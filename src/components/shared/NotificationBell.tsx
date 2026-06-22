@@ -58,12 +58,18 @@ export default function NotificationBell() {
     fetchNotifications()
   }
 
-  async function markRead(id: string, taskId?: string) {
+  async function markRead(id: string, taskId?: string, title?: string) {
     await supabase.from('notifications').update({ read: true }).eq('id', id)
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n))
     if (taskId) {
       setOpen(false)
       window.dispatchEvent(new CustomEvent('open-task', { detail: { taskId } }))
+    } else if (title?.includes('Chat del Equipo')) {
+      setOpen(false)
+      window.dispatchEvent(new CustomEvent('open-chat', { detail: { room: 'team' } }))
+    } else if (title?.includes('en el chat de')) {
+      setOpen(false)
+      window.dispatchEvent(new CustomEvent('open-chat', { detail: { room: 'client' } }))
     }
   }
 
@@ -116,7 +122,7 @@ export default function NotificationBell() {
               <div className="py-8 text-center text-gray-400 text-sm">No tienes notificaciones</div>
             )}
             {notifications.map(n => (
-              <div key={n.id} onClick={() => markRead(n.id, n.task_id)}
+              <div key={n.id} onClick={() => markRead(n.id, n.task_id, n.title)}
                 className={`px-4 py-3 border-b border-gray-50 cursor-pointer hover:bg-gray-50 transition ${!n.read ? 'bg-blue-50' : ''}`}>
                 <div className="flex items-start gap-2">
                   <span className="text-base shrink-0 mt-0.5">{typeIcon[n.type] || '🔔'}</span>

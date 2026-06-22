@@ -58,6 +58,16 @@ export default function TeamDashboard() {
     return () => window.removeEventListener('open-task', handleOpenTask)
   }, [])
 
+  useEffect(() => {
+    function handleOpenChat(e: Event) {
+      const room = (e as CustomEvent).detail?.room
+      if (room === 'team') setTeamView('chat_team')
+      else if (room === 'client') setTeamView('chat_clients')
+    }
+    window.addEventListener('open-chat', handleOpenChat)
+    return () => window.removeEventListener('open-chat', handleOpenChat)
+  }, [])
+
   async function fetchTasks() {
     const { data } = await supabase
       .from('tasks')

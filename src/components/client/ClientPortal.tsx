@@ -55,6 +55,15 @@ export default function ClientPortal() {
     if (user) fetchData()
   }, [user])
 
+  useEffect(() => {
+    function handleOpenChat(e: Event) {
+      const room = (e as CustomEvent).detail?.room
+      if (room === 'client') setActiveTab('chat')
+    }
+    window.addEventListener('open-chat', handleOpenChat)
+    return () => window.removeEventListener('open-chat', handleOpenChat)
+  }, [])
+
   async function fetchData() {
     const { data: client } = await supabase.from('clients').select('*').eq('user_id', user!.id).single()
     if (!client) { setLoading(false); return }

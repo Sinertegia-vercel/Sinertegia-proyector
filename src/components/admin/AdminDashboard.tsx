@@ -72,6 +72,17 @@ export default function AdminDashboard() {
     return () => window.removeEventListener('open-task', handleOpenTask)
   }, [])
 
+  // ── open-chat desde campanita ─────────────────────────────────────────────
+  useEffect(() => {
+    function handleOpenChat(e: Event) {
+      const room = (e as CustomEvent).detail?.room
+      if (room === 'team') setView('chat_team')
+      else if (room === 'client') setView('chat_clients')
+    }
+    window.addEventListener('open-chat', handleOpenChat)
+    return () => window.removeEventListener('open-chat', handleOpenChat)
+  }, [])
+
   // ── badges de chat en tiempo real ────────────────────────────────────────
   useEffect(() => {
     if (!user) return
