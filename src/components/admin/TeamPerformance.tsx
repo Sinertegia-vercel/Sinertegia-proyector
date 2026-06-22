@@ -1,0 +1,446 @@
+import { useEffect, useState, useMemo } from 'react'
+import { TrendingUp, TrendingDown, Clock, Building2, Star, ChevronLeft, ChevronRight } from 'lucide-react'
+import { supabase } from '../../lib/supabase'
+import type { Task, User } from '../../types'
+import UserAvatar from '../shared/UserAvatar'
+
+interface Props {
+  teamMembers: User[]
+  tasks: Task[]
+}
+
+interface SessionRow {
+  user_id: string
+  started_at: string
+  regular_minutes: number
+  overtime_minutes: number
+}
+
+interface RatingRow {
+  task_id: string
+  stars: number
+}
+
+const DEPT_LABELS: Record<string, string> = {
+  edicion: 'Edición', grabacion: 'Grabación', diseno: 'Diseño',
+  copy: 'Copy', webmaster: 'Webmaster', trafficker: 'Trafficker',
+  lider: 'Líder', cliente: 'Cliente',
+}
+
+function scoreColor(val: number, good = 80, bad = 50) {
+  if (val >= good) return { text: 'text-green-600', bg: 'bg-green-500' }
+  if (val >= bad) return { text: 'text-yellow-600', bg: 'bg-yellow-400' }
+  return { text: 'text-red-600', bg: 'bg-red-400' }
+}
+
+function StarDisplay({ value }: { value: number }) {
+  return (
+    <div className="flex items-center gap-0.5">
+      {[1, 2, 3, 4, 5].map(i => (
+        <Star key={i} size={12}
+          className={i <= Math.round(value) ? 'text-yellow-400 fill-yellow-400' : 'text-gray-200 fill-gray-200'} />
+      ))}
+      <span className="text-xs font-bold text-gray-700 ml-1">{value > 0 ? value.toFixed(1) : '—'}</span>
+    </div>
+  )
+}
+
+function getMondayOf(date: Date): Date {
+  const d = new Date(date)
+  const day = d.getDay()
+  const diff = day === 0 ? -6 : 1 - day
+  d.setDate(d.getDate() + diff)
+  d.setHours(0, 0, 0, 0)
+  return d
+}
+
+function formatWeekRange(monday: Date): string {
+  const sunday = new Date(monday)
+  sunday.setDate(monday.getDate() + 6)
+  const opts: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' }
+  if (monday.getMonth() === sunday.getMonth()) {
+    return `${monday.getDate()} – ${sunday.toLocaleDateString('es-MX', opts)}`
+  }
+  return `${monday.toLocaleDateString('es-MX', opts)} – ${sunday.toLocaleDateString('es-MX', opts)}`
+}
+
+export default function TeamPerformance({ teamMembers, tasks }: Props) {
+  const [sessions, setSessions] = useState<SessionRow[]>([])
+  const [ratings, setRatings] = useState<RatingRow[]>([])
+  const [period, setPeriod] = useState<'semana' | 'mes'>('semana')
+  const [weekStart, setWeekStart] = useState<Date>(() => getMondayOf(new Date()))
+
+  useEffect(() => {
+    fetchSessions()
+    fetchRatings()
+  }, [period, weekStart])
+
+  function prevWeek() { const d = new Date(weekStart); d.setDate(d.getDate() - 7); setWeekStart(d) }
+  function nextWeek() { const d = new Date(weekStart); d.setDate(d.getDate() + 7); setWeekStart(d) }
+  const isCurrentWeek = getMondayOf(new Date()).toDateString() === weekStart.toDateString()
+
+  async function fetchSessions() {
+    let fromStr: string
+    let toStr: string | undefined
+    if (period === 'semana') {
+      fromStr = weekStart.toISOString().split('T')[0]
+      const end = new Date(weekStart); end.setDate(weekStart.getDate() + 6)
+      toStr = end.toISOString().split('T')[0]
+    } else {
+      const now = new Date()
+      fromStr = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
+    }
+    let query = supabase
+      .from('work_sessions')
+      .select('user_id, started_at, regular_minutes, overtime_minutes')
+      .gte('date', fromStr)
+      .not('ended_at', 'is', null)
+    if (toStr) query = query.lte('date', toStr)
+    const { data } = await query
+    setSessions((data as SessionRow[]) || [])
+  }
+
+  async function fetchRatings() {
+    const taskIds = tasks.map(t => t.id)
+    if (!taskIds.length) return
+    const { data } = await supabase
+      .from('task_ratings')
+      .select('task_id, stars')
+      .in('task_id', taskIds)
+    setRatings((data as RatingRow[]) || [])
+  }
+
+  function getMemberKPIs(member: User) {
+    const memberId = member.id
+    const startHour = member.work_start ?? 9
+    const endHour = member.work_end ?? 17
+    const dailyHours = endHour - startHour
+    const expectedHours = period === 'semana' ? dailyHours * 5 : dailyHours * 22
+
+    const memberTasks = tasks.filter(t => t.assigned_to === memberId)
+    const completed = memberTasks.filter(t => t.status === 'completada')
+    const memberSessions = sessions.filter(s => s.user_id === memberId)
+
+    // 1. Horas trabajadas
+    const regularMins = memberSessions.reduce((acc, s) => acc + (s.regular_minutes || 0), 0)
+    const overtimeMins = memberSessions.reduce((acc, s) => acc + (s.overtime_minutes || 0), 0)
+    const totalHours = ((regularMins + overtimeMins) / 60)
+
+    // 2. Conectadas a tiempo según horario individual (gracia de 5 min)
+    const onTime = memberSessions.filter(s => {
+      const d = new Date(s.started_at)
+      const h = d.getHours()
+      const m = d.getMinutes()
+      return h < startHour || (h === startHour && m <= 5)
+    })
+    const onTimeRate = memberSessions.length > 0
+      ? Math.round((onTime.length / memberSessions.length) * 100) : 0
+
+    // 3. Trabajos entregados
+    const delivered = completed.length
+
+    // 4. Sin retrabajos (tareas completadas con change_count = 0)
+    const noRetrabajo = completed.filter(t => !((t as any).change_count) || (t as any).change_count === 0)
+    const noRetrabajoRate = completed.length > 0
+      ? Math.round((noRetrabajo.length / completed.length) * 100) : 0
+
+    // 5. Calificación del cliente (promedio de estrellas en sus tareas)
+    const taskIds = memberTasks.map(t => t.id)
+    const memberRatings = ratings.filter(r => taskIds.includes(r.task_id))
+    const avgRating = memberRatings.length > 0
+      ? memberRatings.reduce((acc, r) => acc + r.stars, 0) / memberRatings.length : 0
+
+    // Score general (promedio ponderado)
+    const score = Math.round(
+      (onTimeRate * 0.2) +
+      (noRetrabajoRate * 0.25) +
+      (Math.min(delivered * 10, 100) * 0.2) +
+      (avgRating * 20 * 0.2) +
+      (Math.min(totalHours / expectedHours * 100, 100) * 0.15)
+    )
+
+    return { regularMins, overtimeMins, totalHours, onTimeRate, delivered, noRetrabajoRate, avgRating, score, sessionCount: memberSessions.length, startHour, endHour, dailyHours }
+  }
+
+  const allKPIs = teamMembers.map(m => ({ member: m, kpis: getMemberKPIs(m) }))
+    .sort((a, b) => b.kpis.score - a.kpis.score)
+
+  const generalKPIs = useMemo(() => {
+    const active = allKPIs.filter(x => x.kpis.sessionCount > 0 || x.kpis.delivered > 0)
+    if (active.length === 0) return null
+    const totalHours = allKPIs.reduce((s, x) => s + x.kpis.totalHours, 0)
+    const totalDelivered = allKPIs.reduce((s, x) => s + x.kpis.delivered, 0)
+    const avgOnTime = active.length > 0
+      ? Math.round(active.reduce((s, x) => s + x.kpis.onTimeRate, 0) / active.filter(x => x.kpis.sessionCount > 0).length || 0) : 0
+    const withDeliveries = allKPIs.filter(x => x.kpis.delivered > 0)
+    const avgNoRetrabajo = withDeliveries.length > 0
+      ? Math.round(withDeliveries.reduce((s, x) => s + x.kpis.noRetrabajoRate, 0) / withDeliveries.length) : 0
+    const withRatings = allKPIs.filter(x => x.kpis.avgRating > 0)
+    const avgRating = withRatings.length > 0
+      ? withRatings.reduce((s, x) => s + x.kpis.avgRating, 0) / withRatings.length : 0
+    const avgScore = active.length > 0
+      ? Math.round(active.reduce((s, x) => s + x.kpis.score, 0) / active.length) : 0
+    return { totalHours, totalDelivered, avgOnTime, avgNoRetrabajo, avgRating, avgScore }
+  }, [allKPIs])
+
+  return (
+    <div>
+      {/* Header con filtros */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <h3 className="font-bold text-gray-800 text-lg">Scorecard del equipo</h3>
+        <div className="flex items-center gap-2">
+          {/* Toggle semana/mes */}
+          <div className="flex rounded-lg overflow-hidden border border-gray-200">
+            {(['semana', 'mes'] as const).map(p => (
+              <button key={p} onClick={() => setPeriod(p)}
+                className={`px-4 py-1.5 text-sm font-medium transition ${period === p ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
+                {p === 'semana' ? 'Semana' : 'Mes'}
+              </button>
+            ))}
+          </div>
+          {/* Navegación de semana */}
+          {period === 'semana' && (
+            <div className="flex items-center gap-1 bg-gray-100 rounded-lg px-2 py-1">
+              <button onClick={prevWeek} className="p-1 hover:bg-gray-200 rounded transition">
+                <ChevronLeft size={15} className="text-gray-600" />
+              </button>
+              <span className="text-xs font-semibold text-gray-700 px-1 min-w-[130px] text-center">
+                {isCurrentWeek ? 'Esta semana' : formatWeekRange(weekStart)}
+              </span>
+              <button onClick={nextWeek} disabled={isCurrentWeek}
+                className="p-1 hover:bg-gray-200 rounded transition disabled:opacity-30">
+                <ChevronRight size={15} className="text-gray-600" />
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Rendimiento general del equipo */}
+      {generalKPIs && (
+        <div className="bg-gradient-to-r from-blue-700 to-blue-900 rounded-2xl p-5 mb-6 text-white">
+          <p className="text-xs font-semibold text-blue-200 uppercase tracking-wide mb-3">Rendimiento general del equipo</p>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div className="text-center">
+              <p className="text-2xl font-bold">{generalKPIs.totalHours.toFixed(0)}h</p>
+              <p className="text-xs text-blue-200 mt-0.5">Horas totales</p>
+            </div>
+            <div className="text-center">
+              <p className={`text-2xl font-bold ${generalKPIs.avgOnTime >= 80 ? 'text-green-300' : generalKPIs.avgOnTime >= 50 ? 'text-yellow-300' : 'text-red-300'}`}>
+                {generalKPIs.avgOnTime}%
+              </p>
+              <p className="text-xs text-blue-200 mt-0.5">A tiempo promedio</p>
+            </div>
+            <div className="text-center">
+              <p className="text-2xl font-bold">{generalKPIs.totalDelivered}</p>
+              <p className="text-xs text-blue-200 mt-0.5">Entregas totales</p>
+            </div>
+            <div className="text-center">
+              <p className={`text-2xl font-bold ${generalKPIs.avgNoRetrabajo >= 80 ? 'text-green-300' : generalKPIs.avgNoRetrabajo >= 50 ? 'text-yellow-300' : 'text-red-300'}`}>
+                {generalKPIs.avgNoRetrabajo}%
+              </p>
+              <p className="text-xs text-blue-200 mt-0.5">Sin retrabajo</p>
+            </div>
+            <div className="text-center">
+              <p className={`text-2xl font-bold ${generalKPIs.avgScore >= 80 ? 'text-green-300' : generalKPIs.avgScore >= 50 ? 'text-yellow-300' : 'text-red-300'}`}>
+                {generalKPIs.avgScore}
+              </p>
+              <p className="text-xs text-blue-200 mt-0.5">Score promedio</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tabla scorecard */}
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm mb-6">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th className="text-left px-4 py-3 font-semibold text-gray-500">Persona</th>
+                <th className="text-center px-4 py-3 font-semibold text-gray-500">
+                  <div className="flex flex-col items-center">
+                    <Clock size={13} className="mb-0.5 text-blue-500" />
+                    Horas
+                  </div>
+                </th>
+                <th className="text-center px-4 py-3 font-semibold text-gray-500">
+                  <div className="flex flex-col items-center">
+                    <span className="text-base">⏰</span>
+                    A tiempo
+                  </div>
+                </th>
+                <th className="text-center px-4 py-3 font-semibold text-gray-500">
+                  <div className="flex flex-col items-center">
+                    <span className="text-base">✅</span>
+                    Entregados
+                  </div>
+                </th>
+                <th className="text-center px-4 py-3 font-semibold text-gray-500">
+                  <div className="flex flex-col items-center">
+                    <span className="text-base">🔄</span>
+                    Sin retrabajo
+                  </div>
+                </th>
+                <th className="text-center px-4 py-3 font-semibold text-gray-500">
+                  <div className="flex flex-col items-center">
+                    <Star size={13} className="mb-0.5 text-yellow-400 fill-yellow-400" />
+                    Calif. cliente
+                  </div>
+                </th>
+                <th className="text-center px-4 py-3 font-semibold text-gray-500">Score</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {allKPIs.map(({ member, kpis }, idx) => {
+                const sc = scoreColor(kpis.score)
+                return (
+                  <tr key={member.id} className={`hover:bg-gray-50 transition ${idx === 0 ? 'bg-yellow-50' : ''}`}>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <UserAvatar name={member.full_name} avatarUrl={member.avatar_url} size={32} />
+                        <div>
+                          <p className="font-medium text-gray-800">{member.full_name}</p>
+                          <p className="text-xs text-gray-400">{member.department ? DEPT_LABELS[member.department] : '—'}</p>
+                        </div>
+                        {idx === 0 && kpis.score > 0 && <span className="text-xs bg-yellow-200 text-yellow-800 px-1.5 py-0.5 rounded-full font-semibold">🏆</span>}
+                      </div>
+                    </td>
+
+                    {/* Horas trabajadas */}
+                    <td className="px-4 py-3 text-center">
+                      <div>
+                        <p className="font-bold text-gray-800">{kpis.totalHours.toFixed(1)}h</p>
+                        {kpis.overtimeMins > 0 && (
+                          <p className="text-xs text-orange-500 font-medium">+{(kpis.overtimeMins / 60).toFixed(1)}h extra</p>
+                        )}
+                        <p className="text-xs text-gray-400">{kpis.sessionCount} sesiones</p>
+                      </div>
+                    </td>
+
+                    {/* A tiempo */}
+                    <td className="px-4 py-3 text-center">
+                      <span className={`font-bold text-sm ${scoreColor(kpis.onTimeRate).text}`}>
+                        {kpis.sessionCount > 0 ? `${kpis.onTimeRate}%` : '—'}
+                      </span>
+                    </td>
+
+                    {/* Trabajos entregados */}
+                    <td className="px-4 py-3 text-center">
+                      <span className="font-bold text-gray-800">{kpis.delivered}</span>
+                    </td>
+
+                    {/* Sin retrabajo */}
+                    <td className="px-4 py-3 text-center">
+                      <span className={`font-bold text-sm ${kpis.delivered > 0 ? scoreColor(kpis.noRetrabajoRate).text : 'text-gray-400'}`}>
+                        {kpis.delivered > 0 ? `${kpis.noRetrabajoRate}%` : '—'}
+                      </span>
+                    </td>
+
+                    {/* Calificación */}
+                    <td className="px-4 py-3 text-center">
+                      <StarDisplay value={kpis.avgRating} />
+                    </td>
+
+                    {/* Score general */}
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2 justify-center">
+                        <div className="w-16 bg-gray-200 rounded-full h-2">
+                          <div className={`h-2 rounded-full ${sc.bg}`} style={{ width: `${kpis.score}%` }} />
+                        </div>
+                        <span className={`text-sm font-bold ${sc.text} w-8 text-right`}>{kpis.score > 0 ? kpis.score : '—'}</span>
+                        {kpis.score >= 80 ? <TrendingUp size={13} className="text-green-500" /> : kpis.score > 0 ? <TrendingDown size={13} className="text-red-400" /> : null}
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Tarjetas individuales */}
+      <h4 className="font-semibold text-gray-700 mb-3">Detalle por persona</h4>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {allKPIs.map(({ member, kpis }) => (
+          <div key={member.id} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+            <div className="flex items-center gap-2 mb-4">
+              <UserAvatar name={member.full_name} avatarUrl={member.avatar_url} size={36} />
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-gray-800 truncate">{member.full_name}</p>
+                <p className="text-xs text-gray-400">{member.department ? DEPT_LABELS[member.department] : '—'}</p>
+              </div>
+              <div className={`text-lg font-bold ${scoreColor(kpis.score).text}`}>
+                {kpis.score > 0 ? kpis.score : '—'}
+              </div>
+            </div>
+
+            <div className="space-y-2.5">
+              {/* Horas */}
+              <div className="flex items-center justify-between text-xs">
+                <span className="flex items-center gap-1.5 text-gray-500"><Clock size={12} /> Horas trabajadas</span>
+                <div className="text-right">
+                  <span className="font-bold text-gray-800">{kpis.totalHours.toFixed(1)}h</span>
+                  {kpis.overtimeMins > 0 && <span className="text-orange-500 ml-1">+{(kpis.overtimeMins / 60).toFixed(1)}h extra</span>}
+                </div>
+              </div>
+
+              {/* A tiempo */}
+              <div>
+                <div className="flex items-center justify-between text-xs mb-1">
+                  <span className="text-gray-500">⏰ Conectadas a tiempo</span>
+                  <span className={`font-bold ${scoreColor(kpis.onTimeRate).text}`}>
+                    {kpis.sessionCount > 0 ? `${kpis.onTimeRate}%` : '—'}
+                  </span>
+                </div>
+                {kpis.sessionCount > 0 && (
+                  <div className="w-full bg-gray-100 rounded-full h-1.5">
+                    <div className={`h-1.5 rounded-full ${scoreColor(kpis.onTimeRate).bg}`} style={{ width: `${kpis.onTimeRate}%` }} />
+                  </div>
+                )}
+              </div>
+
+              {/* Entregados */}
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-500">✅ Trabajos entregados</span>
+                <span className="font-bold text-gray-800">{kpis.delivered}</span>
+              </div>
+
+              {/* Sin retrabajo */}
+              <div>
+                <div className="flex items-center justify-between text-xs mb-1">
+                  <span className="text-gray-500">🔄 Sin retrabajo</span>
+                  <span className={`font-bold ${kpis.delivered > 0 ? scoreColor(kpis.noRetrabajoRate).text : 'text-gray-400'}`}>
+                    {kpis.delivered > 0 ? `${kpis.noRetrabajoRate}%` : '—'}
+                  </span>
+                </div>
+                {kpis.delivered > 0 && (
+                  <div className="w-full bg-gray-100 rounded-full h-1.5">
+                    <div className={`h-1.5 rounded-full ${scoreColor(kpis.noRetrabajoRate).bg}`} style={{ width: `${kpis.noRetrabajoRate}%` }} />
+                  </div>
+                )}
+              </div>
+
+              {/* Calificación */}
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-500">⭐ Calif. del cliente</span>
+                <StarDisplay value={kpis.avgRating} />
+              </div>
+
+              {/* Ubicaciones */}
+              <div className="pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-gray-400">
+                <span>🕘 {kpis.startHour}:00 – {kpis.endHour}:00 ({kpis.dailyHours}h/día)</span>
+                {kpis.sessionCount > 0 && <span className="flex items-center gap-1"><Building2 size={11} />{kpis.sessionCount} ses.</span>}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <p className="text-xs text-gray-400 mt-4">
+        Score calculado con: 20% puntualidad · 25% sin retrabajo · 20% entregas · 20% calificación cliente · 15% horas
+      </p>
+    </div>
+  )
+}
