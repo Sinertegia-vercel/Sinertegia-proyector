@@ -161,8 +161,8 @@ export default function TeamChat() {
   async function deleteForEveryone(msg: ChatMessage) {
     if (!user) return
     setOpenMenuId(null)
-    await supabase.from('chat_messages').update({ deleted_for_everyone: true }).eq('id', msg.id).eq('sender_id', user.id)
-    setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, deleted_for_everyone: true } : m))
+    await supabase.from('chat_messages').delete().eq('id', msg.id).eq('sender_id', user.id)
+    setMessages(prev => prev.filter(m => m.id !== msg.id))
   }
 
   if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Cargando chat...</div>

@@ -172,8 +172,8 @@ export default function ClientChatRoom({ client, onConvertToTask }: Props) {
   async function deleteForEveryone(msg: ChatMessage) {
     if (!user) return
     setOpenMenuId(null)
-    await supabase.from('chat_messages').update({ deleted_for_everyone: true }).eq('id', msg.id).eq('sender_id', user.id)
-    setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, deleted_for_everyone: true } : m))
+    await supabase.from('chat_messages').delete().eq('id', msg.id).eq('sender_id', user.id)
+    setMessages(prev => prev.filter(m => m.id !== msg.id))
   }
 
   async function handleConvertToTask(msg: ChatMessage) {
