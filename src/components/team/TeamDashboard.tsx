@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Link, MessageSquare, CheckCircle, Clock, ClipboardList, MessageCircle, Map, Plus, CalendarDays, Link2 } from 'lucide-react'
+import { MessageSquare, CheckCircle, Clock, ClipboardList, MessageCircle, Map, Plus, CalendarDays, Link2, Loader2, XCircle, FileText } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import type { Task, Project, User } from '../../types'
 import PriorityBadge from '../shared/PriorityBadge'
 import StatusBadge from '../shared/StatusBadge'
+import Sidebar from '../shared/Sidebar'
 import TaskDetailModal from './TaskDetailModal'
 import TeamChat from '../chat/TeamChat'
 import ClientChatsHub from '../chat/ClientChatsHub'
@@ -15,7 +16,20 @@ import ClientDeliverables from '../admin/ClientDeliverables'
 
 type TeamView = 'tasks' | 'calendar' | 'roadmap' | 'chat_team' | 'chat_clients' | 'entregables'
 
-export default function TeamDashboard() {
+const TEAM_NAV_ITEMS = [
+  { id: 'tasks' as TeamView, label: 'Mis tareas', icon: ClipboardList },
+  { id: 'calendar' as TeamView, label: 'Mi Calendario', icon: CalendarDays },
+  { id: 'roadmap' as TeamView, label: 'Hoja de Ruta', icon: Map },
+  { id: 'chat_team' as TeamView, label: 'Chat del Equipo', icon: MessageSquare },
+  { id: 'chat_clients' as TeamView, label: 'Chat con Clientes', icon: MessageCircle },
+  { id: 'entregables' as TeamView, label: 'Entregables', icon: Link2 },
+]
+
+interface Props {
+  embedded?: boolean
+}
+
+export default function TeamDashboard({ embedded = false }: Props) {
   const { user } = useAuth()
   const [tasks, setTasks] = useState<Task[]>([])
   const [reviewTasks, setReviewTasks] = useState<Task[]>([])
@@ -223,22 +237,23 @@ export default function TeamDashboard() {
         </div>
       )}
 
-      {/* Tabs de navegación */}
-      <div className="flex gap-2 mb-6 border-b border-gray-200 overflow-x-auto">
-        {[
-          { id: 'tasks' as TeamView, label: 'Mis tareas', icon: ClipboardList },
-          { id: 'calendar' as TeamView, label: 'Mi Calendario', icon: CalendarDays },
-          { id: 'roadmap' as TeamView, label: 'Hoja de Ruta', icon: Map },
-          { id: 'chat_team' as TeamView, label: 'Chat del Equipo', icon: MessageSquare },
-          { id: 'chat_clients' as TeamView, label: 'Chat con Clientes', icon: MessageCircle },
-          { id: 'entregables' as TeamView, label: 'Entregables', icon: Link2 },
-        ].map(({ id, label, icon: Icon }) => (
-          <button key={id} onClick={() => setTeamView(id)}
-            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition whitespace-nowrap ${teamView === id ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-            <Icon size={15} /> {label}
-          </button>
-        ))}
-      </div>
+      {/* Tabs de navegación (solo cuando está embebido dentro del Admin) */}
+      {embedded && (
+        <div className="flex gap-2 mb-6 border-b border-gray-200 overflow-x-auto">
+          {TEAM_NAV_ITEMS.map(({ id, label, icon: Icon }) => (
+            <button key={id} onClick={() => setTeamView(id)}
+              className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition whitespace-nowrap ${teamView === id ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+              <Icon size={15} /> {label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className={embedded ? '' : 'flex gap-6 items-start'}>
+        {!embedded && (
+          <Sidebar items={TEAM_NAV_ITEMS} activeId={teamView} onSelect={id => setTeamView(id as TeamView)} />
+        )}
+        <div className="flex-1 min-w-0">
 
       {/* Vista: Mi Calendario */}
       {teamView === 'calendar' && (
@@ -263,15 +278,20 @@ export default function TeamDashboard() {
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
         {[
-          { label: 'Total', value: stats.total, color: 'bg-gray-50 border-gray-200' },
-          { label: 'Pendientes', value: stats.pendiente, color: 'bg-gray-50 border-gray-200' },
-          { label: 'En progreso', value: stats.en_progreso, color: 'bg-blue-50 border-blue-200' },
-          { label: 'Completadas', value: stats.completada, color: 'bg-green-50 border-green-200' },
-          { label: 'Vencidas', value: stats.vencidas, color: 'bg-red-50 border-red-200' },
-        ].map(s => (
-          <div key={s.label} className={`border rounded-xl p-4 text-center ${s.color}`}>
-            <p className="text-2xl font-bold text-gray-800">{s.value}</p>
-            <p className="text-xs text-gray-500 mt-1">{s.label}</p>
+          { label: 'Total', value: stats.total, icon: ClipboardList, bg: 'bg-purple-100', color: 'text-purple-600' },
+          { label: 'Pendientes', value: stats.pendiente, icon: Clock, bg: 'bg-orange-100', color: 'text-orange-600' },
+          { label: 'En progreso', value: stats.en_progreso, icon: Loader2, bg: 'bg-blue-100', color: 'text-blue-600' },
+          { label: 'Completadas', value: stats.completada, icon: CheckCircle, bg: 'bg-green-100', color: 'text-green-600' },
+          { label: 'Vencidas', value: stats.vencidas, icon: XCircle, bg: 'bg-red-100', color: 'text-red-600' },
+        ].map(({ label, value, icon: Icon, bg, color }) => (
+          <div key={label} className="bg-white border border-gray-200 rounded-2xl p-4 flex items-center gap-3 shadow-sm">
+            <div className={`w-11 h-11 rounded-full flex items-center justify-center shrink-0 ${bg}`}>
+              <Icon size={18} className={color} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-2xl font-bold text-gray-900 leading-tight">{value}</p>
+              <p className="text-xs text-gray-500 truncate">{label}</p>
+            </div>
           </div>
         ))}
       </div>
@@ -282,7 +302,7 @@ export default function TeamDashboard() {
           <button
             key={f}
             onClick={() => setFilter(f)}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition ${filter === f ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+            className={`px-4 py-1.5 rounded-full text-sm font-medium transition ${filter === f ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
           >
             {f === 'todas' ? 'Todas' : f === 'en_progreso' ? 'En progreso' : f.charAt(0).toUpperCase() + f.slice(1)}
           </button>
@@ -329,17 +349,17 @@ export default function TeamDashboard() {
                   <td className="px-4 py-3 whitespace-nowrap"><StatusBadge status={task.status} /></td>
                   <td className="px-4 py-3 whitespace-nowrap"><PriorityBadge priority={task.priority} /></td>
                   <td className="px-4 py-3 whitespace-nowrap">
-                    <span className={`text-xs ${isOverdue(task) ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
+                    <span className={`flex items-center gap-1 text-xs ${isOverdue(task) ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
+                      <CalendarDays size={12} className="shrink-0" />
                       {task.commitment_date ? new Date(task.commitment_date).toLocaleDateString('es-MX') : '—'}
                       {isOverdue(task) && ' ⚠️'}
                     </span>
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
-                    {task.links && task.links.length > 0 && (
-                      <span className="flex items-center gap-1 text-blue-500 text-xs">
-                        <Link size={12} /> {task.links.length}
-                      </span>
-                    )}
+                    <span className={`flex items-center gap-1 text-xs ${task.links && task.links.length > 0 ? 'text-blue-500' : 'text-gray-300'}`}>
+                      <FileText size={14} />
+                      {task.links && task.links.length > 0 && task.links.length}
+                    </span>
                   </td>
                   <td className="px-4 py-3">
                     <span className="flex items-center gap-1 text-gray-400 text-xs">
@@ -355,6 +375,8 @@ export default function TeamDashboard() {
       </div>
 
       </>)}
+        </div>
+      </div>
 
       {/* Modales globales */}
       {selectedTask && (

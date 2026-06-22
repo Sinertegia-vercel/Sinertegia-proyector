@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { ExternalLink, Send, Camera, Loader2, PlusCircle, CheckCircle, X, ChevronDown } from 'lucide-react'
+import { ExternalLink, Send, Camera, Loader2, PlusCircle, CheckCircle, X, ChevronDown, CheckCheck, ClipboardList, LayoutGrid, CalendarDays, Map, MessageCircle, Link2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import type { Task, Project, Client } from '../../types'
@@ -10,10 +10,21 @@ import ClientChatRoom from '../chat/ClientChatRoom'
 import ClientDeliverables from '../admin/ClientDeliverables'
 import RoadmapView from '../roadmap/RoadmapView'
 import RequestTaskModal from './RequestTaskModal'
+import Sidebar from '../shared/Sidebar'
 import StarRating from './StarRating'
 import { DEPT_LABELS, DEPT_COLORS, DEPT_ORDER } from '../../data/projectTemplates'
 
 type Tab = 'mistareas' | 'progreso' | 'area' | 'calendario' | 'roadmap' | 'chat' | 'entregables'
+
+const CLIENT_NAV_ITEMS = [
+  { id: 'mistareas' as Tab, label: 'Mis tareas', icon: CheckCheck },
+  { id: 'progreso' as Tab, label: 'Todas las tareas', icon: ClipboardList },
+  { id: 'area' as Tab, label: 'Por área', icon: LayoutGrid },
+  { id: 'calendario' as Tab, label: 'Calendario', icon: CalendarDays },
+  { id: 'roadmap' as Tab, label: 'Hoja de Ruta', icon: Map },
+  { id: 'chat' as Tab, label: 'Chat con el equipo', icon: MessageCircle },
+  { id: 'entregables' as Tab, label: 'Entregables', icon: Link2 },
+]
 
 interface TaskRequest {
   id: string
@@ -278,7 +289,7 @@ export default function ClientPortal() {
       </div>
 
       {/* ── Contenido principal ── */}
-      <div className="relative z-10 p-6 max-w-5xl mx-auto">
+      <div className="relative z-10 p-6 max-w-6xl mx-auto">
       <div className="flex items-start justify-between mb-6">
         <div>
           <h2 className="text-xl font-bold text-gray-900">Mi proyecto</h2>
@@ -387,23 +398,9 @@ export default function ClientPortal() {
         </div>
       )}
 
-      {/* Tabs */}
-      <div className="flex gap-1 mb-6 border-b border-gray-200">
-        {([
-          { id: 'mistareas', label: '✅ Mis tareas' },
-          { id: 'progreso', label: '📋 Todas las tareas' },
-          { id: 'area', label: '🗂 Por área' },
-          { id: 'calendario', label: '📅 Calendario' },
-          { id: 'roadmap', label: '🗺 Hoja de Ruta' },
-          { id: 'chat', label: '💬 Chat con el equipo' },
-          { id: 'entregables', label: '🔗 Entregables' },
-        ] as { id: Tab; label: string }[]).map(({ id, label }) => (
-          <button key={id} onClick={() => setActiveTab(id)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition ${activeTab === id ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-            {label}
-          </button>
-        ))}
-      </div>
+      <div className="flex gap-6 items-start">
+        <Sidebar items={CLIENT_NAV_ITEMS} activeId={activeTab} onSelect={id => setActiveTab(id as Tab)} />
+        <div className="flex-1 min-w-0">
 
       {/* ── Tab: Mis tareas ── */}
       {activeTab === 'mistareas' && (
@@ -825,6 +822,9 @@ export default function ClientPortal() {
           <p className="text-sm">No se encontró tu perfil de cliente.</p>
         </div>
       )}
+
+        </div>
+      </div>
 
       </div>{/* fin contenido principal */}
 

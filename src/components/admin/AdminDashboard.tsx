@@ -3,6 +3,7 @@ import { Users, FolderKanban, AlertTriangle, TrendingUp, Calendar, ClipboardList
 import { supabase } from '../../lib/supabase'
 import type { Task, Project, User, Client } from '../../types'
 import ProgressBar from '../shared/ProgressBar'
+import Sidebar from '../shared/Sidebar'
 import ProjectDetail from './ProjectDetail'
 import TeamCapacity from './TeamCapacity'
 import TeamCalendar from './TeamCalendar'
@@ -30,6 +31,21 @@ const STATUS_FILTER_LABELS: { value: StatusFilter; label: string }[] = [
   { value: 'activo', label: 'Activos' },
   { value: 'pausado', label: 'Pausados' },
   { value: 'completado', label: 'Completados' },
+]
+
+const ADMIN_NAV_ITEMS = [
+  { id: 'overview', label: 'Proyectos', icon: FolderKanban },
+  { id: 'team', label: 'Capacidad del equipo', icon: Users },
+  { id: 'calendar', label: 'Calendario', icon: Calendar },
+  { id: 'performance', label: 'Rendimiento', icon: TrendingUp },
+  { id: 'mytasks', label: 'Mis tareas', icon: ClipboardList },
+  { id: 'roadmap', label: 'Hoja de Ruta', icon: Map },
+  { id: 'clientes', label: 'Clientes', icon: UserCheck },
+  { id: 'requests', label: 'Solicitudes', icon: Inbox },
+  { id: 'chat_team', label: 'Chat Equipo', icon: MessageSquare },
+  { id: 'chat_clients', label: 'Chat Clientes', icon: MessageCircle },
+  { id: 'entregables', label: 'Entregables', icon: Link2 },
+  { id: 'spelling', label: 'Ortografía', icon: SpellCheck },
 ]
 
 const STATUS_BADGE: Record<string, string> = {
@@ -221,40 +237,20 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* Nav tabs */}
-      <div className="flex gap-2 mb-6 border-b border-gray-200 overflow-x-auto">
-        {[
-          { id: 'overview', label: 'Proyectos', icon: FolderKanban },
-          { id: 'team', label: 'Capacidad del equipo', icon: Users },
-          { id: 'calendar', label: 'Calendario', icon: Calendar },
-          { id: 'performance', label: 'Rendimiento', icon: TrendingUp },
-          { id: 'mytasks', label: 'Mis tareas', icon: ClipboardList },
-          { id: 'roadmap', label: 'Hoja de Ruta', icon: Map },
-          { id: 'clientes', label: 'Clientes', icon: UserCheck },
-          { id: 'requests', label: 'Solicitudes', icon: Inbox },
-          { id: 'chat_team', label: 'Chat Equipo', icon: MessageSquare },
-          { id: 'chat_clients', label: 'Chat Clientes', icon: MessageCircle },
-          { id: 'entregables', label: 'Entregables', icon: Link2 },
-          { id: 'spelling', label: 'Ortografía', icon: SpellCheck },
-        ].map(({ id, label, icon: Icon }) => {
-          const badge = id === 'chat_team' ? unreadTeamChat : id === 'chat_clients' ? unreadClientChat : 0
-          return (
-            <button key={id} onClick={() => {
-              setView(id as View)
-              if (id === 'chat_team') setUnreadTeamChat(0)
-              if (id === 'chat_clients') setUnreadClientChat(0)
-            }}
-              className={`relative flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition whitespace-nowrap shrink-0 ${view === id ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-              <Icon size={15} /> {label}
-              {badge > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold min-w-[16px] h-4 rounded-full flex items-center justify-center px-1">
-                  {badge > 9 ? '9+' : badge}
-                </span>
-              )}
-            </button>
-          )
-        })}
-      </div>
+      <div className="flex gap-6 items-start">
+        <Sidebar
+          items={ADMIN_NAV_ITEMS.map(item => ({
+            ...item,
+            badge: item.id === 'chat_team' ? unreadTeamChat : item.id === 'chat_clients' ? unreadClientChat : 0,
+          }))}
+          activeId={view}
+          onSelect={id => {
+            setView(id as View)
+            if (id === 'chat_team') setUnreadTeamChat(0)
+            if (id === 'chat_clients') setUnreadClientChat(0)
+          }}
+        />
+        <div className="flex-1 min-w-0">
 
       {/* Alertas */}
       {overdueTasks.length > 0 && view === 'overview' && (
@@ -357,7 +353,7 @@ export default function AdminDashboard() {
       {view === 'performance' && <TeamPerformance teamMembers={teamMembers} tasks={tasks} />}
 
       {/* Vista mis tareas */}
-      {view === 'mytasks' && <TeamDashboard />}
+      {view === 'mytasks' && <TeamDashboard embedded />}
 
       {/* Vista hoja de ruta */}
       {view === 'roadmap' && <RoadmapView tasks={tasks} title="Todas las tareas del equipo" />}
@@ -379,6 +375,9 @@ export default function AdminDashboard() {
       {view === 'clientes' && (
         <ClientAssignmentManager clients={clients} teamMembers={teamMembers} />
       )}
+
+        </div>
+      </div>
 
       {reportProject && (
         <ClientReportModal project={reportProject} tasks={tasks} onClose={() => setReportProject(null)} />
