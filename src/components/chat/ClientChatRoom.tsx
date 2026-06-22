@@ -137,17 +137,24 @@ export default function ClientChatRoom({ client, onConvertToTask }: Props) {
       content: content || '',
       ...(file_url ? { file_url, file_type, file_name } : {}),
     })
-    const allUsers = [...chatUsers]
-    const mentioned = allUsers.filter(u => u.id !== user.id && content.includes(`@${u.full_name}`))
-    if (mentioned.length > 0) {
+    // Equipo → notifica al cliente. Cliente → notifica a todo el equipo asignado.
+    const others: { id: string; full_name: string }[] = isTeamOrAdmin
+      ? (client.user_id && client.user_id !== user.id ? [{ id: client.user_id, full_name: client.name }] : [])
+      : chatUsers.filter(u => u.id !== user.id)
+
+    if (others.length > 0) {
+      const messagePreview = content.slice(0, 100) + (content.length > 100 ? '...' : '')
       await supabase.from('notifications').insert(
-        mentioned.map(u => ({
-          user_id: u.id,
-          title: `@${user.full_name} te mencionó en el chat`,
-          message: content.slice(0, 100) + (content.length > 100 ? '...' : ''),
-          type: 'mention',
-          read: false,
-        }))
+        others.map(u => {
+          const isMentioned = content.includes(`@${u.full_name}`)
+          return {
+            user_id: u.id,
+            title: isMentioned ? `@${user.full_name} te mencionó en el chat` : `💬 ${user.full_name} en el chat de ${client.name}`,
+            message: messagePreview,
+            type: isMentioned ? 'mention' : 'chat',
+            read: false,
+          }
+        })
       )
     }
     fetchMessages(roomId)
