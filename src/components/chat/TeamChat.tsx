@@ -132,7 +132,7 @@ export default function TeamChat() {
     const others = chatUsers.filter(u => u.id !== user.id)
     if (others.length > 0) {
       const messagePreview = content.slice(0, 100) + (content.length > 100 ? '...' : '')
-      await supabase.from('notifications').insert(
+      const { error: notifErr } = await supabase.from('notifications').insert(
         others.map(u => {
           const isMentioned = content.includes(`@${u.full_name}`)
           return {
@@ -144,6 +144,7 @@ export default function TeamChat() {
           }
         })
       )
+      if (notifErr) console.error('Error al crear notificación de chat:', notifErr)
     }
     fetchMessages(roomId)
   }

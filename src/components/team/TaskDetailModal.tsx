@@ -357,9 +357,9 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone 
 
           {/* ── Links / Entregables ── */}
           <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Links / Entregables</p>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Entregables</p>
             {links.length === 0 && (
-              <p className="text-xs text-gray-400 italic mb-2">Sin links aún</p>
+              <p className="text-xs text-orange-500 mb-2">📎 Recuerda añadir el link del entregable</p>
             )}
             <div className="space-y-1.5 mb-3">
               {links.map(link => (
@@ -576,7 +576,7 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone 
             </p>
             <div className="space-y-2 mb-3 max-h-48 overflow-y-auto">
               {comments.length === 0 && (
-                <p className="text-xs text-gray-400 italic">Sin comentarios aún</p>
+                <p className="text-xs text-gray-400">Aún no hay comentarios, escribe el primero</p>
               )}
               {comments.map(c => (
                 <div key={c.id} className="bg-gray-50 rounded-lg px-3 py-2">
