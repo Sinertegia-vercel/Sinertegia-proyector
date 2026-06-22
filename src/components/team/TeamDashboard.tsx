@@ -295,13 +295,13 @@ export default function TeamDashboard() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="text-left px-4 py-3 font-semibold text-gray-600">Tarea</th>
-                <th className="text-left px-4 py-3 font-semibold text-gray-600">Cliente</th>
-                <th className="text-left px-4 py-3 font-semibold text-gray-600">Estatus</th>
-                <th className="text-left px-4 py-3 font-semibold text-gray-600">Prioridad</th>
-                <th className="text-left px-4 py-3 font-semibold text-gray-600">F. Compromiso</th>
-                <th className="text-left px-4 py-3 font-semibold text-gray-600">Entregables</th>
-                <th className="text-left px-4 py-3 font-semibold text-gray-600"></th>
+                <th className="text-left px-4 py-3 font-semibold text-gray-600 min-w-[220px]">Tarea</th>
+                <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">Cliente</th>
+                <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">Estatus</th>
+                <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">Prioridad</th>
+                <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap" title="Fecha de compromiso de entrega">F. Compromiso</th>
+                <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">Entregables</th>
+                <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">Coment.</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -314,27 +314,27 @@ export default function TeamDashboard() {
                   className={`hover:bg-gray-50 cursor-pointer transition ${isOverdue(task) ? 'bg-red-50' : ''}`}
                   onClick={() => setSelectedTask(task)}
                 >
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 max-w-[260px]">
                     <div className="flex items-center gap-2">
                       {task.status === 'completada'
                         ? <CheckCircle size={16} className="text-green-500 shrink-0" />
                         : <Clock size={16} className={`shrink-0 ${isOverdue(task) ? 'text-red-500' : 'text-gray-400'}`} />
                       }
-                      <span className={`font-medium ${task.status === 'completada' ? 'line-through text-gray-400' : 'text-gray-800'}`}>
+                      <span className={`font-medium truncate ${task.status === 'completada' ? 'line-through text-gray-400' : 'text-gray-800'}`}>
                         {task.title}
                       </span>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-gray-600">{task.project?.client?.name || '—'}</td>
-                  <td className="px-4 py-3"><StatusBadge status={task.status} /></td>
-                  <td className="px-4 py-3"><PriorityBadge priority={task.priority} /></td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{task.project?.client?.name || '—'}</td>
+                  <td className="px-4 py-3 whitespace-nowrap"><StatusBadge status={task.status} /></td>
+                  <td className="px-4 py-3 whitespace-nowrap"><PriorityBadge priority={task.priority} /></td>
+                  <td className="px-4 py-3 whitespace-nowrap">
                     <span className={`text-xs ${isOverdue(task) ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
                       {task.commitment_date ? new Date(task.commitment_date).toLocaleDateString('es-MX') : '—'}
                       {isOverdue(task) && ' ⚠️'}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 whitespace-nowrap">
                     {task.links && task.links.length > 0 && (
                       <span className="flex items-center gap-1 text-blue-500 text-xs">
                         <Link size={12} /> {task.links.length}
