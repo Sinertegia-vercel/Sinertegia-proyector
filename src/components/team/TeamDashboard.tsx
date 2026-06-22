@@ -299,7 +299,7 @@ export default function TeamDashboard() {
                 <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">Cliente</th>
                 <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">Estatus</th>
                 <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">Prioridad</th>
-                <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap" title="Fecha de compromiso de entrega">F. Compromiso</th>
+                <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap" title="Fecha de compromiso de entrega">Fecha de entrega</th>
                 <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">Entregables</th>
                 <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">Coment.</th>
               </tr>
