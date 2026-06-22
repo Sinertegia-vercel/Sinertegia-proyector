@@ -290,7 +290,7 @@ export default function TeamDashboard() {
                 <th className="text-left px-4 py-3 font-semibold text-gray-600">Estatus</th>
                 <th className="text-left px-4 py-3 font-semibold text-gray-600">Prioridad</th>
                 <th className="text-left px-4 py-3 font-semibold text-gray-600">F. Compromiso</th>
-                <th className="text-left px-4 py-3 font-semibold text-gray-600">Links</th>
+                <th className="text-left px-4 py-3 font-semibold text-gray-600">Entregables</th>
                 <th className="text-left px-4 py-3 font-semibold text-gray-600"></th>
               </tr>
             </thead>
@@ -332,7 +332,10 @@ export default function TeamDashboard() {
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    <MessageSquare size={14} className="text-gray-400" />
+                    <span className="flex items-center gap-1 text-gray-400 text-xs">
+                      <MessageSquare size={14} />
+                      {(task.comments as any)?.[0]?.count > 0 && (task.comments as any)[0].count}
+                    </span>
                   </td>
                 </tr>
               ))}

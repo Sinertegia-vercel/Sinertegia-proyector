@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
-import { X, ExternalLink, Send, CheckCircle, RotateCcw, ShieldCheck, ThumbsUp, Plus, Trash2 } from 'lucide-react'
+import { X, ExternalLink, Send, CheckCircle, RotateCcw, ShieldCheck, ThumbsUp, Plus, Trash2, MessageSquare } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import type { Task, User } from '../../types'
+import type { Task, User, Comment } from '../../types'
 
 interface Props {
   task: Task
@@ -29,6 +29,9 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone 
   const [currentStatus, setCurrentStatus] = useState(task.status)
   const [statusMenuOpen, setStatusMenuOpen] = useState(false)
   const [commitDate, setCommitDate] = useState(task.commitment_date || '')
+  const [comments, setComments] = useState<Comment[]>([])
+  const [newComment, setNewComment] = useState('')
+  const [sendingComment, setSendingComment] = useState(false)
 
   useEffect(() => {
     supabase.from('users').select('*')
@@ -36,6 +39,31 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone 
       .order('full_name')
       .then(({ data }) => setTeamMembers(data || []))
   }, [])
+
+  useEffect(() => {
+    fetchComments()
+  }, [task.id])
+
+  async function fetchComments() {
+    const { data } = await supabase
+      .from('task_comments')
+      .select('*, user:users(id, full_name)')
+      .eq('task_id', task.id)
+      .order('created_at', { ascending: true })
+    setComments((data as Comment[]) || [])
+  }
+
+  async function sendComment(e: React.FormEvent) {
+    e.preventDefault()
+    if (!newComment.trim() || !user) return
+    setSendingComment(true)
+    await supabase.from('task_comments').insert({
+      task_id: task.id, user_id: user.id, content: newComment.trim(),
+    })
+    setNewComment('')
+    await fetchComments()
+    setSendingComment(false)
+  }
 
   // ─── determinar paso actual ───────────────────────────────────────────────
   const step = !task.review_status ? 1
@@ -540,6 +568,38 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone 
               </button>
             </div>
           )}
+
+          {/* ── Comentarios ── */}
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+              <MessageSquare size={13} /> Comentarios
+            </p>
+            <div className="space-y-2 mb-3 max-h-48 overflow-y-auto">
+              {comments.length === 0 && (
+                <p className="text-xs text-gray-400 italic">Sin comentarios aún</p>
+              )}
+              {comments.map(c => (
+                <div key={c.id} className="bg-gray-50 rounded-lg px-3 py-2">
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className="text-xs font-semibold text-gray-700">{c.user?.full_name || 'Usuario'}</span>
+                    <span className="text-[10px] text-gray-400">
+                      {new Date(c.created_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap">{c.content}</p>
+                </div>
+              ))}
+            </div>
+            <form onSubmit={sendComment} className="flex gap-2">
+              <input value={newComment} onChange={e => setNewComment(e.target.value)}
+                placeholder="Escribe un comentario..."
+                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <button type="submit" disabled={sendingComment || !newComment.trim()}
+                className="bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 transition disabled:opacity-50">
+                <Send size={14} />
+              </button>
+            </form>
+          </div>
 
           {/* Botón cerrar */}
           <div className="pt-2 border-t border-gray-100">
