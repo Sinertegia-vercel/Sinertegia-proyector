@@ -19,6 +19,8 @@ export interface ChatMessage {
   file_url?: string
   file_type?: string
   file_name?: string
+  deleted_for_everyone?: boolean
+  deleted_for?: string[]
   sender?: User
 }
 

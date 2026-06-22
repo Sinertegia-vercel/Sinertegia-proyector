@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { Users, Music } from 'lucide-react'
+import { Users, Music, MoreVertical, Trash2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import type { ChatMessage, User } from '../../types'
@@ -60,6 +60,7 @@ export default function TeamChat() {
   const [newMessage, setNewMessage] = useState('')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(true)
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => { initRoom() }, [])
@@ -67,7 +68,7 @@ export default function TeamChat() {
   useEffect(() => {
     if (!roomId) return
     const channel = supabase.channel(`team-chat-${roomId}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `room_id=eq.${roomId}` },
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages', filter: `room_id=eq.${roomId}` },
         () => fetchMessages(roomId))
       .subscribe()
     return () => { supabase.removeChannel(channel) }
@@ -149,7 +150,24 @@ export default function TeamChat() {
     fetchMessages(roomId)
   }
 
+  async function deleteForMe(msg: ChatMessage) {
+    if (!user) return
+    setOpenMenuId(null)
+    const updated = [...(msg.deleted_for || []), user.id]
+    await supabase.from('chat_messages').update({ deleted_for: updated }).eq('id', msg.id)
+    setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, deleted_for: updated } : m))
+  }
+
+  async function deleteForEveryone(msg: ChatMessage) {
+    if (!user) return
+    setOpenMenuId(null)
+    await supabase.from('chat_messages').update({ deleted_for_everyone: true }).eq('id', msg.id).eq('sender_id', user.id)
+    setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, deleted_for_everyone: true } : m))
+  }
+
   if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Cargando chat...</div>
+
+  const visibleMessages = messages.filter(m => !(m.deleted_for || []).includes(user?.id || ''))
 
   return (
     <div className="flex flex-col h-[600px] bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
@@ -162,34 +180,70 @@ export default function TeamChat() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
-        {messages.length === 0 && (
+        {visibleMessages.length === 0 && (
           <div className="text-center text-gray-400 py-8">
             <Users size={28} className="mx-auto mb-2 opacity-30" />
             <p className="text-sm">No hay mensajes aún. ¡Sé el primero!</p>
           </div>
         )}
-        {messages.map(msg => {
+        {visibleMessages.map(msg => {
           const isMe = msg.sender_id === user?.id
           const senderName = (msg.sender as any)?.full_name || 'Usuario'
           const initial = senderName.charAt(0).toUpperCase()
           return (
-            <div key={msg.id} className={`flex gap-2 ${isMe ? 'flex-row-reverse' : ''}`}>
+            <div key={msg.id} className={`flex gap-2 group ${isMe ? 'flex-row-reverse' : ''}`}>
               <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${isMe ? 'bg-blue-600 text-white' : 'bg-gray-300 text-gray-700'}`}>
                 {initial}
               </div>
               <div className={`max-w-xs lg:max-w-md flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
                 {!isMe && <span className="text-xs text-gray-400 mb-1 ml-1">{senderName}</span>}
-                {msg.content && (
-                  <div className={`px-3 py-2 rounded-xl text-sm ${isMe ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white text-gray-800 rounded-tl-none border border-gray-200'}`}>
-                    {renderWithMentions(msg.content, chatUsers.map(u => u.full_name))}
+                {msg.deleted_for_everyone ? (
+                  <div className="px-3 py-2 rounded-xl text-sm italic text-gray-400 bg-gray-100 border border-gray-200">
+                    🚫 Mensaje eliminado
                   </div>
+                ) : (
+                  <>
+                    {msg.content && (
+                      <div className={`px-3 py-2 rounded-xl text-sm ${isMe ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white text-gray-800 rounded-tl-none border border-gray-200'}`}>
+                        {renderWithMentions(msg.content, chatUsers.map(u => u.full_name))}
+                      </div>
+                    )}
+                    {msg.file_url && msg.file_type && msg.file_name && (
+                      <FilePreview url={msg.file_url} type={msg.file_type} name={msg.file_name} isMe={isMe} />
+                    )}
+                  </>
                 )}
-                {msg.file_url && msg.file_type && msg.file_name && (
-                  <FilePreview url={msg.file_url} type={msg.file_type} name={msg.file_name} isMe={isMe} />
-                )}
-                <span className="text-xs text-gray-300 mt-1 mx-1">
-                  {new Date(msg.created_at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
-                </span>
+                <div className="flex items-center gap-1.5 mt-1 mx-1">
+                  <span className="text-xs text-gray-300">
+                    {new Date(msg.created_at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                  {!msg.deleted_for_everyone && (
+                    <div className="relative">
+                      <button type="button"
+                        onClick={() => setOpenMenuId(o => o === msg.id ? null : msg.id)}
+                        className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-gray-600 transition">
+                        <MoreVertical size={13} />
+                      </button>
+                      {openMenuId === msg.id && (
+                        <>
+                          <div className="fixed inset-0 z-10" onClick={() => setOpenMenuId(null)} />
+                          <div className={`absolute z-20 top-5 ${isMe ? 'right-0' : 'left-0'} bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[160px]`}>
+                            <button type="button" onClick={() => deleteForMe(msg)}
+                              className="w-full flex items-center gap-2 text-left px-3 py-2 text-xs text-gray-600 hover:bg-gray-50">
+                              <Trash2 size={12} /> Borrar para mí
+                            </button>
+                            {isMe && (
+                              <button type="button" onClick={() => deleteForEveryone(msg)}
+                                className="w-full flex items-center gap-2 text-left px-3 py-2 text-xs text-red-600 hover:bg-red-50">
+                                <Trash2 size={12} /> Borrar para todos
+                              </button>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )

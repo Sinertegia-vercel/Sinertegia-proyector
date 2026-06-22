@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { Plus, CheckCircle, Music } from 'lucide-react'
+import { Plus, CheckCircle, Music, MoreVertical, Trash2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import type { ChatMessage, Client, User } from '../../types'
@@ -53,6 +53,7 @@ export default function ClientChatRoom({ client, onConvertToTask }: Props) {
   const [newMessage, setNewMessage] = useState('')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(true)
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   const isTeamOrAdmin = user?.role === 'admin' || user?.role === 'team'
@@ -68,7 +69,7 @@ export default function ClientChatRoom({ client, onConvertToTask }: Props) {
     const channel = supabase
       .channel(`client-chat-${roomId}`)
       .on('postgres_changes', {
-        event: 'INSERT',
+        event: '*',
         schema: 'public',
         table: 'chat_messages',
         filter: `room_id=eq.${roomId}`,
@@ -160,6 +161,21 @@ export default function ClientChatRoom({ client, onConvertToTask }: Props) {
     fetchMessages(roomId)
   }
 
+  async function deleteForMe(msg: ChatMessage) {
+    if (!user) return
+    setOpenMenuId(null)
+    const updated = [...(msg.deleted_for || []), user.id]
+    await supabase.from('chat_messages').update({ deleted_for: updated }).eq('id', msg.id)
+    setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, deleted_for: updated } : m))
+  }
+
+  async function deleteForEveryone(msg: ChatMessage) {
+    if (!user) return
+    setOpenMenuId(null)
+    await supabase.from('chat_messages').update({ deleted_for_everyone: true }).eq('id', msg.id).eq('sender_id', user.id)
+    setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, deleted_for_everyone: true } : m))
+  }
+
   async function handleConvertToTask(msg: ChatMessage) {
     await supabase
       .from('chat_messages')
@@ -175,6 +191,8 @@ export default function ClientChatRoom({ client, onConvertToTask }: Props) {
     return <div className="flex items-center justify-center h-full text-gray-400">Cargando chat...</div>
   }
 
+  const visibleMessages = messages.filter(m => !(m.deleted_for || []).includes(user?.id || ''))
+
   return (
     <div className="flex flex-col h-full bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
       {/* Header */}
@@ -185,7 +203,7 @@ export default function ClientChatRoom({ client, onConvertToTask }: Props) {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
-        {messages.length === 0 && (
+        {visibleMessages.length === 0 && (
           <div className="text-center text-gray-400 py-8">
             <p className="text-sm">No hay mensajes aún.</p>
             <p className="text-xs mt-1 text-gray-400">
@@ -195,7 +213,7 @@ export default function ClientChatRoom({ client, onConvertToTask }: Props) {
             </p>
           </div>
         )}
-        {messages.map(msg => {
+        {visibleMessages.map(msg => {
           const senderRole = (msg.sender as any)?.role
           const isClientMsg = senderRole === 'client'
           const isMe = msg.sender_id === user?.id
@@ -203,7 +221,7 @@ export default function ClientChatRoom({ client, onConvertToTask }: Props) {
           const initial = senderName.charAt(0).toUpperCase()
 
           return (
-            <div key={msg.id} className={`flex gap-2 ${isMe ? 'flex-row-reverse' : ''}`}>
+            <div key={msg.id} className={`flex gap-2 group ${isMe ? 'flex-row-reverse' : ''}`}>
               <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${isClientMsg ? 'bg-red-100 text-red-700' : 'bg-blue-600 text-white'}`}>
                 {initial}
               </div>
@@ -211,42 +229,76 @@ export default function ClientChatRoom({ client, onConvertToTask }: Props) {
                 {!isMe && (
                   <span className="text-xs text-gray-400 mb-1 ml-1">{senderName}</span>
                 )}
-                {msg.content && (
-                  <div className={`px-3 py-2 rounded-xl text-sm ${isMe ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white text-gray-800 rounded-tl-none border border-gray-200'}`}>
-                    {renderWithMentions(msg.content, chatUsers.map(u => u.full_name))}
-                    {msg.converted_to_task && (
-                      <span className="ml-2 inline-flex items-center gap-1 text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full">
-                        <CheckCircle size={10} /> Tarea creada
-                      </span>
+                {msg.deleted_for_everyone ? (
+                  <div className="px-3 py-2 rounded-xl text-sm italic text-gray-400 bg-gray-100 border border-gray-200">
+                    🚫 Mensaje eliminado
+                  </div>
+                ) : (
+                  <>
+                    {msg.content && (
+                      <div className={`px-3 py-2 rounded-xl text-sm ${isMe ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white text-gray-800 rounded-tl-none border border-gray-200'}`}>
+                        {renderWithMentions(msg.content, chatUsers.map(u => u.full_name))}
+                        {msg.converted_to_task && (
+                          <span className="ml-2 inline-flex items-center gap-1 text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full">
+                            <CheckCircle size={10} /> Tarea creada
+                          </span>
+                        )}
+                      </div>
                     )}
-                  </div>
-                )}
-                {msg.file_url && msg.file_type === 'image' && (
-                  <a href={msg.file_url} target="_blank" rel="noreferrer">
-                    <img src={msg.file_url} alt={msg.file_name || 'imagen'} className="max-w-[200px] max-h-[200px] rounded-xl object-cover mt-1 hover:opacity-90 transition" />
-                  </a>
-                )}
-                {msg.file_url && msg.file_type === 'audio' && (
-                  <div className={`mt-1 flex items-center gap-2 rounded-xl px-3 py-2 ${isMe ? 'bg-blue-700' : 'bg-gray-100'}`}>
-                    <Music size={14} className={isMe ? 'text-blue-200' : 'text-gray-500'} />
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-xs truncate mb-1 ${isMe ? 'text-blue-200' : 'text-gray-500'}`}>{msg.file_name}</p>
-                      <audio controls src={msg.file_url} className="w-full h-8" style={{ maxWidth: '200px' }} />
-                    </div>
-                  </div>
+                    {msg.file_url && msg.file_type === 'image' && (
+                      <a href={msg.file_url} target="_blank" rel="noreferrer">
+                        <img src={msg.file_url} alt={msg.file_name || 'imagen'} className="max-w-[200px] max-h-[200px] rounded-xl object-cover mt-1 hover:opacity-90 transition" />
+                      </a>
+                    )}
+                    {msg.file_url && msg.file_type === 'audio' && (
+                      <div className={`mt-1 flex items-center gap-2 rounded-xl px-3 py-2 ${isMe ? 'bg-blue-700' : 'bg-gray-100'}`}>
+                        <Music size={14} className={isMe ? 'text-blue-200' : 'text-gray-500'} />
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-xs truncate mb-1 ${isMe ? 'text-blue-200' : 'text-gray-500'}`}>{msg.file_name}</p>
+                          <audio controls src={msg.file_url} className="w-full h-8" style={{ maxWidth: '200px' }} />
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
                 <div className="flex items-center gap-2 mt-1 mx-1">
                   <span className="text-xs text-gray-300">
                     {new Date(msg.created_at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
                   </span>
                   {/* Botón "Crear tarea" solo para equipo/admin viendo mensajes del cliente */}
-                  {isTeamOrAdmin && isClientMsg && !msg.converted_to_task && (
+                  {isTeamOrAdmin && isClientMsg && !msg.converted_to_task && !msg.deleted_for_everyone && (
                     <button
                       onClick={() => handleConvertToTask(msg)}
                       className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded-full transition"
                     >
                       <Plus size={10} /> Crear tarea
                     </button>
+                  )}
+                  {!msg.deleted_for_everyone && (
+                    <div className="relative">
+                      <button type="button"
+                        onClick={() => setOpenMenuId(o => o === msg.id ? null : msg.id)}
+                        className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-gray-600 transition">
+                        <MoreVertical size={13} />
+                      </button>
+                      {openMenuId === msg.id && (
+                        <>
+                          <div className="fixed inset-0 z-10" onClick={() => setOpenMenuId(null)} />
+                          <div className={`absolute z-20 top-5 ${isMe ? 'right-0' : 'left-0'} bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[160px]`}>
+                            <button type="button" onClick={() => deleteForMe(msg)}
+                              className="w-full flex items-center gap-2 text-left px-3 py-2 text-xs text-gray-600 hover:bg-gray-50">
+                              <Trash2 size={12} /> Borrar para mí
+                            </button>
+                            {isMe && (
+                              <button type="button" onClick={() => deleteForEveryone(msg)}
+                                className="w-full flex items-center gap-2 text-left px-3 py-2 text-xs text-red-600 hover:bg-red-50">
+                                <Trash2 size={12} /> Borrar para todos
+                              </button>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
