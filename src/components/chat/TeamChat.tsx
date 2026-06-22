@@ -139,7 +139,7 @@ export default function TeamChat() {
             user_id: u.id,
             title: isMentioned ? `@${user.full_name} te mencionó en el chat` : `💬 ${user.full_name} en el Chat del Equipo`,
             message: messagePreview,
-            type: isMentioned ? 'mention' : 'chat',
+            type: isMentioned ? 'mention' : 'comment',
             read: false,
           }
         })

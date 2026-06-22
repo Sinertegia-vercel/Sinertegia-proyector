@@ -151,7 +151,7 @@ export default function ClientChatRoom({ client, onConvertToTask }: Props) {
             user_id: u.id,
             title: isMentioned ? `@${user.full_name} te mencionó en el chat` : `💬 ${user.full_name} en el chat de ${client.name}`,
             message: messagePreview,
-            type: isMentioned ? 'mention' : 'chat',
+            type: isMentioned ? 'mention' : 'comment',
             read: false,
           }
         })
