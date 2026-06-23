@@ -39,9 +39,11 @@ function AppContent() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="relative z-40">
-        <Navbar />
-      </div>
+      {user.role !== 'team' && (
+        <div className="relative z-40">
+          <Navbar />
+        </div>
+      )}
       <main>
         {user.role === 'admin' && <AdminDashboard />}
         {user.role === 'team' && <TeamDashboard />}
