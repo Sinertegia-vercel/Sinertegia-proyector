@@ -160,10 +160,13 @@ export default function TeamDashboard({ embedded = false }: Props) {
     .filter(d => d.value > 0)
 
   // Tareas completadas por día de la semana (acumulado Lun → Dom)
+  // Usa completion_date si existe; si no, cae a updated_at (que siempre se llena al cambiar de estatus)
   const completedByWeekday = WEEKDAYS.map(() => 0)
   tasks.forEach(t => {
-    if (t.status === 'completada' && t.completion_date) {
-      const jsDay = new Date(t.completion_date + 'T00:00:00').getDay()
+    if (t.status === 'completada') {
+      const dateStr = t.completion_date ? t.completion_date + 'T00:00:00' : t.updated_at
+      if (!dateStr) return
+      const jsDay = new Date(dateStr).getDay()
       const idx = jsDay === 0 ? 6 : jsDay - 1
       completedByWeekday[idx]++
     }
@@ -504,8 +507,8 @@ export default function TeamDashboard({ embedded = false }: Props) {
           </div>
 
           {/* Gráficas + próximas entregas */}
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
-            <div className="lg:col-span-2 bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6 items-stretch">
+            <div className="lg:col-span-2 bg-white border border-gray-200 rounded-2xl p-4 shadow-sm flex flex-col min-h-[280px]">
               <p className="text-sm font-bold text-gray-800 mb-2">Resumen de progreso</p>
               <ResponsiveContainer width="100%" height={180}>
                 <AreaChart data={weeklyProgress}>
@@ -523,10 +526,10 @@ export default function TeamDashboard({ embedded = false }: Props) {
               </ResponsiveContainer>
             </div>
 
-            <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm flex flex-col">
+            <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm flex flex-col min-h-[280px]">
               <p className="text-sm font-bold text-gray-800 mb-2">Tareas por prioridad</p>
               {priorityData.length === 0 ? (
-                <p className="text-xs text-gray-400 py-10 text-center">Sin tareas aún</p>
+                <p className="text-xs text-gray-400 flex-1 flex items-center justify-center text-center">Sin tareas aún</p>
               ) : (
                 <>
                   <ResponsiveContainer width="100%" height={130}>
@@ -548,12 +551,12 @@ export default function TeamDashboard({ embedded = false }: Props) {
               )}
             </div>
 
-            <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
+            <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm flex flex-col min-h-[280px]">
               <p className="text-sm font-bold text-gray-800 mb-3">Próximas entregas</p>
               {upcoming.length === 0 ? (
-                <p className="text-xs text-gray-400">No tienes entregas próximas</p>
+                <p className="text-xs text-gray-400 flex-1 flex items-center justify-center text-center">No tienes entregas próximas</p>
               ) : (
-                <div className="space-y-2.5">
+                <div className="space-y-2.5 flex-1">
                   {upcoming.map(t => (
                     <div key={t.id} className="flex items-center gap-2.5 cursor-pointer" onClick={() => setSelectedTask(t)}>
                       <div className="w-8 h-8 rounded-lg bg-purple-50 flex items-center justify-center shrink-0">
