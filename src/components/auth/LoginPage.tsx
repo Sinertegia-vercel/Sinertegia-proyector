@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Eye, EyeOff, ArrowLeft, Mail } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import logoImg from '../../assets/logo.png'
+import FloatingLines from './FloatingLines'
 
 interface Props {
   unauthorizedEmail?: string | null
@@ -59,8 +60,22 @@ export default function LoginPage({ unauthorizedEmail }: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-red-700 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
+    <div className="min-h-screen relative bg-[#0b1230] flex items-center justify-center p-4 overflow-hidden">
+      <div className="absolute inset-0">
+        <FloatingLines
+          enabledWaves={['top', 'middle', 'bottom']}
+          lineCount={8}
+          lineDistance={8}
+          bendRadius={8}
+          bendStrength={-2}
+          interactive
+          parallax
+          animationSpeed={1}
+          linesGradient={['#1e3a8a', '#3b82f6', '#dc2626']}
+        />
+      </div>
+
+      <div className="relative z-10 bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">
 
         <div className="flex flex-col items-center mb-8">
           <img src={logoImg} alt="Sinertegia Logo" className="w-24 h-24 object-contain" />
