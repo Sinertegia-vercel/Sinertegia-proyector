@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { MessageSquare, CheckCircle, Clock, ClipboardList, MessageCircle, Map, Plus, CalendarDays, Link2, Loader2, XCircle, FileText } from 'lucide-react'
+import { MessageSquare, CheckCircle, Clock, ClipboardList, MessageCircle, Map, Plus, CalendarDays, Link2, Loader2, XCircle, FileText, ChevronDown } from 'lucide-react'
 import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -51,6 +51,8 @@ export default function TeamDashboard({ embedded = false }: Props) {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [showCreateTask, setShowCreateTask] = useState(false)
   const [filter, setFilter] = useState<'todas' | 'pendiente' | 'en_progreso' | 'completada'>('todas')
+  const [clientFilter, setClientFilter] = useState<string>('todos')
+  const [clientFilterOpen, setClientFilterOpen] = useState(false)
   const [teamView, setTeamView] = useState<TeamView>('tasks')
 
   const isTraffickerOrLider = user?.department === 'trafficker' || user?.department === 'lider'
@@ -143,7 +145,9 @@ export default function TeamDashboard({ embedded = false }: Props) {
     setReviewTasks((data as any) || [])
   }
 
-  const filtered = filter === 'todas' ? tasks.filter(t => t.status !== 'completada') : tasks.filter(t => t.status === filter)
+  const byStatus = filter === 'todas' ? tasks.filter(t => t.status !== 'completada') : tasks.filter(t => t.status === filter)
+  const filtered = clientFilter === 'todos' ? byStatus : byStatus.filter(t => t.project?.client?.name === clientFilter)
+  const clientOptions = Array.from(new Set(tasks.map(t => t.project?.client?.name).filter((n): n is string => !!n))).sort()
   const isOverdue = (t: Task) => t.commitment_date && t.status !== 'completada' && new Date(t.commitment_date) < new Date()
 
   const stats = {
@@ -294,7 +298,35 @@ export default function TeamDashboard({ embedded = false }: Props) {
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
               <th className="text-left px-4 py-3 font-semibold text-gray-600 min-w-[220px]">Tarea</th>
-              <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">Cliente</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap relative">
+                <div className="relative inline-block">
+                  <button type="button" onClick={() => setClientFilterOpen(o => !o)}
+                    className="flex items-center gap-1 hover:text-gray-900 transition">
+                    Cliente
+                    {clientFilter !== 'todos' && (
+                      <span className="text-blue-600 font-normal">({clientFilter})</span>
+                    )}
+                    <ChevronDown size={13} />
+                  </button>
+                  {clientFilterOpen && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setClientFilterOpen(false)} />
+                      <div className="absolute left-0 top-7 z-20 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[180px] max-h-64 overflow-y-auto">
+                        <button type="button" onClick={() => { setClientFilter('todos'); setClientFilterOpen(false) }}
+                          className={`w-full text-left px-3 py-2 text-xs font-medium hover:bg-gray-50 transition ${clientFilter === 'todos' ? 'text-blue-600' : 'text-gray-700'}`}>
+                          Todos los clientes
+                        </button>
+                        {clientOptions.map(name => (
+                          <button key={name} type="button" onClick={() => { setClientFilter(name); setClientFilterOpen(false) }}
+                            className={`w-full text-left px-3 py-2 text-xs font-medium hover:bg-gray-50 transition ${clientFilter === name ? 'text-blue-600' : 'text-gray-700'}`}>
+                            {name}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </th>
               <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">Estatus</th>
               <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">Prioridad</th>
               <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap" title="Fecha de compromiso de entrega">Fecha de entrega</th>
