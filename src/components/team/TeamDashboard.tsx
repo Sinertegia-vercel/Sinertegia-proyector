@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { MessageSquare, CheckCircle, Clock, ClipboardList, MessageCircle, Map, Plus, CalendarDays, Link2, Loader2, XCircle, FileText, ChevronDown } from 'lucide-react'
 import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { supabase } from '../../lib/supabase'
@@ -53,6 +53,8 @@ export default function TeamDashboard({ embedded = false }: Props) {
   const [filter, setFilter] = useState<'todas' | 'pendiente' | 'en_progreso' | 'completada'>('todas')
   const [clientFilter, setClientFilter] = useState<string>('todos')
   const [clientFilterOpen, setClientFilterOpen] = useState(false)
+  const [clientFilterPos, setClientFilterPos] = useState({ top: 0, left: 0 })
+  const clientFilterBtnRef = useRef<HTMLButtonElement>(null)
   const [teamView, setTeamView] = useState<TeamView>('tasks')
 
   const isTraffickerOrLider = user?.department === 'trafficker' || user?.department === 'lider'
@@ -298,34 +300,19 @@ export default function TeamDashboard({ embedded = false }: Props) {
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
               <th className="text-left px-4 py-3 font-semibold text-gray-600 min-w-[220px]">Tarea</th>
-              <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap relative">
-                <div className="relative inline-block">
-                  <button type="button" onClick={() => setClientFilterOpen(o => !o)}
-                    className="flex items-center gap-1 hover:text-gray-900 transition">
-                    Cliente
-                    {clientFilter !== 'todos' && (
-                      <span className="text-blue-600 font-normal">({clientFilter})</span>
-                    )}
-                    <ChevronDown size={13} />
-                  </button>
-                  {clientFilterOpen && (
-                    <>
-                      <div className="fixed inset-0 z-10" onClick={() => setClientFilterOpen(false)} />
-                      <div className="absolute left-0 top-7 z-20 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[180px] max-h-64 overflow-y-auto">
-                        <button type="button" onClick={() => { setClientFilter('todos'); setClientFilterOpen(false) }}
-                          className={`w-full text-left px-3 py-2 text-xs font-medium hover:bg-gray-50 transition ${clientFilter === 'todos' ? 'text-blue-600' : 'text-gray-700'}`}>
-                          Todos los clientes
-                        </button>
-                        {clientOptions.map(name => (
-                          <button key={name} type="button" onClick={() => { setClientFilter(name); setClientFilterOpen(false) }}
-                            className={`w-full text-left px-3 py-2 text-xs font-medium hover:bg-gray-50 transition ${clientFilter === name ? 'text-blue-600' : 'text-gray-700'}`}>
-                            {name}
-                          </button>
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </div>
+              <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">
+                <button type="button" ref={clientFilterBtnRef} onClick={() => {
+                  if (!clientFilterOpen && clientFilterBtnRef.current) {
+                    const rect = clientFilterBtnRef.current.getBoundingClientRect()
+                    setClientFilterPos({ top: rect.bottom + 4, left: rect.left })
+                  }
+                  setClientFilterOpen(o => !o)
+                }}
+                  className="flex items-center gap-1 hover:text-gray-900 transition">
+                  Cliente
+                  {clientFilter !== 'todos' && <span className="text-blue-600 font-normal">({clientFilter})</span>}
+                  <ChevronDown size={13} />
+                </button>
               </th>
               <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">Estatus</th>
               <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">Prioridad</th>
@@ -382,6 +369,27 @@ export default function TeamDashboard({ embedded = false }: Props) {
           </tbody>
         </table>
       </div>
+
+      {clientFilterOpen && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setClientFilterOpen(false)} />
+          <div
+            className="fixed z-50 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[200px] max-h-72 overflow-y-auto"
+            style={{ top: clientFilterPos.top, left: clientFilterPos.left }}
+          >
+            <button type="button" onClick={() => { setClientFilter('todos'); setClientFilterOpen(false) }}
+              className={`w-full text-left px-3 py-2 text-sm font-medium hover:bg-gray-50 transition ${clientFilter === 'todos' ? 'text-blue-600' : 'text-gray-700'}`}>
+              Todos los clientes
+            </button>
+            {clientOptions.map(name => (
+              <button key={name} type="button" onClick={() => { setClientFilter(name); setClientFilterOpen(false) }}
+                className={`w-full text-left px-3 py-2 text-sm font-medium hover:bg-gray-50 transition ${clientFilter === name ? 'text-blue-600' : 'text-gray-700'}`}>
+                {name}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   )
 
