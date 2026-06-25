@@ -55,6 +55,10 @@ export default function TeamDashboard({ embedded = false }: Props) {
   const [clientFilterOpen, setClientFilterOpen] = useState(false)
   const [clientFilterPos, setClientFilterPos] = useState({ top: 0, left: 0 })
   const clientFilterBtnRef = useRef<HTMLButtonElement>(null)
+  const [priorityFilter, setPriorityFilter] = useState<Priority | 'todos'>('todos')
+  const [priorityFilterOpen, setPriorityFilterOpen] = useState(false)
+  const [priorityFilterPos, setPriorityFilterPos] = useState({ top: 0, left: 0 })
+  const priorityFilterBtnRef = useRef<HTMLButtonElement>(null)
   const [teamView, setTeamView] = useState<TeamView>('tasks')
 
   const isTraffickerOrLider = user?.department === 'trafficker' || user?.department === 'lider'
@@ -148,8 +152,10 @@ export default function TeamDashboard({ embedded = false }: Props) {
   }
 
   const byStatus = filter === 'todas' ? tasks.filter(t => t.status !== 'completada') : tasks.filter(t => t.status === filter)
-  const filtered = clientFilter === 'todos' ? byStatus : byStatus.filter(t => t.project?.client?.name === clientFilter)
+  const byClient = clientFilter === 'todos' ? byStatus : byStatus.filter(t => t.project?.client?.name === clientFilter)
+  const filtered = priorityFilter === 'todos' ? byClient : byClient.filter(t => t.priority === priorityFilter)
   const clientOptions = Array.from(new Set(tasks.map(t => t.project?.client?.name).filter((n): n is string => !!n))).sort()
+  const priorityOptions = (['critica', 'alta', 'media', 'baja'] as Priority[]).filter(p => tasks.some(t => t.priority === p))
   const isOverdue = (t: Task) => t.commitment_date && t.status !== 'completada' && new Date(t.commitment_date) < new Date()
 
   const stats = {
@@ -315,7 +321,20 @@ export default function TeamDashboard({ embedded = false }: Props) {
                 </button>
               </th>
               <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">Estatus</th>
-              <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">Prioridad</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">
+                <button type="button" ref={priorityFilterBtnRef} onClick={() => {
+                  if (!priorityFilterOpen && priorityFilterBtnRef.current) {
+                    const rect = priorityFilterBtnRef.current.getBoundingClientRect()
+                    setPriorityFilterPos({ top: rect.bottom + 4, left: rect.left })
+                  }
+                  setPriorityFilterOpen(o => !o)
+                }}
+                  className="flex items-center gap-1 hover:text-gray-900 transition">
+                  Prioridad
+                  {priorityFilter !== 'todos' && <span className="text-blue-600 font-normal">({PRIORITY_CHART[priorityFilter].label})</span>}
+                  <ChevronDown size={13} />
+                </button>
+              </th>
               <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap" title="Fecha de compromiso de entrega">Fecha de entrega</th>
               <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">Entregables</th>
               <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">Com.</th>
@@ -385,6 +404,28 @@ export default function TeamDashboard({ embedded = false }: Props) {
               <button key={name} type="button" onClick={() => { setClientFilter(name); setClientFilterOpen(false) }}
                 className={`w-full text-left px-3 py-2 text-sm font-medium hover:bg-gray-50 transition ${clientFilter === name ? 'text-blue-600' : 'text-gray-700'}`}>
                 {name}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      {priorityFilterOpen && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setPriorityFilterOpen(false)} />
+          <div
+            className="fixed z-50 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[160px]"
+            style={{ top: priorityFilterPos.top, left: priorityFilterPos.left }}
+          >
+            <button type="button" onClick={() => { setPriorityFilter('todos'); setPriorityFilterOpen(false) }}
+              className={`w-full text-left px-3 py-2 text-sm font-medium hover:bg-gray-50 transition ${priorityFilter === 'todos' ? 'text-blue-600' : 'text-gray-700'}`}>
+              Todas las prioridades
+            </button>
+            {priorityOptions.map(p => (
+              <button key={p} type="button" onClick={() => { setPriorityFilter(p); setPriorityFilterOpen(false) }}
+                className={`w-full text-left px-3 py-2 text-sm font-medium hover:bg-gray-50 transition flex items-center gap-2 ${priorityFilter === p ? 'text-blue-600' : 'text-gray-700'}`}>
+                <span className="w-2 h-2 rounded-full" style={{ background: PRIORITY_CHART[p].color }} />
+                {PRIORITY_CHART[p].label}
               </button>
             ))}
           </div>
