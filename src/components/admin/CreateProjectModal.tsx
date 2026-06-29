@@ -4,6 +4,9 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import type { Client, User } from '../../types'
 import { PROJECT_TEMPLATES, GROUP_LABELS, GROUP_COLORS, TEMPLATE_GROUP_ORDER } from '../../data/projectTemplates'
+import CreateFunnelTemplateModal from './CreateFunnelTemplateModal'
+
+interface CustomTemplate { id: string; name: string; icon: string; description: string | null; taskCount: number }
 
 interface Props {
   clients: Client[]
@@ -44,12 +47,35 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null)
   const [clientUser, setClientUser] = useState<User | null>(null)
   const [clientUsers, setClientUsers] = useState<User[]>([])
+  const [customTemplates, setCustomTemplates] = useState<CustomTemplate[]>([])
+  const [showCreateFunnel, setShowCreateFunnel] = useState(false)
 
   useEffect(() => {
     supabase.from('users').select('*').eq('role', 'client').order('full_name').then(({ data }) => {
       if (data) setClientUsers(data as User[])
     })
+    fetchCustomTemplates()
   }, [])
+
+  async function fetchCustomTemplates() {
+    const { data: templates } = await supabase.from('project_templates').select('*').order('created_at')
+    if (!templates || templates.length === 0) { setCustomTemplates([]); return }
+    const { data: counts } = await supabase
+      .from('template_tasks')
+      .select('template_id')
+      .in('template_id', templates.map((t: any) => t.id))
+    const countByTemplate: Record<string, number> = {}
+    ;(counts || []).forEach((row: any) => { countByTemplate[row.template_id] = (countByTemplate[row.template_id] || 0) + 1 })
+    setCustomTemplates(templates.map((t: any) => ({
+      id: t.id, name: t.name, icon: t.icon, description: t.description, taskCount: countByTemplate[t.id] || 0,
+    })))
+  }
+
+  function handleFunnelCreated(tpl: { id: string; name: string; icon: string; description: string }) {
+    setShowCreateFunnel(false)
+    fetchCustomTemplates()
+    setForm(f => ({ ...f, templateId: tpl.id }))
+  }
 
   const clientAssignees = clientUsers.map(u => ({ id: u.id, full_name: `${u.full_name} (cliente)` }))
 
@@ -90,6 +116,8 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
       .eq('template_id', form.templateId)
       .order('created_at')
 
+    // tpl viene de PROJECT_TEMPLATES (vsl/webinar/otro); si es un embudo personalizado, tpl es undefined
+    // y todas sus tareas vienen de template_tasks (customDbTasks) en vez de tareas fijas en el código.
     const baseTasks: CombinedTask[] = (tpl?.tasks || []).map(t => ({ ...t, isCustom: false, group: t.group }))
     const customTasks: CombinedTask[] = (customDbTasks || []).map(t => ({
       title: t.title,
@@ -287,6 +315,7 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
 
   const selectedCount = selectedTasks.size
   const selectedTpl = PROJECT_TEMPLATES.find(t => t.id === form.templateId)
+    || customTemplates.find(t => t.id === form.templateId)
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -409,7 +438,7 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
             <div>
               <label className="block text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Tipo de embudo *</label>
               <div className="grid grid-cols-3 gap-3">
-                {PROJECT_TEMPLATES.map(tpl => (
+                {PROJECT_TEMPLATES.filter(t => t.id !== 'otro').map(tpl => (
                   <button key={tpl.id} type="button"
                     onClick={() => setForm({ ...form, templateId: tpl.id })}
                     className={`border-2 rounded-xl p-4 text-left transition cursor-pointer ${
@@ -425,6 +454,44 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
                     )}
                   </button>
                 ))}
+
+                {customTemplates.map(tpl => (
+                  <button key={tpl.id} type="button"
+                    onClick={() => setForm({ ...form, templateId: tpl.id })}
+                    className={`border-2 rounded-xl p-4 text-left transition cursor-pointer ${
+                      form.templateId === tpl.id
+                        ? 'border-blue-600 bg-blue-50'
+                        : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50/50'
+                    }`}>
+                    <p className="text-2xl mb-1">{tpl.icon}</p>
+                    <p className="font-semibold text-sm text-gray-800">{tpl.name}</p>
+                    <p className="text-xs text-gray-400 mt-0.5 leading-tight">{tpl.description}</p>
+                    {tpl.taskCount > 0 && (
+                      <p className="text-xs font-semibold text-blue-500 mt-2">{tpl.taskCount}+ tareas</p>
+                    )}
+                  </button>
+                ))}
+
+                {PROJECT_TEMPLATES.filter(t => t.id === 'otro').map(tpl => (
+                  <button key={tpl.id} type="button"
+                    onClick={() => setForm({ ...form, templateId: tpl.id })}
+                    className={`border-2 rounded-xl p-4 text-left transition cursor-pointer ${
+                      form.templateId === tpl.id
+                        ? 'border-blue-600 bg-blue-50'
+                        : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50/50'
+                    }`}>
+                    <p className="text-2xl mb-1">{tpl.icon}</p>
+                    <p className="font-semibold text-sm text-gray-800">{tpl.name}</p>
+                    <p className="text-xs text-gray-400 mt-0.5 leading-tight">{tpl.description}</p>
+                  </button>
+                ))}
+
+                <button type="button" onClick={() => setShowCreateFunnel(true)}
+                  className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-left transition cursor-pointer hover:border-blue-400 hover:bg-blue-50/50 flex flex-col items-start justify-center">
+                  <p className="text-2xl mb-1 text-blue-500"><Plus size={24} /></p>
+                  <p className="font-semibold text-sm text-blue-600">Crear embudo nuevo</p>
+                  <p className="text-xs text-gray-400 mt-0.5 leading-tight">Define sus tareas una sola vez y reúsalo</p>
+                </button>
               </div>
             </div>
 
@@ -609,6 +676,13 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
           </>
         )}
       </div>
+
+      {showCreateFunnel && (
+        <CreateFunnelTemplateModal
+          onClose={() => setShowCreateFunnel(false)}
+          onCreated={handleFunnelCreated}
+        />
+      )}
     </div>
   )
 }
