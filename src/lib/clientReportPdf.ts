@@ -103,8 +103,8 @@ function buildReportHtml(opts: {
       const w = Math.round((c / maxc) * 100)
       const wd = c ? Math.round((done / c) * 100) : 0
       return `<div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
-        <div style="width:175px;font-size:11.5px;font-weight:500;color:${INK};display:flex;align-items:center;gap:9px;white-space:nowrap;overflow:hidden;">
-          ${avatar(name, 20)}<span style="overflow:hidden;text-overflow:ellipsis;">${esc(name)}</span>
+        <div style="width:230px;flex:0 0 230px;font-size:11.5px;font-weight:500;color:${INK};display:flex;align-items:center;gap:9px;white-space:nowrap;">
+          ${avatar(name, 20)}<span style="display:inline-block;max-width:195px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(name)}</span>
         </div>
         <div style="flex:1;height:14px;background:#EEF2F5;border-radius:8px;overflow:hidden;">
           <div style="height:100%;border-radius:8px;position:relative;width:${w}%;background:${colorFor(name)};">
