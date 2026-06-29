@@ -1,10 +1,13 @@
+import { useState } from 'react'
 import type { Task, User } from '../../types'
-import { CheckCircle, Clock, AlertTriangle } from 'lucide-react'
+import { CheckCircle, Clock, AlertTriangle, ShieldCheck, Shield } from 'lucide-react'
+import { supabase } from '../../lib/supabase'
 
 interface Props {
   teamMembers: User[]
   tasks: Task[]
   onAssign: () => void
+  onUpdate?: () => void
 }
 
 const DEPT_LABELS: Record<string, string> = {
@@ -13,7 +16,18 @@ const DEPT_LABELS: Record<string, string> = {
   lider: 'Líder', cliente: 'Cliente',
 }
 
-export default function TeamCapacity({ teamMembers, tasks, onAssign }: Props) {
+export default function TeamCapacity({ teamMembers, tasks, onAssign, onUpdate }: Props) {
+  const [confirmingId, setConfirmingId] = useState<string | null>(null)
+  const [updatingId, setUpdatingId] = useState<string | null>(null)
+
+  async function makeAdmin(memberId: string) {
+    setUpdatingId(memberId)
+    await supabase.from('users').update({ role: 'admin' }).eq('id', memberId)
+    setConfirmingId(null)
+    setUpdatingId(null)
+    onUpdate?.()
+  }
+
   function getMemberTasks(memberId: string) {
     return tasks.filter(t => t.assigned_to === memberId)
   }
@@ -68,7 +82,14 @@ export default function TeamCapacity({ teamMembers, tasks, onAssign }: Props) {
                       {member.full_name.charAt(0)}
                     </div>
                     <div>
-                      <p className="font-semibold text-gray-800">{member.full_name}</p>
+                      <p className="font-semibold text-gray-800 flex items-center gap-1.5">
+                        {member.full_name}
+                        {member.role === 'admin' && (
+                          <span className="flex items-center gap-1 text-[10px] font-semibold text-purple-600 bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded-full">
+                            <ShieldCheck size={10} /> Admin
+                          </span>
+                        )}
+                      </p>
                       <p className="text-xs text-gray-400">{member.department ? DEPT_LABELS[member.department] : '—'}</p>
                     </div>
                   </div>
@@ -76,6 +97,25 @@ export default function TeamCapacity({ teamMembers, tasks, onAssign }: Props) {
                 <div className="text-right">
                   <p className="text-xs text-gray-400">Carga esta semana</p>
                   <p className="text-lg font-bold text-gray-800">{weekTasks.length} tareas</p>
+                  {member.role !== 'admin' && (
+                    confirmingId === member.id ? (
+                      <div className="flex items-center gap-1 mt-1.5 justify-end">
+                        <button onClick={() => makeAdmin(member.id)} disabled={updatingId === member.id}
+                          className="text-[11px] font-semibold text-white bg-purple-600 hover:bg-purple-700 px-2 py-1 rounded-md transition disabled:opacity-60">
+                          {updatingId === member.id ? '...' : 'Sí, hacer admin'}
+                        </button>
+                        <button onClick={() => setConfirmingId(null)}
+                          className="text-[11px] text-gray-400 hover:text-gray-600 px-1.5 py-1">
+                          Cancelar
+                        </button>
+                      </div>
+                    ) : (
+                      <button onClick={() => setConfirmingId(member.id)}
+                        className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-purple-600 mt-1.5 transition">
+                        <Shield size={11} /> Hacer administrador
+                      </button>
+                    )
+                  )}
                 </div>
               </div>
 

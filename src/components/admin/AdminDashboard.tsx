@@ -344,7 +344,7 @@ export default function AdminDashboard() {
       )}
 
       {/* Vista capacidad del equipo */}
-      {view === 'team' && <TeamCapacity teamMembers={teamMembers} tasks={tasks} onAssign={() => setView('create')} />}
+      {view === 'team' && <TeamCapacity teamMembers={teamMembers} tasks={tasks} onAssign={() => setView('create')} onUpdate={fetchAll} />}
 
       {/* Vista calendario */}
       {view === 'calendar' && <TeamCalendar teamMembers={teamMembers} tasks={tasks} onlineIds={onlineIds} />}

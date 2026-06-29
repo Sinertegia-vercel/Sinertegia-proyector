@@ -206,7 +206,7 @@ export default function ProjectDetail({ project, tasks, teamMembers, projects, o
                 <th className="text-left px-4 py-3 font-semibold text-gray-500">Prioridad</th>
                 <th className="text-left px-4 py-3 font-semibold text-orange-500">La necesito para</th>
                 <th className="text-left px-4 py-3 font-semibold text-blue-500">Mi compromiso</th>
-                <th className="text-left px-4 py-3 font-semibold text-gray-500">F. Entrega</th>
+                <th className="text-left px-4 py-3 font-semibold text-gray-500">Fecha de entrega</th>
                 <th className="text-left px-4 py-3 font-semibold text-gray-500">Revisión</th>
               </tr>
             </thead>

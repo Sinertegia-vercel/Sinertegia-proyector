@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, FileDown } from 'lucide-react'
+import jsPDF from 'jspdf'
 import type { Task, User } from '../../types'
 import UserAvatar from '../shared/UserAvatar'
 
@@ -42,6 +43,7 @@ const MONTHS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', '
 export default function TeamCalendar({ teamMembers, tasks, onlineIds = new Set() }: Props) {
   const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date()))
   const [weeksToShow] = useState(4)
+  const [selectedClient, setSelectedClient] = useState<string | null>(null)
 
   const days: Date[] = []
   for (let i = 0; i < weeksToShow * 7; i++) {
@@ -61,6 +63,60 @@ export default function TeamCalendar({ teamMembers, tasks, onlineIds = new Set()
   function prevWeek() { setWeekStart(addDays(weekStart, -7)) }
   function nextWeek() { setWeekStart(addDays(weekStart, 7)) }
   function goToday() { setWeekStart(getWeekStart(new Date())) }
+
+  function generateClientPdf(clientName: string) {
+    const clientTasks = tasks.filter(t => (t.project?.client?.name || '') === clientName)
+    const completadas = clientTasks.filter(t => t.status === 'completada')
+    const enProgreso = clientTasks.filter(t => t.status === 'en_progreso')
+    const pendientes = clientTasks.filter(t => t.status === 'pendiente' || t.status === 'bloqueada')
+
+    const doc = new jsPDF()
+    let y = 20
+
+    doc.setFontSize(16)
+    doc.text(`Reporte de tareas — ${clientName}`, 14, y)
+    y += 6
+    doc.setFontSize(10)
+    doc.setTextColor(120)
+    doc.text(`Generado el ${new Date().toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })}`, 14, y)
+    y += 10
+    doc.setTextColor(0)
+
+    function addSection(title: string, list: Task[]) {
+      if (y > 270) { doc.addPage(); y = 20 }
+      doc.setFontSize(13)
+      doc.text(`${title} (${list.length})`, 14, y)
+      y += 7
+      doc.setFontSize(10)
+      if (list.length === 0) {
+        doc.setTextColor(150)
+        doc.text('Sin tareas en esta categoría', 16, y)
+        doc.setTextColor(0)
+        y += 7
+      } else {
+        list.forEach(t => {
+          if (y > 280) { doc.addPage(); y = 20 }
+          const assignee = t.assignee?.full_name || ''
+          const date = t.commitment_date ? new Date(t.commitment_date + 'T00:00:00').toLocaleDateString('es-MX') : 'sin fecha'
+          doc.text(`• ${t.title}`, 16, y)
+          y += 5
+          doc.setFontSize(9)
+          doc.setTextColor(130)
+          doc.text(`   ${assignee ? assignee + ' · ' : ''}Prioridad: ${t.priority} · Entrega: ${date}`, 16, y)
+          doc.setTextColor(0)
+          doc.setFontSize(10)
+          y += 6
+        })
+      }
+      y += 4
+    }
+
+    addSection('Completadas', completadas)
+    addSection('En progreso', enProgreso)
+    addSection('Faltantes / Pendientes', pendientes)
+
+    doc.save(`Reporte_${clientName.replace(/\s+/g, '_')}.pdf`)
+  }
 
   function getTasksForMemberAndDay(memberId: string, day: Date) {
     return tasks.filter(t => {
@@ -118,15 +174,33 @@ export default function TeamCalendar({ teamMembers, tasks, onlineIds = new Set()
         </div>
       </div>
 
-      {/* Leyenda de clientes */}
+      {/* Leyenda de clientes — clic para filtrar el calendario por ese cliente */}
       {Object.keys(clientColorMap).length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-4">
+        <div className="flex flex-wrap items-center gap-2 mb-4">
           {Object.entries(clientColorMap).map(([client, color]) => (
-            <span key={client} className="flex items-center gap-1.5 text-xs text-gray-600">
+            <button key={client} type="button"
+              onClick={() => setSelectedClient(prev => prev === client ? null : client)}
+              className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded-full border transition ${
+                selectedClient === client
+                  ? 'border-blue-400 bg-blue-50 text-blue-700 font-semibold'
+                  : 'border-transparent text-gray-600 hover:bg-gray-100'
+              }`}>
               <span className={`w-3 h-3 rounded-sm ${color}`} />
               {client}
-            </span>
+            </button>
           ))}
+          {selectedClient && (
+            <>
+              <button type="button" onClick={() => setSelectedClient(null)}
+                className="text-xs text-gray-400 hover:text-gray-600 underline">
+                Quitar filtro
+              </button>
+              <button type="button" onClick={() => generateClientPdf(selectedClient)}
+                className="flex items-center gap-1.5 text-xs font-semibold text-white bg-gradient-to-r from-blue-700 to-red-600 px-3 py-1.5 rounded-full hover:opacity-90 transition ml-auto">
+                <FileDown size={13} /> Generar PDF de {selectedClient}
+              </button>
+            </>
+          )}
         </div>
       )}
 
@@ -166,9 +240,10 @@ export default function TeamCalendar({ teamMembers, tasks, onlineIds = new Set()
                 return !t.start_date && !effectiveEnd
               }).length
               const totalMemberTasks = memberTasks.length
+              const hasSelectedClientTask = !selectedClient || memberTasks.some(t => (t.project?.client?.name || '') === selectedClient)
 
               return (
-              <div key={member.id} className="flex border-b border-gray-100 last:border-b-0 hover:bg-gray-50 transition">
+              <div key={member.id} className={`flex border-b border-gray-100 last:border-b-0 hover:bg-gray-50 transition ${!hasSelectedClientTask ? 'opacity-30' : ''}`}>
                 {/* Nombre */}
                 <div className="w-40 shrink-0 px-3 py-2 border-r border-gray-200 flex items-start gap-2">
                   <div className="relative shrink-0" style={{ width: 28, height: 28 }}>
@@ -201,9 +276,10 @@ export default function TeamCalendar({ teamMembers, tasks, onlineIds = new Set()
                         const clientName = task.project?.client?.name || ''
                         const color = clientColorMap[clientName] || 'bg-blue-400'
                         const isOverdue = task.commitment_date && task.status !== 'completada' && new Date(task.commitment_date + 'T00:00:00') < today
+                        const isDimmed = !!selectedClient && clientName !== selectedClient
                         return (
                           <div key={ti} title={`${task.title} — ${clientName}`}
-                            className={`w-full rounded text-white text-center mb-0.5 cursor-pointer hover:opacity-80 transition ${isOverdue ? 'bg-red-500' : color}`}
+                            className={`w-full rounded text-white text-center mb-0.5 cursor-pointer transition ${isOverdue ? 'bg-red-500' : color} ${isDimmed ? 'opacity-10' : 'hover:opacity-80'}`}
                             style={{ height: '18px', fontSize: '9px', lineHeight: '18px', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', paddingInline: '2px' }}>
                             {task.title}
                           </div>
