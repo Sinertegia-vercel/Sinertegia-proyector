@@ -26,6 +26,13 @@ const PRIORITIES: { value: Priority; label: string }[] = [
   { value: 'baja', label: 'Baja' },
 ]
 
+const EMOJI_OPTIONS = [
+  '🎬', '📡', '🛒', '🎪', '💰', '📦', '🎯', '📈', '🚀', '🛍️',
+  '🎟️', '🎫', '💼', '📋', '✨', '🔥', '⚡', '🌟', '💎', '🎁',
+  '📺', '🎙️', '📱', '💻', '🖥️', '🗂️', '📊', '🧩', '🏷️', '🛠️',
+  '🧲', '📣', '🛫', '🏢', '🏠', '🎓', '🍽️', '🩺', '⚖️', '💪',
+]
+
 interface TaskRow {
   title: string
   department: Department
@@ -51,6 +58,7 @@ export default function CreateFunnelTemplateModal({ onClose, onCreated }: Props)
   ])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false)
 
   function updateTask(idx: number, patch: Partial<TaskRow>) {
     setTasks(prev => prev.map((t, i) => i === idx ? { ...t, ...patch } : t))
@@ -97,10 +105,25 @@ export default function CreateFunnelTemplateModal({ onClose, onCreated }: Props)
 
         <div className="p-6 space-y-5 overflow-y-auto">
           <div className="flex gap-3">
-            <div className="w-20">
+            <div className="w-20 relative">
               <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide">Ícono</label>
-              <input value={icon} onChange={e => setIcon(e.target.value)} maxLength={4}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-center text-xl focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <button type="button" onClick={() => setShowEmojiPicker(o => !o)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-center text-xl hover:bg-gray-50 transition">
+                {icon || '🗂️'}
+              </button>
+              {showEmojiPicker && (
+                <>
+                  <div className="fixed inset-0 z-30" onClick={() => setShowEmojiPicker(false)} />
+                  <div className="absolute left-0 top-[calc(100%+4px)] z-40 bg-white border border-gray-200 rounded-xl shadow-lg p-2 grid grid-cols-5 gap-1 w-[220px]">
+                    {EMOJI_OPTIONS.map(e => (
+                      <button key={e} type="button" onClick={() => { setIcon(e); setShowEmojiPicker(false) }}
+                        className="text-xl hover:bg-gray-100 rounded-lg py-1.5 transition">
+                        {e}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
             <div className="flex-1">
               <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide">Nombre del embudo *</label>
