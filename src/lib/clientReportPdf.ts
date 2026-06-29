@@ -213,14 +213,23 @@ export async function generateClientReportPdf(opts: {
       backgroundColor: '#ffffff',
     })
 
-    const pdf = new jsPDF('p', 'mm', 'a4')
     const pageWidthMm = 210
     const pageHeightMm = 297
     const imgHeightMm = (canvas.height * pageWidthMm) / canvas.width
+    const imgData = canvas.toDataURL('image/png')
 
+    if (imgHeightMm <= pageHeightMm) {
+      // Cabe en una sola hoja: la hoja se hace del tamaño exacto del contenido, sin espacio sobrante.
+      const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: [pageWidthMm, imgHeightMm] })
+      pdf.addImage(imgData, 'PNG', 0, 0, pageWidthMm, imgHeightMm)
+      pdf.save(opts.filename)
+      return
+    }
+
+    // No cabe en una sola hoja: se reparte en hojas A4 normales.
+    const pdf = new jsPDF('p', 'mm', 'a4')
     let heightLeft = imgHeightMm
     let position = 0
-    const imgData = canvas.toDataURL('image/png')
 
     pdf.addImage(imgData, 'PNG', 0, position, pageWidthMm, imgHeightMm)
     heightLeft -= pageHeightMm
