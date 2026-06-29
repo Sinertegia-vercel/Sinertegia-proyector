@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { ChevronLeft, ChevronRight, FileDown } from 'lucide-react'
-import jsPDF from 'jspdf'
 import type { Task, User } from '../../types'
 import UserAvatar from '../shared/UserAvatar'
+import { generateClientReportPdf } from '../../lib/clientReportPdf'
 
 interface Props {
   teamMembers: User[]
@@ -64,58 +64,32 @@ export default function TeamCalendar({ teamMembers, tasks, onlineIds = new Set()
   function nextWeek() { setWeekStart(addDays(weekStart, 7)) }
   function goToday() { setWeekStart(getWeekStart(new Date())) }
 
-  function generateClientPdf(clientName: string) {
+  const [generatingPdf, setGeneratingPdf] = useState(false)
+
+  async function generateClientPdf(clientName: string) {
     const clientTasks = tasks.filter(t => (t.project?.client?.name || '') === clientName)
-    const completadas = clientTasks.filter(t => t.status === 'completada')
-    const enProgreso = clientTasks.filter(t => t.status === 'en_progreso')
-    const pendientes = clientTasks.filter(t => t.status === 'pendiente' || t.status === 'bloqueada')
+    const toReportTask = (t: Task) => ({
+      title: t.title,
+      responsable: t.assignee?.full_name || 'Sin asignar',
+      priority: t.priority,
+      date: t.commitment_date ? new Date(t.commitment_date + 'T00:00:00').toLocaleDateString('es-MX') : null,
+    })
 
-    const doc = new jsPDF()
-    let y = 20
-
-    doc.setFontSize(16)
-    doc.text(`Reporte de tareas — ${clientName}`, 14, y)
-    y += 6
-    doc.setFontSize(10)
-    doc.setTextColor(120)
-    doc.text(`Generado el ${new Date().toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })}`, 14, y)
-    y += 10
-    doc.setTextColor(0)
-
-    function addSection(title: string, list: Task[]) {
-      if (y > 270) { doc.addPage(); y = 20 }
-      doc.setFontSize(13)
-      doc.text(`${title} (${list.length})`, 14, y)
-      y += 7
-      doc.setFontSize(10)
-      if (list.length === 0) {
-        doc.setTextColor(150)
-        doc.text('Sin tareas en esta categoría', 16, y)
-        doc.setTextColor(0)
-        y += 7
-      } else {
-        list.forEach(t => {
-          if (y > 280) { doc.addPage(); y = 20 }
-          const assignee = t.assignee?.full_name || ''
-          const date = t.commitment_date ? new Date(t.commitment_date + 'T00:00:00').toLocaleDateString('es-MX') : 'sin fecha'
-          doc.text(`• ${t.title}`, 16, y)
-          y += 5
-          doc.setFontSize(9)
-          doc.setTextColor(130)
-          doc.text(`   ${assignee ? assignee + ' · ' : ''}Prioridad: ${t.priority} · Entrega: ${date}`, 16, y)
-          doc.setTextColor(0)
-          doc.setFontSize(10)
-          y += 6
-        })
-      }
-      y += 4
+    setGeneratingPdf(true)
+    try {
+      await generateClientReportPdf({
+        titulo: clientName,
+        subtitulo: 'Estado del embudo y producción de campaña',
+        fecha: new Date().toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' }),
+        pie: `Reporte ${clientName} · Sinertegia Launch 57`,
+        completadas: clientTasks.filter(t => t.status === 'completada').map(toReportTask),
+        enProgreso: clientTasks.filter(t => t.status === 'en_progreso').map(toReportTask),
+        pendientes: clientTasks.filter(t => t.status === 'pendiente' || t.status === 'bloqueada').map(toReportTask),
+        filename: `Reporte_${clientName.replace(/\s+/g, '_')}.pdf`,
+      })
+    } finally {
+      setGeneratingPdf(false)
     }
-
-    addSection('Completadas', completadas)
-    addSection('En progreso', enProgreso)
-    addSection('Faltantes / Pendientes', pendientes)
-
-    doc.save(`Reporte_${clientName.replace(/\s+/g, '_')}.pdf`)
   }
 
   function getTasksForMemberAndDay(memberId: string, day: Date) {
@@ -195,9 +169,9 @@ export default function TeamCalendar({ teamMembers, tasks, onlineIds = new Set()
                 className="text-xs text-gray-400 hover:text-gray-600 underline">
                 Quitar filtro
               </button>
-              <button type="button" onClick={() => generateClientPdf(selectedClient)}
-                className="flex items-center gap-1.5 text-xs font-semibold text-white bg-gradient-to-r from-blue-700 to-red-600 px-3 py-1.5 rounded-full hover:opacity-90 transition ml-auto">
-                <FileDown size={13} /> Generar PDF de {selectedClient}
+              <button type="button" onClick={() => generateClientPdf(selectedClient)} disabled={generatingPdf}
+                className="flex items-center gap-1.5 text-xs font-semibold text-white bg-gradient-to-r from-blue-700 to-red-600 px-3 py-1.5 rounded-full hover:opacity-90 transition ml-auto disabled:opacity-60">
+                <FileDown size={13} /> {generatingPdf ? 'Generando PDF...' : `Generar PDF de ${selectedClient}`}
               </button>
             </>
           )}
