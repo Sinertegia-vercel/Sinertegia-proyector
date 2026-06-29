@@ -52,25 +52,25 @@ function dateChip(d: string | null): string {
 }
 
 function taskRow(t: ReportTask, idx: number): string {
-  return `<div style="display:flex;align-items:center;gap:12px;background:${CARD};border:1px solid ${LINE};border-radius:12px;padding:9px 13px;margin-bottom:7px;box-shadow:0 2px 6px rgba(40,50,65,.04);">
-    <div style="font-size:11px;font-weight:700;color:${MUTED};width:22px;flex:0 0 auto;text-align:center;">${String(idx).padStart(2, '0')}</div>
+  return `<div style="display:flex;align-items:center;gap:16px;background:${CARD};border:1px solid ${LINE};border-radius:14px;padding:14px 18px;margin-bottom:11px;box-shadow:0 2px 6px rgba(40,50,65,.04);">
+    <div style="font-size:11.5px;font-weight:700;color:${MUTED};width:24px;flex:0 0 auto;text-align:center;">${String(idx).padStart(2, '0')}</div>
     <div style="flex:1;min-width:0;">
-      <div style="font-size:11.8px;font-weight:500;color:${INK};line-height:1.25;">${esc(t.title)}</div>
-      <div style="display:flex;align-items:center;gap:7px;margin-top:4px;">${avatar(t.responsable)}<span style="font-size:10px;color:${MUTED};font-weight:300;">${esc(t.responsable)}</span></div>
+      <div style="font-size:12.5px;font-weight:500;color:${INK};line-height:1.3;">${esc(t.title)}</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:7px;">${avatar(t.responsable)}<span style="font-size:10.5px;color:${MUTED};font-weight:300;">${esc(t.responsable)}</span></div>
     </div>
-    <div style="display:flex;align-items:center;gap:8px;flex:0 0 auto;">${prioPill(t.priority)}${dateChip(t.date)}</div>
+    <div style="display:flex;align-items:center;gap:9px;flex:0 0 auto;">${prioPill(t.priority)}${dateChip(t.date)}</div>
   </div>`
 }
 
 function section(title: string, items: ReportTask[], accent: string, icon: string): string {
   const body = items.length === 0
-    ? `<div style="font-size:11.5px;color:${MUTED};padding:14px;text-align:center;background:${CARD};border:1px dashed ${LINE};border-radius:12px;">Sin tareas en esta categoría.</div>`
+    ? `<div style="font-size:12px;color:${MUTED};padding:18px;text-align:center;background:${CARD};border:1px dashed ${LINE};border-radius:14px;">Sin tareas en esta categoría.</div>`
     : items.map((t, i) => taskRow(t, i + 1)).join('')
-  return `<section style="margin-bottom:18px;">
-    <div style="display:flex;align-items:center;gap:11px;margin-bottom:11px;padding-bottom:9px;border-bottom:2px solid ${accent};">
-      <span style="width:26px;height:26px;border-radius:8px;color:#fff;font-size:14px;display:flex;align-items:center;justify-content:center;background:${accent};">${icon}</span>
-      <h2 style="font-size:15px;font-weight:700;color:${SLATE};flex:1;letter-spacing:-.2px;margin:0;">${esc(title)}</h2>
-      <span style="color:#fff;font-size:11px;font-weight:700;padding:3px 11px;border-radius:20px;background:${accent};">${items.length}</span>
+  return `<section style="margin-bottom:30px;">
+    <div style="display:flex;align-items:center;gap:13px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid ${accent};">
+      <span style="width:28px;height:28px;border-radius:9px;color:#fff;font-size:15px;display:flex;align-items:center;justify-content:center;background:${accent};">${icon}</span>
+      <h2 style="font-size:16px;font-weight:700;color:${SLATE};flex:1;letter-spacing:-.2px;margin:0;">${esc(title)}</h2>
+      <span style="color:#fff;font-size:11.5px;font-weight:700;padding:4px 13px;border-radius:20px;background:${accent};">${items.length}</span>
     </div>
     <div>${body}</div>
   </section>`
@@ -102,84 +102,84 @@ function buildReportHtml(opts: {
       const done = doneByResp.get(name) || 0
       const w = Math.round((c / maxc) * 100)
       const wd = c ? Math.round((done / c) * 100) : 0
-      return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:9px;">
-        <div style="width:165px;font-size:11px;font-weight:500;color:${INK};display:flex;align-items:center;gap:8px;white-space:nowrap;overflow:hidden;">
-          ${avatar(name)}<span style="overflow:hidden;text-overflow:ellipsis;">${esc(name)}</span>
+      return `<div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
+        <div style="width:175px;font-size:11.5px;font-weight:500;color:${INK};display:flex;align-items:center;gap:9px;white-space:nowrap;overflow:hidden;">
+          ${avatar(name, 20)}<span style="overflow:hidden;text-overflow:ellipsis;">${esc(name)}</span>
         </div>
-        <div style="flex:1;height:13px;background:#EEF2F5;border-radius:8px;overflow:hidden;">
+        <div style="flex:1;height:14px;background:#EEF2F5;border-radius:8px;overflow:hidden;">
           <div style="height:100%;border-radius:8px;position:relative;width:${w}%;background:${colorFor(name)};">
             <div style="position:absolute;left:0;top:0;height:100%;background:rgba(255,255,255,.45);width:${wd}%;"></div>
           </div>
         </div>
-        <div style="width:42px;text-align:right;font-size:11px;font-weight:600;color:${MUTED};">${done}/${c}</div>
+        <div style="width:44px;text-align:right;font-size:11.5px;font-weight:600;color:${MUTED};">${done}/${c}</div>
       </div>`
     }).join('')
 
-  return `<div style="width:793px;font-family:'Poppins','Segoe UI',sans-serif;color:${INK};background:#F4F6F8;">
-    <div style="position:relative;background:linear-gradient(135deg,${SLATE} 0%,${SLATE_D} 100%);color:#fff;padding:30px 34px;overflow:hidden;">
-      <div style="display:flex;align-items:center;gap:18px;position:relative;z-index:2;">
-        <div style="width:78px;height:78px;background:#fff;border-radius:20px;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 22px rgba(0,0,0,.25);flex:0 0 auto;">
-          <img src="${logoImg}" style="width:62px;height:62px;object-fit:contain;" />
+  return `<div style="width:850px;font-family:'Poppins','Segoe UI',sans-serif;color:${INK};background:#F4F6F8;">
+    <div style="position:relative;background:linear-gradient(135deg,${SLATE} 0%,${SLATE_D} 100%);color:#fff;padding:42px 44px;overflow:hidden;">
+      <div style="display:flex;align-items:center;gap:24px;position:relative;z-index:2;">
+        <div style="width:86px;height:86px;background:#fff;border-radius:22px;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 22px rgba(0,0,0,.25);flex:0 0 auto;">
+          <img src="${logoImg}" style="width:68px;height:68px;object-fit:contain;" />
         </div>
         <div>
-          <span style="display:inline-block;font-size:10px;letter-spacing:2.5px;font-weight:600;color:${YELLOW};text-transform:uppercase;margin-bottom:8px;">Reporte de Tareas</span>
-          <h1 style="font-size:25px;font-weight:700;letter-spacing:-.3px;line-height:1.1;margin:0;">${esc(titulo)}</h1>
-          <div style="font-size:12.5px;color:#C7CDD6;margin-top:4px;font-weight:300;">${esc(subtitulo)} · Generado el ${esc(fecha)}</div>
+          <span style="display:inline-block;font-size:11px;letter-spacing:2.5px;font-weight:600;color:${YELLOW};text-transform:uppercase;margin-bottom:10px;">Reporte de Tareas</span>
+          <h1 style="font-size:28px;font-weight:700;letter-spacing:-.3px;line-height:1.15;margin:0;">${esc(titulo)}</h1>
+          <div style="font-size:13.5px;color:#C7CDD6;margin-top:6px;font-weight:300;">${esc(subtitulo)} · Generado el ${esc(fecha)}</div>
         </div>
       </div>
     </div>
     <div style="height:5px;width:100%;background:linear-gradient(90deg,${RED} 0 60%,${YELLOW} 60% 100%);"></div>
 
-    <div style="display:flex;gap:12px;padding:22px 34px 6px;">
+    <div style="display:flex;gap:20px;padding:32px 44px 10px;">
       ${[
         { cap: 'Completadas', num: nComp, foot: `${pct}% del total`, color: GREEN, numColor: SLATE },
         { cap: 'En progreso', num: nProg, foot: 'activas ahora', color: YELLOW, numColor: SLATE },
         { cap: 'Pendientes', num: nPend, foot: 'por arrancar', color: RED, numColor: RED },
         { cap: 'Total', num: all.length, foot: 'tareas del proyecto', color: SLATE, numColor: SLATE },
       ].map(k => `
-      <div style="flex:1;background:${CARD};border-radius:16px;padding:16px 16px 14px;box-shadow:0 4px 14px rgba(40,50,65,.06);border:1px solid ${LINE};position:relative;overflow:hidden;">
+      <div style="flex:1;background:${CARD};border-radius:18px;padding:22px 22px 20px;box-shadow:0 4px 14px rgba(40,50,65,.06);border:1px solid ${LINE};position:relative;overflow:hidden;">
         <div style="position:absolute;top:0;left:0;width:5px;height:100%;background:${k.color};"></div>
-        <div style="font-size:10px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;color:${MUTED};">${k.cap}</div>
-        <div style="font-size:32px;font-weight:700;line-height:1;margin-top:6px;color:${k.numColor};">${k.num}</div>
-        <div style="font-size:10.5px;color:${MUTED};margin-top:4px;font-weight:300;">${k.foot}</div>
+        <div style="font-size:10.5px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;color:${MUTED};">${k.cap}</div>
+        <div style="font-size:36px;font-weight:700;line-height:1;margin-top:10px;color:${k.numColor};">${k.num}</div>
+        <div style="font-size:11px;color:${MUTED};margin-top:6px;font-weight:300;">${k.foot}</div>
       </div>`).join('')}
     </div>
 
-    <div style="padding:8px 34px 4px;">
-      <div style="background:${CARD};border:1px solid ${LINE};border-radius:16px;padding:16px 18px;box-shadow:0 4px 14px rgba(40,50,65,.06);">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-          <span style="font-size:12px;font-weight:600;color:${SLATE};">Avance general del proyecto</span>
-          <span style="font-size:13px;font-weight:700;color:${GREEN};">${pct}% completado</span>
+    <div style="padding:14px 44px 6px;">
+      <div style="background:${CARD};border:1px solid ${LINE};border-radius:18px;padding:22px 24px;box-shadow:0 4px 14px rgba(40,50,65,.06);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+          <span style="font-size:13px;font-weight:600;color:${SLATE};">Avance general del proyecto</span>
+          <span style="font-size:14px;font-weight:700;color:${GREEN};">${pct}% completado</span>
         </div>
-        <div style="height:14px;background:#EAEFF3;border-radius:10px;overflow:hidden;display:flex;">
+        <div style="height:16px;background:#EAEFF3;border-radius:10px;overflow:hidden;display:flex;">
           <div style="background:linear-gradient(90deg,${GREEN},#37b86b);width:${(nComp / total * 100).toFixed(1)}%;"></div>
           <div style="background:repeating-linear-gradient(45deg,#F3D6D7,#F3D6D7 6px,#fae4e5 6px,#fae4e5 12px);width:${(nPend / total * 100).toFixed(1)}%;"></div>
         </div>
-        <div style="display:flex;gap:18px;margin-top:9px;font-size:10.5px;color:${MUTED};">
-          <span><i style="width:9px;height:9px;border-radius:3px;display:inline-block;margin-right:5px;vertical-align:middle;background:${GREEN};"></i>Completadas (${nComp})</span>
-          <span><i style="width:9px;height:9px;border-radius:3px;display:inline-block;margin-right:5px;vertical-align:middle;background:${YELLOW};"></i>En progreso (${nProg})</span>
-          <span><i style="width:9px;height:9px;border-radius:3px;display:inline-block;margin-right:5px;vertical-align:middle;background:#F3D6D7;"></i>Pendientes (${nPend})</span>
+        <div style="display:flex;gap:22px;margin-top:13px;font-size:11px;color:${MUTED};">
+          <span><i style="width:9px;height:9px;border-radius:3px;display:inline-block;margin-right:6px;vertical-align:middle;background:${GREEN};"></i>Completadas (${nComp})</span>
+          <span><i style="width:9px;height:9px;border-radius:3px;display:inline-block;margin-right:6px;vertical-align:middle;background:${YELLOW};"></i>En progreso (${nProg})</span>
+          <span><i style="width:9px;height:9px;border-radius:3px;display:inline-block;margin-right:6px;vertical-align:middle;background:#F3D6D7;"></i>Pendientes (${nPend})</span>
         </div>
       </div>
     </div>
 
-    <div style="padding:14px 34px 4px;">
-      <div style="background:${CARD};border:1px solid ${LINE};border-radius:16px;padding:16px 18px 14px;box-shadow:0 4px 14px rgba(40,50,65,.06);">
-        <h3 style="font-size:12px;font-weight:600;color:${SLATE};margin-bottom:12px;display:flex;align-items:center;gap:8px;">
+    <div style="padding:18px 44px 6px;">
+      <div style="background:${CARD};border:1px solid ${LINE};border-radius:18px;padding:22px 24px 20px;box-shadow:0 4px 14px rgba(40,50,65,.06);">
+        <h3 style="font-size:13px;font-weight:600;color:${SLATE};margin-bottom:18px;display:flex;align-items:center;gap:9px;">
           <span style="width:8px;height:8px;border-radius:50%;background:${RED};display:inline-block;"></span>
-          Carga por responsable <span style="font-weight:300;color:${MUTED};font-size:10px;">(completadas / total)</span>
+          Carga por responsable <span style="font-weight:300;color:${MUTED};font-size:11px;">(completadas / total)</span>
         </h3>
         ${respRows}
       </div>
     </div>
 
-    <div style="padding:16px 34px 24px;">
+    <div style="padding:24px 44px 36px;">
       ${section('Completadas', completadas, GREEN, '✓')}
       ${section('En progreso', enProgreso, YELLOW, '◐')}
       ${section('Faltantes / Pendientes', pendientes, RED, '!')}
     </div>
 
-    <div style="position:relative;height:20mm;padding:0 34px;display:flex;align-items:center;justify-content:space-between;background:${SLATE};color:#fff;font-size:9.5px;font-weight:300;">
+    <div style="position:relative;height:24mm;padding:0 44px;display:flex;align-items:center;justify-content:space-between;background:${SLATE};color:#fff;font-size:10.5px;font-weight:300;">
       <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,${RED} 0 60%,${YELLOW} 60% 100%);"></div>
       <div><b>${esc(pie)}</b></div>
       <div style="color:#C7CDD6;">Generado el ${esc(fecha)}</div>
