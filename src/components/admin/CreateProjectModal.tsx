@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { X, Plus, ChevronLeft, CheckSquare, Square, GripVertical } from 'lucide-react'
+import { X, Plus, ChevronLeft, CheckSquare, Square, GripVertical, MoreVertical, Pencil, Trash2, MessageSquare } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import type { Client, User } from '../../types'
@@ -21,6 +21,7 @@ interface CombinedTask {
   priority: string
   isCustom: boolean
   group?: string
+  note?: string
 }
 
 export default function CreateProjectModal({ clients, teamMembers, onClose, onCreated }: Props) {
@@ -45,6 +46,11 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
   const [newTaskTitle, setNewTaskTitle] = useState('')
   const [draggedIdx, setDraggedIdx] = useState<number | null>(null)
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null)
+  const [openMenuIdx, setOpenMenuIdx] = useState<number | null>(null)
+  const [editingIdx, setEditingIdx] = useState<number | null>(null)
+  const [editTitleValue, setEditTitleValue] = useState('')
+  const [commentingIdx, setCommentingIdx] = useState<number | null>(null)
+  const [commentDraft, setCommentDraft] = useState('')
   const [clientUser, setClientUser] = useState<User | null>(null)
   const [clientUsers, setClientUsers] = useState<User[]>([])
   const [customTemplates, setCustomTemplates] = useState<CustomTemplate[]>([])
@@ -222,6 +228,53 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
     setAddingTaskToGroup(null)
   }
 
+  function startEditTask(idx: number) {
+    setEditingIdx(idx)
+    setEditTitleValue(combinedTasks[idx].title)
+    setOpenMenuIdx(null)
+  }
+
+  function saveEditTask(idx: number) {
+    if (!editTitleValue.trim()) { setEditingIdx(null); return }
+    setCombinedTasks(prev => prev.map((t, i) => i === idx ? { ...t, title: editTitleValue.trim() } : t))
+    setEditingIdx(null)
+  }
+
+  function deleteTaskRow(idx: number) {
+    const newTasks = combinedTasks.filter((_, i) => i !== idx)
+    const oldToNew: Record<number, number> = {}
+    let shift = 0
+    combinedTasks.forEach((_, i) => {
+      if (i === idx) { shift = 1; return }
+      oldToNew[i] = i - shift
+    })
+
+    const newSelected = new Set<number>()
+    selectedTasks.forEach(i => { if (i !== idx && oldToNew[i] !== undefined) newSelected.add(oldToNew[i]) })
+
+    const newOverrides: Record<number, string> = {}
+    Object.entries(taskOverrides).forEach(([k, v]) => {
+      const o = Number(k)
+      if (o !== idx && oldToNew[o] !== undefined) newOverrides[oldToNew[o]] = v
+    })
+
+    setCombinedTasks(newTasks)
+    setSelectedTasks(newSelected)
+    setTaskOverrides(newOverrides)
+    setOpenMenuIdx(null)
+  }
+
+  function openComment(idx: number) {
+    setCommentingIdx(idx)
+    setCommentDraft(combinedTasks[idx].note || '')
+    setOpenMenuIdx(null)
+  }
+
+  function saveComment(idx: number) {
+    setCombinedTasks(prev => prev.map((t, i) => i === idx ? { ...t, note: commentDraft.trim() || undefined } : t))
+    setCommentingIdx(null)
+  }
+
   async function handleCreate(tasks?: CombinedTask[]) {
     if (!validateStep1()) return
     setSaving(true)
@@ -262,6 +315,7 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
           department: t.department,
           assigned_to: taskOverrides[idx] || deptAssignees[t.group || t.department] || user!.id,
           priority: t.priority,
+          description: t.note || null,
           status: 'pendiente',
           created_by: user!.id,
         }
@@ -637,7 +691,21 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
                           <input type="checkbox" checked={selectedTasks.has(task.idx)}
                             onChange={() => toggleTask(task.idx)}
                             className="w-4 h-4 accent-blue-600 shrink-0 cursor-pointer" />
-                          <span className="text-sm text-gray-700 flex-1 leading-tight">{task.title}</span>
+                          {editingIdx === task.idx ? (
+                            <input
+                              autoFocus
+                              value={editTitleValue}
+                              onChange={e => setEditTitleValue(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') saveEditTask(task.idx)
+                                if (e.key === 'Escape') setEditingIdx(null)
+                              }}
+                              onBlur={() => saveEditTask(task.idx)}
+                              className="flex-1 text-sm border border-blue-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          ) : (
+                            <span className="text-sm text-gray-700 flex-1 leading-tight">{task.title}</span>
+                          )}
                           {task.isCustom && (
                             <span className="text-xs bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full font-medium shrink-0">🔖</span>
                           )}
@@ -662,6 +730,36 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
                               {allAssignees.map(m => <option key={m.id} value={m.id}>{m.full_name.split(' ')[0]}</option>)}
                             </select>
                           )}
+
+                          {/* Comentario / nota de la tarea */}
+                          <button type="button" onClick={() => openComment(task.idx)}
+                            title={combinedTasks[task.idx].note ? 'Ver/editar comentario' : 'Agregar comentario'}
+                            className={`shrink-0 p-1 rounded transition ${combinedTasks[task.idx].note ? 'text-blue-500' : 'text-gray-300 hover:text-gray-500'}`}>
+                            <MessageSquare size={14} />
+                          </button>
+
+                          {/* Menú de 3 puntos: editar / eliminar */}
+                          <div className="relative shrink-0">
+                            <button type="button" onClick={() => setOpenMenuIdx(openMenuIdx === task.idx ? null : task.idx)}
+                              className="p-1 rounded text-gray-300 hover:text-gray-600 hover:bg-gray-100 transition">
+                              <MoreVertical size={14} />
+                            </button>
+                            {openMenuIdx === task.idx && (
+                              <>
+                                <div className="fixed inset-0 z-10" onClick={() => setOpenMenuIdx(null)} />
+                                <div className="absolute right-0 top-6 z-20 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[150px]">
+                                  <button type="button" onClick={() => startEditTask(task.idx)}
+                                    className="w-full flex items-center gap-2 text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50">
+                                    <Pencil size={12} /> Editar tarea
+                                  </button>
+                                  <button type="button" onClick={() => deleteTaskRow(task.idx)}
+                                    className="w-full flex items-center gap-2 text-left px-3 py-2 text-xs text-red-600 hover:bg-red-50">
+                                    <Trash2 size={12} /> Eliminar
+                                  </button>
+                                </div>
+                              </>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -685,6 +783,30 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
           </>
         )}
       </div>
+
+      {commentingIdx !== null && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[70] p-4" onClick={() => setCommentingIdx(null)}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-5" onClick={e => e.stopPropagation()}>
+            <p className="text-sm font-bold text-gray-800 mb-1">Comentario para la tarea</p>
+            <p className="text-xs text-gray-400 mb-3 truncate">{combinedTasks[commentingIdx]?.title}</p>
+            <textarea
+              autoFocus
+              value={commentDraft}
+              onChange={e => setCommentDraft(e.target.value)}
+              rows={4}
+              placeholder="Escribe una nota o instrucción para esta tarea..."
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+            />
+            <div className="flex justify-end gap-2 mt-3">
+              <button onClick={() => setCommentingIdx(null)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancelar</button>
+              <button onClick={() => saveComment(commentingIdx)}
+                className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition">
+                Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showCreateFunnel && (
         <CreateFunnelTemplateModal
