@@ -515,6 +515,10 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
                 const groupTasks = tasksByGroup[groupKey]
                 const allSel = groupTasks.every(t => selectedTasks.has(t.idx))
                 const colorClass = GROUP_COLORS[groupKey] || 'bg-gray-100 text-gray-700 border-gray-200'
+                const isCliente = groupKey === 'cliente'
+                // Si alguna tarea del grupo tiene override individual, desactivar el selector grupal
+                const groupIdxSet = new Set(groupTasks.map(t => t.idx))
+                const hasIndividualOverrides = groupTasks.some(t => !!taskOverrides[t.idx])
 
                 return (
                   <div key={groupKey}>
@@ -531,47 +535,52 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
                         {groupTasks.filter(t => selectedTasks.has(t.idx)).length}/{groupTasks.length}
                       </span>
                       <div className="ml-auto flex items-center gap-2">
-                        {/* Persona principal */}
-                        <select value={deptAssignees[groupKey] || ''}
-                          onChange={e => {
-                            setDeptAssignees(prev => ({ ...prev, [groupKey]: e.target.value }))
-                            // Si se borra la persona 1, limpiar persona 2 y overrides del grupo
-                            if (!e.target.value) {
-                              setDeptAssignees2(prev => { const n = {...prev}; delete n[groupKey]; return n })
-                              const groupIdxs = new Set(groupTasks.map(t => t.idx))
-                              setTaskOverrides(prev => Object.fromEntries(Object.entries(prev).filter(([k]) => !groupIdxs.has(Number(k)))))
-                            }
-                          }}
-                          className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-                          <option value="">Asignar persona...</option>
-                          {(groupKey === 'cliente' ? clientGroupAssignees : allAssignees).map(m => <option key={m.id} value={m.id}>{m.full_name}</option>)}
-                        </select>
-
-                        {/* Persona 2: aparece solo si hay persona 1 */}
-                        {deptAssignees[groupKey] && (
-                          deptAssignees2[groupKey] ? (
-                            <select value={deptAssignees2[groupKey]}
+                        {hasIndividualOverrides && !isCliente ? (
+                          <span className="text-xs text-orange-600 bg-orange-50 border border-orange-200 px-2 py-1 rounded-lg">
+                            Asignación individual activa
+                          </span>
+                        ) : (
+                          <>
+                            {/* Persona principal */}
+                            <select value={deptAssignees[groupKey] || ''}
                               onChange={e => {
+                                setDeptAssignees(prev => ({ ...prev, [groupKey]: e.target.value }))
                                 if (!e.target.value) {
                                   setDeptAssignees2(prev => { const n = {...prev}; delete n[groupKey]; return n })
-                                  const groupIdxs = new Set(groupTasks.map(t => t.idx))
-                                  setTaskOverrides(prev => Object.fromEntries(Object.entries(prev).filter(([k]) => !groupIdxs.has(Number(k)))))
-                                } else {
-                                  setDeptAssignees2(prev => ({ ...prev, [groupKey]: e.target.value }))
+                                  setTaskOverrides(prev => Object.fromEntries(Object.entries(prev).filter(([k]) => !groupIdxSet.has(Number(k)))))
                                 }
                               }}
-                              className="text-sm border border-purple-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-purple-400 bg-purple-50 text-purple-700">
-                              <option value="">— quitar</option>
-                              {allAssignees.filter(m => m.id !== deptAssignees[groupKey]).map(m => <option key={m.id} value={m.id}>{m.full_name}</option>)}
+                              className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                              <option value="">Asignar persona...</option>
+                              {(isCliente ? clientGroupAssignees : allAssignees).map(m => <option key={m.id} value={m.id}>{m.full_name}</option>)}
                             </select>
-                          ) : (
-                            <button
-                              onClick={() => setDeptAssignees2(prev => ({ ...prev, [groupKey]: '' }))}
-                              title="Agregar segunda persona a este grupo"
-                              className="flex items-center gap-1 text-xs text-purple-600 border border-purple-200 bg-purple-50 hover:bg-purple-100 px-2 py-1.5 rounded-lg transition shrink-0 font-medium">
-                              <Plus size={12} /> persona
-                            </button>
-                          )
+
+                            {/* Persona 2: solo si hay persona 1 y NO es cliente */}
+                            {!isCliente && deptAssignees[groupKey] && (
+                              deptAssignees2[groupKey] ? (
+                                <select value={deptAssignees2[groupKey]}
+                                  onChange={e => {
+                                    if (!e.target.value) {
+                                      setDeptAssignees2(prev => { const n = {...prev}; delete n[groupKey]; return n })
+                                      setTaskOverrides(prev => Object.fromEntries(Object.entries(prev).filter(([k]) => !groupIdxSet.has(Number(k)))))
+                                    } else {
+                                      setDeptAssignees2(prev => ({ ...prev, [groupKey]: e.target.value }))
+                                    }
+                                  }}
+                                  className="text-sm border border-purple-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-purple-400 bg-purple-50 text-purple-700">
+                                  <option value="">— quitar</option>
+                                  {allAssignees.filter(m => m.id !== deptAssignees[groupKey]).map(m => <option key={m.id} value={m.id}>{m.full_name}</option>)}
+                                </select>
+                              ) : (
+                                <button
+                                  onClick={() => setDeptAssignees2(prev => ({ ...prev, [groupKey]: '' }))}
+                                  title="Agregar segunda persona a este grupo"
+                                  className="flex items-center gap-1 text-xs text-purple-600 border border-purple-200 bg-purple-50 hover:bg-purple-100 px-2 py-1.5 rounded-lg transition shrink-0 font-medium">
+                                  <Plus size={12} /> persona
+                                </button>
+                              )
+                            )}
+                          </>
                         )}
 
                         <button
@@ -632,27 +641,27 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
                           {task.isCustom && (
                             <span className="text-xs bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full font-medium shrink-0">🔖</span>
                           )}
-                          {/* Toggle persona 1 / persona 2 cuando hay dos asignados en el grupo */}
-                          {selectedTasks.has(task.idx) && deptAssignees[groupKey] && deptAssignees2[groupKey] && (() => {
-                            const p1 = allAssignees.find(m => m.id === deptAssignees[groupKey])
-                            const p2 = allAssignees.find(m => m.id === deptAssignees2[groupKey])
-                            const current = taskOverrides[task.idx] || deptAssignees[groupKey]
-                            const isP2 = current === deptAssignees2[groupKey]
-                            return (
-                              <div className="flex items-center gap-0.5 shrink-0 border border-gray-200 rounded-lg overflow-hidden">
-                                <button type="button"
-                                  onClick={() => setTaskOverrides(prev => { const n = {...prev}; delete n[task.idx]; return n })}
-                                  className={`px-2 py-1 text-xs font-medium transition ${!isP2 ? 'bg-blue-600 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>
-                                  {p1?.full_name.split(' ')[0]}
-                                </button>
-                                <button type="button"
-                                  onClick={() => setTaskOverrides(prev => ({ ...prev, [task.idx]: deptAssignees2[groupKey] }))}
-                                  className={`px-2 py-1 text-xs font-medium transition ${isP2 ? 'bg-purple-600 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}>
-                                  {p2?.full_name.split(' ')[0]}
-                                </button>
-                              </div>
-                            )
-                          })()}
+                          {/* Asignación individual por tarea (no disponible en grupo cliente) */}
+                          {selectedTasks.has(task.idx) && !isCliente && (
+                            <select
+                              value={taskOverrides[task.idx] || ''}
+                              onChange={e => {
+                                if (e.target.value) {
+                                  setTaskOverrides(prev => ({ ...prev, [task.idx]: e.target.value }))
+                                } else {
+                                  setTaskOverrides(prev => { const n = {...prev}; delete n[task.idx]; return n })
+                                }
+                              }}
+                              onClick={e => e.stopPropagation()}
+                              className={`text-xs border rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500 shrink-0 ${
+                                taskOverrides[task.idx]
+                                  ? 'border-blue-400 bg-blue-50 text-blue-700'
+                                  : 'border-gray-200 bg-white text-gray-400'
+                              }`}>
+                              <option value="">👤 Individual...</option>
+                              {allAssignees.map(m => <option key={m.id} value={m.id}>{m.full_name.split(' ')[0]}</option>)}
+                            </select>
+                          )}
                         </div>
                       ))}
                     </div>
