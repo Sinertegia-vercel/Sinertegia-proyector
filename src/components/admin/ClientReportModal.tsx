@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { X, CheckCircle, Clock, AlertCircle, TrendingUp, Download } from 'lucide-react'
 import type { Project, Task } from '../../types'
+import { generateClientReportPdf } from '../../lib/clientReportPdf'
 
 interface Props {
   project: Project
@@ -9,6 +11,7 @@ interface Props {
 
 export default function ClientReportModal({ project, tasks, onClose }: Props) {
   const projectTasks = tasks.filter(t => t.project_id === project.id)
+  const [generatingPdf, setGeneratingPdf] = useState(false)
 
   const completed = projectTasks.filter(t => t.status === 'completada')
   const inProgress = projectTasks.filter(t => t.status === 'en_progreso')
@@ -25,8 +28,29 @@ export default function ClientReportModal({ project, tasks, onClose }: Props) {
     .sort((a, b) => new Date(a.commitment_date!).getTime() - new Date(b.commitment_date!).getTime())
     .slice(0, 5)
 
-  function handlePrint() {
-    window.print()
+  const toReportTask = (t: Task) => ({
+    title: t.title,
+    responsable: (t as any).assignee?.full_name || 'Sin asignar',
+    priority: t.priority,
+    date: t.commitment_date ? new Date(t.commitment_date + 'T00:00:00').toLocaleDateString('es-MX') : null,
+  })
+
+  async function handleExport() {
+    setGeneratingPdf(true)
+    try {
+      await generateClientReportPdf({
+        titulo: `${project.client?.name} — ${project.name}`,
+        subtitulo: 'Estado del embudo y producción de campaña',
+        fecha: today.toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' }),
+        pie: `Reporte ${project.client?.name} · Sinertegia Launch 57`,
+        completadas: completed.map(toReportTask),
+        enProgreso: inProgress.map(toReportTask),
+        pendientes: [...pending, ...blocked].map(toReportTask),
+        filename: `Reporte_${(project.client?.name || 'cliente').replace(/\s+/g, '_')}_${project.name.replace(/\s+/g, '_')}.pdf`,
+      })
+    } finally {
+      setGeneratingPdf(false)
+    }
   }
 
   const statusColor: Record<string, string> = {
@@ -54,9 +78,9 @@ export default function ClientReportModal({ project, tasks, onClose }: Props) {
             <p className="text-sm text-gray-500">{project.name}</p>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={handlePrint}
-              className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 border border-gray-300 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition">
-              <Download size={13} /> Exportar / Imprimir
+            <button onClick={handleExport} disabled={generatingPdf}
+              className="flex items-center gap-1.5 text-xs font-semibold text-white bg-gradient-to-r from-blue-700 to-red-600 px-3 py-2 rounded-lg hover:opacity-90 transition disabled:opacity-60">
+              <Download size={13} /> {generatingPdf ? 'Generando...' : 'Exportar / Imprimir'}
             </button>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
               <X size={20} />
