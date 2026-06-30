@@ -41,14 +41,14 @@ function avatar(name: string, size = 18): string {
 }
 
 function prioPill(p: string): string {
-  if (p === 'alta' || p === 'critica') return `<span style="font-size:9.5px;font-weight:600;padding:3px 9px;border-radius:20px;white-space:nowrap;background:#FBE3E4;color:${RED};">● ${p === 'critica' ? 'Crítica' : 'Alta'}</span>`
-  if (p === 'media') return `<span style="font-size:9.5px;font-weight:600;padding:3px 9px;border-radius:20px;white-space:nowrap;background:#FBF0CC;color:#9A7B0A;">● Media</span>`
-  return `<span style="font-size:9.5px;font-weight:600;padding:3px 9px;border-radius:20px;white-space:nowrap;background:#E5EAEF;color:${SLATE};">● Baja</span>`
+  if (p === 'alta' || p === 'critica') return `<span style="font-size:9.5px;line-height:1.6;font-weight:600;padding:4px 10px;border-radius:20px;white-space:nowrap;background:#FBE3E4;color:${RED};">● ${p === 'critica' ? 'Crítica' : 'Alta'}</span>`
+  if (p === 'media') return `<span style="font-size:9.5px;line-height:1.6;font-weight:600;padding:4px 10px;border-radius:20px;white-space:nowrap;background:#FBF0CC;color:#9A7B0A;">● Media</span>`
+  return `<span style="font-size:9.5px;line-height:1.6;font-weight:600;padding:4px 10px;border-radius:20px;white-space:nowrap;background:#E5EAEF;color:${SLATE};">● Baja</span>`
 }
 
 function dateChip(d: string | null): string {
-  if (!d) return `<span style="font-size:9.5px;padding:3px 9px;border-radius:20px;white-space:nowrap;background:#F0F2F4;color:${MUTED};">Sin fecha</span>`
-  return `<span style="font-size:9.5px;padding:3px 9px;border-radius:20px;white-space:nowrap;background:#EAF4FF;color:#2C6FB0;">📅 ${esc(d)}</span>`
+  if (!d) return `<span style="font-size:9.5px;line-height:1.6;padding:4px 10px;border-radius:20px;white-space:nowrap;background:#F0F2F4;color:${MUTED};">Sin fecha</span>`
+  return `<span style="font-size:9.5px;line-height:1.6;padding:4px 10px;border-radius:20px;white-space:nowrap;background:#EAF4FF;color:#2C6FB0;">📅 ${esc(d)}</span>`
 }
 
 function taskRow(t: ReportTask, idx: number): string {
@@ -102,9 +102,9 @@ function buildReportHtml(opts: {
       const done = doneByResp.get(name) || 0
       const w = Math.round((c / maxc) * 100)
       const wd = c ? Math.round((done / c) * 100) : 0
-      return `<div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
-        <div style="width:230px;flex:0 0 230px;font-size:11.5px;font-weight:500;color:${INK};display:flex;align-items:center;gap:9px;white-space:nowrap;">
-          ${avatar(name, 20)}<span style="display:inline-block;max-width:195px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(name)}</span>
+      return `<div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;">
+        <div style="width:230px;flex:0 0 230px;font-size:11.5px;line-height:1.6;font-weight:500;color:${INK};display:flex;align-items:center;gap:9px;white-space:nowrap;">
+          ${avatar(name, 20)}<span style="white-space:nowrap;">${esc(name)}</span>
         </div>
         <div style="flex:1;height:14px;background:#EEF2F5;border-radius:8px;overflow:hidden;">
           <div style="height:100%;border-radius:8px;position:relative;width:${w}%;background:${colorFor(name)};">
