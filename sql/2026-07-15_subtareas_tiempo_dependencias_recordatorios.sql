@@ -8,6 +8,10 @@ create table if not exists task_subtasks (
   created_at timestamptz not null default now()
 );
 alter table task_subtasks enable row level security;
+drop policy if exists "Usuarios autenticados pueden ver subtareas" on task_subtasks;
+drop policy if exists "Usuarios autenticados pueden crear subtareas" on task_subtasks;
+drop policy if exists "Usuarios autenticados pueden editar subtareas" on task_subtasks;
+drop policy if exists "Usuarios autenticados pueden borrar subtareas" on task_subtasks;
 create policy "Usuarios autenticados pueden ver subtareas" on task_subtasks for select to authenticated using (true);
 create policy "Usuarios autenticados pueden crear subtareas" on task_subtasks for insert to authenticated with check (true);
 create policy "Usuarios autenticados pueden editar subtareas" on task_subtasks for update to authenticated using (true);
@@ -25,6 +29,10 @@ create table if not exists task_time_entries (
   created_at timestamptz not null default now()
 );
 alter table task_time_entries enable row level security;
+drop policy if exists "Usuarios autenticados pueden ver tiempo registrado" on task_time_entries;
+drop policy if exists "Usuarios autenticados pueden registrar tiempo" on task_time_entries;
+drop policy if exists "Usuarios autenticados pueden actualizar su tiempo" on task_time_entries;
+drop policy if exists "Usuarios autenticados pueden borrar tiempo" on task_time_entries;
 create policy "Usuarios autenticados pueden ver tiempo registrado" on task_time_entries for select to authenticated using (true);
 create policy "Usuarios autenticados pueden registrar tiempo" on task_time_entries for insert to authenticated with check (true);
 create policy "Usuarios autenticados pueden actualizar su tiempo" on task_time_entries for update to authenticated using (true);
@@ -61,9 +69,8 @@ begin
 end;
 $$;
 
--- IMPORTANTE: antes de correr la siguiente línea, activa la extensión "pg_cron"
--- en Supabase → Database → Extensions (búscala y actívala). Si no la activas,
--- esta línea marcará error "schema cron does not exist".
+-- Requiere la extensión "pg_cron" activada (Supabase → Database → Extensions).
+-- cron.schedule() actualiza el job si ya existe uno con el mismo nombre, así que es seguro correr esto varias veces.
 select cron.schedule(
   'notify-upcoming-deadlines-daily',
   '0 14 * * *', -- 8:00am hora Ciudad de México aprox. (UTC-6) — ajusta la hora si quieres
