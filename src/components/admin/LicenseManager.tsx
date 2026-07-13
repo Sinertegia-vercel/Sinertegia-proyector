@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ShieldAlert, ShieldCheck, Save, Plus } from 'lucide-react'
+import { ShieldAlert, ShieldCheck, Save, Plus, Copy, Check, Link2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
 interface License {
@@ -9,6 +9,7 @@ interface License {
   expires_at: string | null
   monthly_amount: number
   notes: string | null
+  payment_link: string | null
 }
 
 function daysUntil(dateStr: string | null): number | null {
@@ -28,6 +29,8 @@ export default function LicenseManager() {
   const [expiresAt, setExpiresAt] = useState('')
   const [monthlyAmount, setMonthlyAmount] = useState('0')
   const [notes, setNotes] = useState('')
+  const [paymentLink, setPaymentLink] = useState('')
+  const [linkCopied, setLinkCopied] = useState(false)
 
   useEffect(() => {
     fetchLicense()
@@ -44,6 +47,7 @@ export default function LicenseManager() {
       setExpiresAt(l.expires_at || '')
       setMonthlyAmount(String(l.monthly_amount ?? 0))
       setNotes(l.notes || '')
+      setPaymentLink(l.payment_link || '')
     }
     setLoading(false)
   }
@@ -57,10 +61,18 @@ export default function LicenseManager() {
       expires_at: overrides?.expires_at ?? (expiresAt || null),
       monthly_amount: parseFloat(monthlyAmount) || 0,
       notes: notes.trim() || null,
+      payment_link: paymentLink.trim() || null,
       updated_at: new Date().toISOString(),
     }).eq('id', 1)
     await fetchLicense()
     setSaving(false)
+  }
+
+  function copyPaymentLink() {
+    if (!license?.payment_link) return
+    navigator.clipboard.writeText(license.payment_link)
+    setLinkCopied(true)
+    setTimeout(() => setLinkCopied(false), 2000)
   }
 
   async function toggleStatus() {
@@ -127,6 +139,20 @@ export default function LicenseManager() {
               <p><span className="text-gray-400">Estado:</span> <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{isActive ? 'ACTIVA' : 'SUSPENDIDA'}</span></p>
               {license.notes && <p className="pt-1 text-gray-500 text-xs">{license.notes}</p>}
             </div>
+            {license.payment_link && (
+              <div className="mt-3 pt-3 border-t border-gray-100">
+                <p className="text-xs text-gray-400 mb-1.5">Link de pago mensual</p>
+                <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+                  <Link2 size={13} className="text-blue-500 shrink-0" />
+                  <a href={license.payment_link} target="_blank" rel="noreferrer" className="text-xs text-blue-700 truncate flex-1 hover:underline">
+                    {license.payment_link}
+                  </a>
+                  <button onClick={copyPaymentLink} className="shrink-0 text-blue-600 hover:text-blue-800 transition">
+                    {linkCopied ? <Check size={14} /> : <Copy size={14} />}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -162,6 +188,11 @@ export default function LicenseManager() {
             <div>
               <label className="block text-xs text-gray-500 mb-1">Mensualidad (MXN)</label>
               <input type="number" step="0.01" value={monthlyAmount} onChange={e => setMonthlyAmount(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Link de pago (Mercado Pago, Stripe, etc.)</label>
+              <input type="url" value={paymentLink} onChange={e => setPaymentLink(e.target.value)} placeholder="https://mpago.la/..."
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
