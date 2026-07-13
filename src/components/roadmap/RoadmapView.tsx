@@ -24,6 +24,7 @@ export default function RoadmapView({ tasks, title }: Props) {
   const [clientFilter, setClientFilter] = useState<string>('todos')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'pendiente' | 'en_progreso' | 'completada' | 'bloqueada' | 'cambio_1' | 'cambio_2' | null>(null)
 
   // Lista de clientes únicos
   const clients = useMemo(() => {
@@ -35,6 +36,12 @@ export default function RoadmapView({ tasks, title }: Props) {
   const filteredTasks = useMemo(() => {
     return tasks.filter(t => {
       if (clientFilter !== 'todos' && t.project?.client?.name !== clientFilter) return false
+      if (statusFilter) {
+        const changeCount = (t as any).change_count ?? 0
+        if (statusFilter === 'cambio_1' && changeCount !== 1) return false
+        else if (statusFilter === 'cambio_2' && changeCount < 2) return false
+        else if (statusFilter !== 'cambio_1' && statusFilter !== 'cambio_2' && t.status !== statusFilter) return false
+      }
       if (dateFrom || dateTo) {
         const taskStart = t.start_date || t.commitment_date
         const taskEnd = t.commitment_date || t.start_date
@@ -44,7 +51,7 @@ export default function RoadmapView({ tasks, title }: Props) {
       }
       return true
     })
-  }, [tasks, clientFilter, dateFrom, dateTo])
+  }, [tasks, clientFilter, dateFrom, dateTo, statusFilter])
   const { startDate, weeks } = useMemo(() => {
     const allDates: Date[] = []
     filteredTasks.forEach(t => {
@@ -125,28 +132,37 @@ export default function RoadmapView({ tasks, title }: Props) {
         <div className="flex flex-wrap gap-3 items-center">
           {title && <span className="text-sm font-semibold text-gray-700 mr-2">{title}</span>}
           {[
-            { key: 'pendiente', label: 'Pendiente' },
-            { key: 'en_progreso', label: 'En progreso' },
-            { key: 'completada', label: 'Completada' },
-            { key: 'bloqueada', label: 'Bloqueada' },
+            { key: 'pendiente' as const, label: 'Pendiente' },
+            { key: 'en_progreso' as const, label: 'En progreso' },
+            { key: 'completada' as const, label: 'Completada' },
+            { key: 'bloqueada' as const, label: 'Bloqueada' },
           ].map(({ key, label }) => (
-            <div key={key} className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-sm" style={{ background: STATUS_COLORS[key].progress }} />
-              <span className="text-xs text-gray-600">{label}</span>
-            </div>
+            <button key={key} type="button" onClick={() => setStatusFilter(prev => prev === key ? null : key)}
+              className={`flex items-center gap-1.5 px-1.5 py-0.5 rounded-md transition ${statusFilter === key ? 'bg-white ring-1 ring-gray-300' : 'hover:bg-white/60'}`}>
+              <div className="w-3 h-3 rounded-sm shrink-0" style={{ background: STATUS_COLORS[key].progress }} />
+              <span className={`text-xs ${statusFilter === key ? 'font-semibold text-gray-800' : 'text-gray-600'}`}>{label}</span>
+            </button>
           ))}
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-sm" style={{ background: '#f59e0b' }} />
-            <span className="text-xs text-gray-600">1 cambio solicitado</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-sm" style={{ background: '#ef4444' }} />
-            <span className="text-xs text-gray-600">2 cambios (límite)</span>
-          </div>
+          <button type="button" onClick={() => setStatusFilter(prev => prev === 'cambio_1' ? null : 'cambio_1')}
+            className={`flex items-center gap-1.5 px-1.5 py-0.5 rounded-md transition ${statusFilter === 'cambio_1' ? 'bg-white ring-1 ring-gray-300' : 'hover:bg-white/60'}`}>
+            <div className="w-3 h-3 rounded-sm shrink-0" style={{ background: '#f59e0b' }} />
+            <span className={`text-xs ${statusFilter === 'cambio_1' ? 'font-semibold text-gray-800' : 'text-gray-600'}`}>1 cambio solicitado</span>
+          </button>
+          <button type="button" onClick={() => setStatusFilter(prev => prev === 'cambio_2' ? null : 'cambio_2')}
+            className={`flex items-center gap-1.5 px-1.5 py-0.5 rounded-md transition ${statusFilter === 'cambio_2' ? 'bg-white ring-1 ring-gray-300' : 'hover:bg-white/60'}`}>
+            <div className="w-3 h-3 rounded-sm shrink-0" style={{ background: '#ef4444' }} />
+            <span className={`text-xs ${statusFilter === 'cambio_2' ? 'font-semibold text-gray-800' : 'text-gray-600'}`}>2 cambios (límite)</span>
+          </button>
           <div className="flex items-center gap-1.5">
             <div className="w-8 h-3 rounded-sm" style={{ background: 'linear-gradient(to right, transparent, rgba(147,197,253,0.5))', border: '1px dashed #3b82f6' }} />
             <span className="text-xs text-gray-600">📌 Planeado (sin iniciar)</span>
           </div>
+          {statusFilter && (
+            <button type="button" onClick={() => setStatusFilter(null)}
+              className="text-xs text-red-400 hover:text-red-600 font-semibold px-1.5">
+              ✕ Quitar filtro
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
           {/* Filtro por cliente */}
