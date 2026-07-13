@@ -60,6 +60,18 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone 
     await supabase.from('task_comments').insert({
       task_id: task.id, user_id: user.id, content: newComment.trim(),
     })
+
+    // Avisar al encargado que creó/asignó la tarea (si no es quien comenta)
+    if (task.created_by && task.created_by !== user.id) {
+      await supabase.from('notifications').insert({
+        user_id: task.created_by,
+        title: '💬 Nuevo comentario',
+        message: `${user.full_name} comentó en "${task.title}": ${newComment.trim().slice(0, 80)}`,
+        type: 'comment',
+        task_id: task.id,
+      })
+    }
+
     setNewComment('')
     await fetchComments()
     setSendingComment(false)

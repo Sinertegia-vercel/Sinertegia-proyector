@@ -337,7 +337,7 @@ export default function TeamDashboard({ embedded = false }: Props) {
               </th>
               <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap" title="Fecha de compromiso de entrega">Fecha de entrega</th>
               <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">Entregables</th>
-              <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">Com.</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">Comentarios</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">

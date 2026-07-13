@@ -315,12 +315,26 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
           department: t.department,
           assigned_to: taskOverrides[idx] || deptAssignees[t.group || t.department] || user!.id,
           priority: t.priority,
-          description: t.note || null,
           status: 'pendiente',
           created_by: user!.id,
+          _note: t.note || null, // no es columna real, se usa abajo para crear el comentario
         }
       })
-      await supabase.from('tasks').insert(tasksToInsert)
+      const { data: insertedTasks } = await supabase.from('tasks').insert(
+        tasksToInsert.map(({ _note, ...t }) => t)
+      ).select('id')
+
+      // Las notas que se escribieron al armar la plantilla se guardan como el primer
+      // comentario de cada tarea (para que le lleguen al encargado que la asignó).
+      if (insertedTasks && insertedTasks.length === tasksToInsert.length) {
+        const commentsToInsert = tasksToInsert
+          .map((t, i) => ({ task_id: insertedTasks[i].id, note: t._note }))
+          .filter(t => t.note)
+          .map(t => ({ task_id: t.task_id, user_id: user!.id, content: t.note as string }))
+        if (commentsToInsert.length > 0) {
+          await supabase.from('task_comments').insert(commentsToInsert)
+        }
+      }
 
       // Agregar asignados a client_team_members para que puedan ver el chat
       const uniqueAssignees = [...new Set(tasksToInsert.map((t: any) => t.assigned_to).filter(Boolean))]
