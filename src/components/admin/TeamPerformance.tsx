@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
-import { TrendingUp, TrendingDown, Clock, Building2, Star, ChevronLeft, ChevronRight } from 'lucide-react'
+import { TrendingUp, TrendingDown, Clock, Building2, Star, ChevronLeft, ChevronRight, UserPlus, X, Copy, Check } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import type { Task, User } from '../../types'
+import type { Task, User, Department } from '../../types'
 import UserAvatar from '../shared/UserAvatar'
 
 interface Props {
@@ -26,6 +26,16 @@ const DEPT_LABELS: Record<string, string> = {
   copy: 'Copy', webmaster: 'Webmaster', trafficker: 'Trafficker',
   lider: 'Líder', cliente: 'Cliente',
 }
+
+const DEPARTMENTS: { value: Department; label: string }[] = [
+  { value: 'edicion', label: 'Edición' },
+  { value: 'grabacion', label: 'Grabación' },
+  { value: 'diseno', label: 'Diseño' },
+  { value: 'copy', label: 'Copy' },
+  { value: 'webmaster', label: 'Webmaster' },
+  { value: 'trafficker', label: 'Trafficker' },
+  { value: 'lider', label: 'Líder de Proyecto' },
+]
 
 function scoreColor(val: number, good = 80, bad = 50) {
   if (val >= good) return { text: 'text-green-600', bg: 'bg-green-500' }
@@ -69,6 +79,47 @@ export default function TeamPerformance({ teamMembers, tasks }: Props) {
   const [ratings, setRatings] = useState<RatingRow[]>([])
   const [period, setPeriod] = useState<'semana' | 'mes'>('semana')
   const [weekStart, setWeekStart] = useState<Date>(() => getMondayOf(new Date()))
+  const [showInviteModal, setShowInviteModal] = useState(false)
+  const [inviteForm, setInviteForm] = useState<{ email: string; full_name: string; role: 'team' | 'admin'; department: Department | '' }>(
+    { email: '', full_name: '', role: 'team', department: '' }
+  )
+  const [inviteSaving, setInviteSaving] = useState(false)
+  const [inviteError, setInviteError] = useState('')
+  const [inviteLink, setInviteLink] = useState('')
+  const [linkCopied, setLinkCopied] = useState(false)
+
+  async function generateTeamInvite(e: React.FormEvent) {
+    e.preventDefault()
+    if (!inviteForm.email.trim()) return
+    setInviteSaving(true)
+    setInviteError('')
+    const { data, error } = await supabase.from('team_invitations').insert({
+      email: inviteForm.email.trim(),
+      full_name: inviteForm.full_name.trim() || null,
+      role: inviteForm.role,
+      department: inviteForm.department || null,
+    }).select('id').single()
+    if (error || !data) {
+      setInviteError('No se pudo generar la invitación: ' + (error?.message || ''))
+      setInviteSaving(false)
+      return
+    }
+    setInviteLink(`https://agencia.sinertegia.com?team_invite=${data.id}`)
+    setInviteSaving(false)
+  }
+
+  function copyInviteLink() {
+    navigator.clipboard.writeText(inviteLink)
+    setLinkCopied(true)
+    setTimeout(() => setLinkCopied(false), 2000)
+  }
+
+  function closeInviteModal() {
+    setShowInviteModal(false)
+    setInviteForm({ email: '', full_name: '', role: 'team', department: '' })
+    setInviteLink('')
+    setInviteError('')
+  }
 
   useEffect(() => {
     fetchSessions()
@@ -189,6 +240,10 @@ export default function TeamPerformance({ teamMembers, tasks }: Props) {
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <h3 className="font-bold text-gray-800 text-lg">Scorecard del equipo</h3>
         <div className="flex items-center gap-2">
+          <button onClick={() => setShowInviteModal(true)}
+            className="flex items-center gap-1.5 text-xs font-semibold text-white bg-gradient-to-r from-blue-700 to-red-600 px-3 py-2 rounded-lg hover:opacity-90 transition">
+            <UserPlus size={14} /> Agregar integrante
+          </button>
           {/* Toggle semana/mes */}
           <div className="flex rounded-lg overflow-hidden border border-gray-200">
             {(['semana', 'mes'] as const).map(p => (
@@ -441,6 +496,76 @@ export default function TeamPerformance({ teamMembers, tasks }: Props) {
       <p className="text-xs text-gray-400 mt-4">
         Score calculado con: 20% puntualidad · 25% sin retrabajo · 20% entregas · 20% calificación cliente · 15% horas
       </p>
+
+      {/* Modal: agregar integrante al equipo */}
+      {showInviteModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between p-5 border-b border-gray-100">
+              <h3 className="text-lg font-bold text-gray-900">Agregar integrante</h3>
+              <button onClick={closeInviteModal} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {!inviteLink ? (
+                <form onSubmit={generateTeamInvite} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide">Correo electrónico *</label>
+                    <input type="email" value={inviteForm.email} onChange={e => setInviteForm(f => ({ ...f, email: e.target.value }))}
+                      required placeholder="correo@ejemplo.com"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide">Nombre (opcional)</label>
+                    <input value={inviteForm.full_name} onChange={e => setInviteForm(f => ({ ...f, full_name: e.target.value }))}
+                      placeholder="Nombre completo"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide">Rol</label>
+                      <select value={inviteForm.role} onChange={e => setInviteForm(f => ({ ...f, role: e.target.value as 'team' | 'admin' }))}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                        <option value="team">Equipo</option>
+                        <option value="admin">Administrador</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide">Departamento</label>
+                      <select value={inviteForm.department} onChange={e => setInviteForm(f => ({ ...f, department: e.target.value as Department }))}
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                        <option value="">Sin departamento</option>
+                        {DEPARTMENTS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  {inviteError && <p className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-3 py-2">{inviteError}</p>}
+                  <button type="submit" disabled={inviteSaving}
+                    className="w-full bg-gradient-to-r from-blue-700 to-red-600 text-white text-sm font-semibold py-2.5 rounded-lg hover:opacity-90 transition disabled:opacity-50">
+                    {inviteSaving ? 'Generando...' : 'Generar link de invitación'}
+                  </button>
+                </form>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-sm text-gray-600">
+                    Comparte este link con <strong>{inviteForm.email}</strong> por WhatsApp o correo — al abrirlo podrá crear su contraseña y unirse.
+                  </p>
+                  <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                    <p className="text-xs text-green-700 flex-1 truncate font-mono">{inviteLink}</p>
+                    <button onClick={copyInviteLink} className="shrink-0 flex items-center gap-1 text-xs font-semibold text-green-700 hover:text-green-900 transition">
+                      {linkCopied ? <><Check size={13} /> Copiado</> : <><Copy size={13} /> Copiar</>}
+                    </button>
+                  </div>
+                  <button onClick={closeInviteModal}
+                    className="w-full bg-gray-100 text-gray-700 text-sm font-semibold py-2.5 rounded-lg hover:bg-gray-200 transition">
+                    Listo
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

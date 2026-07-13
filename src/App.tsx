@@ -4,6 +4,7 @@ import LoginPage from './components/auth/LoginPage'
 import ChangePasswordModal from './components/auth/ChangePasswordModal'
 import ResetPasswordPage from './components/auth/ResetPasswordPage'
 import ClientRegistrationPage from './components/auth/ClientRegistrationPage'
+import TeamRegistrationPage from './components/auth/TeamRegistrationPage'
 import Navbar from './components/shared/Navbar'
 import AdminDashboard from './components/admin/AdminDashboard'
 import TeamDashboard from './components/team/TeamDashboard'
@@ -13,9 +14,10 @@ import OvertimeModal from './components/shared/OvertimeModal'
 import './index.css'
 
 function AppContent() {
-  const { session, user, loading, isPasswordRecovery, unauthorizedEmail } = useAuth()
+  const { session, user, loading, isPasswordRecovery, unauthorizedEmail, deactivatedEmail } = useAuth()
   const { needsCheckIn, showOvertimeModal } = useWorkSession()
   const inviteToken = new URLSearchParams(window.location.search).get('invite')
+  const teamInviteToken = new URLSearchParams(window.location.search).get('team_invite')
 
   if (loading) {
     return (
@@ -32,7 +34,8 @@ function AppContent() {
 
   if (!session || !user) {
     if (inviteToken) return <ClientRegistrationPage inviteToken={inviteToken} />
-    return <LoginPage unauthorizedEmail={unauthorizedEmail} />
+    if (teamInviteToken) return <TeamRegistrationPage inviteToken={teamInviteToken} />
+    return <LoginPage unauthorizedEmail={unauthorizedEmail} deactivatedEmail={deactivatedEmail} />
   }
 
   if (user.must_change_password) return <ChangePasswordModal />

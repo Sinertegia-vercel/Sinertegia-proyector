@@ -50,6 +50,7 @@ export interface User {
   created_at: string
   work_start?: number
   work_end?: number
+  active?: boolean
 }
 
 export interface Client {

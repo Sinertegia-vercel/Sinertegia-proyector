@@ -10,6 +10,7 @@ interface AuthContextType {
   loading: boolean
   isPasswordRecovery: boolean
   unauthorizedEmail: string | null
+  deactivatedEmail: string | null
   signOut: () => Promise<void>
   refreshUser: () => Promise<void>
 }
@@ -20,6 +21,7 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   isPasswordRecovery: false,
   unauthorizedEmail: null,
+  deactivatedEmail: null,
   signOut: async () => {},
   refreshUser: async () => {},
 })
@@ -30,6 +32,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false)
   const [unauthorizedEmail, setUnauthorizedEmail] = useState<string | null>(null)
+  const [deactivatedEmail, setDeactivatedEmail] = useState<string | null>(null)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -65,6 +68,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false)
       return
     }
+    if ((data as any).active === false) {
+      // Cuenta desactivada por el admin: se rechaza el acceso sin borrar su historial.
+      setDeactivatedEmail(data.email)
+      await supabase.auth.signOut()
+      setUser(null)
+      setSession(null)
+      setLoading(false)
+      return
+    }
     setUser(data)
     setLoading(false)
   }
@@ -78,7 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ session, user, loading, isPasswordRecovery, unauthorizedEmail, signOut, refreshUser }}>
+    <AuthContext.Provider value={{ session, user, loading, isPasswordRecovery, unauthorizedEmail, deactivatedEmail, signOut, refreshUser }}>
       {children}
     </AuthContext.Provider>
   )
