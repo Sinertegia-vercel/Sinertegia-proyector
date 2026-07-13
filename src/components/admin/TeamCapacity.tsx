@@ -104,7 +104,7 @@ export default function TeamCapacity({ teamMembers, tasks, onAssign, onUpdate }:
 
           return (
             <div key={member.id} className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-              <div className="flex items-start justify-between mb-4">
+              <div className="flex items-start justify-between mb-3 flex-wrap gap-3">
                 <div>
                   <div className="flex items-center gap-2">
                     <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-600 to-red-500 flex items-center justify-center text-white font-bold text-sm">
@@ -126,32 +126,37 @@ export default function TeamCapacity({ teamMembers, tasks, onAssign, onUpdate }:
                 <div className="text-right">
                   <p className="text-xs text-gray-400">Carga esta semana</p>
                   <p className="text-lg font-bold text-gray-800">{weekTasks.length} tareas</p>
-                  {member.role !== 'admin' && (
-                    confirmingId === member.id ? (
-                      <div className="flex items-center gap-1 mt-1.5 justify-end">
-                        <button onClick={() => makeAdmin(member.id)} disabled={updatingId === member.id}
-                          className="text-[11px] font-semibold text-white bg-purple-600 hover:bg-purple-700 px-2 py-1 rounded-md transition disabled:opacity-60">
-                          {updatingId === member.id ? '...' : 'Sí, hacer admin'}
-                        </button>
-                        <button onClick={() => setConfirmingId(null)}
-                          className="text-[11px] text-gray-400 hover:text-gray-600 px-1.5 py-1">
-                          Cancelar
-                        </button>
-                      </div>
-                    ) : (
-                      <button onClick={() => setConfirmingId(member.id)}
-                        className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-purple-600 mt-1.5 transition">
-                        <Shield size={11} /> Hacer administrador
-                      </button>
-                    )
-                  )}
-                  {removingId !== member.id && (
-                    <button onClick={() => startRemove(member.id)}
-                      className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-red-600 mt-1.5 transition">
-                      <UserX size={11} /> Eliminar del equipo
-                    </button>
-                  )}
                 </div>
+              </div>
+
+              {/* Barra de acciones sobre la persona: bien visible, no escondida */}
+              <div className="flex items-center gap-2 mb-4 flex-wrap">
+                {member.role !== 'admin' && (
+                  confirmingId === member.id ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500">¿Hacerlo administrador?</span>
+                      <button onClick={() => makeAdmin(member.id)} disabled={updatingId === member.id}
+                        className="text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700 px-3 py-1.5 rounded-lg transition disabled:opacity-60">
+                        {updatingId === member.id ? '...' : 'Sí, hacer admin'}
+                      </button>
+                      <button onClick={() => setConfirmingId(null)}
+                        className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1.5">
+                        Cancelar
+                      </button>
+                    </div>
+                  ) : (
+                    <button onClick={() => setConfirmingId(member.id)}
+                      className="flex items-center gap-1.5 text-xs font-semibold text-purple-700 bg-purple-50 border border-purple-200 hover:bg-purple-100 px-3 py-1.5 rounded-lg transition">
+                      <Shield size={13} /> Hacer administrador
+                    </button>
+                  )
+                )}
+                {removingId !== member.id && (
+                  <button onClick={() => startRemove(member.id)}
+                    className="flex items-center gap-1.5 text-xs font-semibold text-red-700 bg-red-50 border border-red-200 hover:bg-red-100 px-3 py-1.5 rounded-lg transition">
+                    <UserX size={13} /> Eliminar del equipo
+                  </button>
+                )}
               </div>
 
               {/* Panel de confirmación / reasignación al eliminar */}
