@@ -24,7 +24,7 @@ import LicenseManager from './LicenseManager'
 import { usePresence } from '../../hooks/usePresence'
 import { useAuth } from '../../contexts/AuthContext'
 import TaskDetailModal from '../team/TaskDetailModal'
-import './AdminDashboardV2.css'
+import '../../styles/DashboardV2.css'
 
 type View = 'overview' | 'project' | 'team' | 'calendar' | 'performance' | 'mytasks' | 'roadmap' | 'requests' | 'chat_team' | 'chat_clients' | 'clientes' | 'spelling' | 'entregables' | 'create' | 'create_project' | 'permisos' | 'licencia'
 type StatusFilter = 'activo' | 'pausado' | 'completado' | 'todos'
@@ -196,60 +196,60 @@ export default function AdminDashboard() {
   const currentNavLabel = navItems.find(i => i.id === view)?.label || 'Panel de Control'
 
   return (
-    <div className="adminv2">
-      <div className="adm-shell">
+    <div className="v2app">
+      <div className="v2-shell">
         {/* ── Sidebar ── */}
-        <aside className="adm-sidebar">
-          <div className="adm-brand">
-            <div className="adm-brand-mark"><Logo size={26} /></div>
+        <aside className="v2-sidebar">
+          <div className="v2-brand">
+            <div className="v2-brand-mark"><Logo size={26} /></div>
             <div>
-              <div className="adm-brand-name">Sinertegia Launch 57</div>
-              <div className="adm-brand-sub">Gestión de proyectos</div>
+              <div className="v2-brand-name">Sinertegia Launch 57</div>
+              <div className="v2-brand-sub">Gestión de proyectos</div>
             </div>
           </div>
 
           {navItems.map(({ id, label, icon: Icon, badge }) => (
             <button key={id} type="button" onClick={() => selectView(id)}
-              className={`adm-nav-item ${view === id ? 'active' : ''}`}>
+              className={`v2-nav-item ${view === id ? 'active' : ''}`}>
               <Icon size={17} />
               {label}
-              {!!badge && <span className="adm-badge">{badge > 9 ? '9+' : badge}</span>}
+              {!!badge && <span className="v2-badge">{badge > 9 ? '9+' : badge}</span>}
             </button>
           ))}
 
-          <div className="adm-tip">
-            <div className="adm-tip-head">💡 Consejo rápido</div>
+          <div className="v2-tip">
+            <div className="v2-tip-head">💡 Consejo rápido</div>
             <p>Organiza tus tareas con prioridades y fechas de entrega para mejorar tu productividad.</p>
           </div>
         </aside>
 
         {/* ── Main ── */}
-        <div className="adm-main">
-          <header className="adm-topbar">
-            <span className="adm-top-title display">{currentNavLabel}</span>
-            <div className="adm-top-spacer" />
+        <div className="v2-main">
+          <header className="v2-topbar">
+            <span className="v2-top-title display">{currentNavLabel}</span>
+            <div className="v2-top-spacer" />
             <TopBarActions />
           </header>
 
-          <div className="adm-content">
+          <div className="v2-content">
 
             {/* ═══ Vista: Proyectos (overview) ═══ */}
             {view === 'overview' && (
               <>
-                <div className="adm-page-head">
+                <div className="v2-page-head">
                   <div>
-                    <h1 className="adm-page-title display">Panel de Control</h1>
-                    <div className="adm-page-meta">
-                      <span className="adm-stat"><b className="mono">{projects.filter(p => p.status === 'activo').length}</b> proyectos activos</span>
-                      <span className="adm-sep" />
-                      <span className="adm-stat"><b className="mono">{teamMembers.length}</b> personas en el equipo</span>
+                    <h1 className="v2-page-title display">Panel de Control</h1>
+                    <div className="v2-page-meta">
+                      <span className="v2-stat-inline"><b className="mono">{projects.filter(p => p.status === 'activo').length}</b> proyectos activos</span>
+                      <span className="v2-sep" />
+                      <span className="v2-stat-inline"><b className="mono">{teamMembers.length}</b> personas en el equipo</span>
                     </div>
                   </div>
-                  <div className="adm-actions">
-                    <button className="adm-btn adm-btn-ghost" onClick={() => setView('create_project')}>
+                  <div className="v2-actions">
+                    <button className="v2-btn v2-btn-ghost" onClick={() => setView('create_project')}>
                       <Plus /> Nuevo proyecto
                     </button>
-                    <button className="adm-btn adm-btn-primary" onClick={() => setView('create')}>
+                    <button className="v2-btn v2-btn-primary" onClick={() => setView('create')}>
                       <Plus /> Nueva tarea
                     </button>
                   </div>
@@ -257,50 +257,50 @@ export default function AdminDashboard() {
 
                 {/* Triage: autorizaciones y vencidas */}
                 {(pendingTraffickerReview.length > 0 || overdueTasks.length > 0 || clientChangesRequested.length > 0) && (
-                  <div className="adm-triage">
+                  <div className="v2-triage">
                     {pendingTraffickerReview.length > 0 && (
-                      <div className="adm-alert warn" onClick={() => { setSelectedProject(pendingTraffickerReview[0].project || null); setView('project') }}>
-                        <div className="adm-alert-icon"><Search /></div>
-                        <div className="adm-alert-body">
-                          <div className="adm-alert-kicker">{pendingTraffickerReview.length} tarea{pendingTraffickerReview.length > 1 ? 's' : ''} espera{pendingTraffickerReview.length > 1 ? 'n' : ''} tu autorización</div>
-                          <div className="adm-alert-title">{pendingTraffickerReview[0].title}</div>
-                          <div className="adm-alert-desc">{pendingTraffickerReview[0].project?.client?.name} — {pendingTraffickerReview[0].project?.name}</div>
+                      <div className="v2-alert warn" onClick={() => { setSelectedProject(pendingTraffickerReview[0].project || null); setView('project') }}>
+                        <div className="v2-alert-icon"><Search /></div>
+                        <div className="v2-alert-body">
+                          <div className="v2-alert-kicker">{pendingTraffickerReview.length} tarea{pendingTraffickerReview.length > 1 ? 's' : ''} espera{pendingTraffickerReview.length > 1 ? 'n' : ''} tu autorización</div>
+                          <div className="v2-alert-title">{pendingTraffickerReview[0].title}</div>
+                          <div className="v2-alert-desc">{pendingTraffickerReview[0].project?.client?.name} — {pendingTraffickerReview[0].project?.name}</div>
                         </div>
-                        <button className="adm-btn adm-btn-warn">Autorizar</button>
+                        <button className="v2-btn v2-btn-warn">Autorizar</button>
                       </div>
                     )}
                     {overdueTasks.length > 0 && (
-                      <div className="adm-alert due" onClick={() => { setSelectedProject(overdueTasks[0].project || null); setView('project') }}>
-                        <div className="adm-alert-icon"><AlertTriangleIcon /></div>
-                        <div className="adm-alert-body">
-                          <div className="adm-alert-kicker">{overdueTasks.length} tarea{overdueTasks.length > 1 ? 's' : ''} vencida{overdueTasks.length > 1 ? 's' : ''}</div>
-                          <div className="adm-alert-title">{overdueTasks[0].title}</div>
-                          <div className="adm-alert-desc">{overdueTasks[0].project?.client?.name} — {overdueTasks[0].project?.name}</div>
+                      <div className="v2-alert due" onClick={() => { setSelectedProject(overdueTasks[0].project || null); setView('project') }}>
+                        <div className="v2-alert-icon"><AlertTriangleIcon /></div>
+                        <div className="v2-alert-body">
+                          <div className="v2-alert-kicker">{overdueTasks.length} tarea{overdueTasks.length > 1 ? 's' : ''} vencida{overdueTasks.length > 1 ? 's' : ''}</div>
+                          <div className="v2-alert-title">{overdueTasks[0].title}</div>
+                          <div className="v2-alert-desc">{overdueTasks[0].project?.client?.name} — {overdueTasks[0].project?.name}</div>
                         </div>
-                        <button className="adm-btn adm-btn-ghost">Revisar</button>
+                        <button className="v2-btn v2-btn-ghost">Revisar</button>
                       </div>
                     )}
                     {clientChangesRequested.length > 0 && (
-                      <div className="adm-alert warn" onClick={() => { setSelectedProject(clientChangesRequested[0].project || null); setView('project') }}>
-                        <div className="adm-alert-icon">✍️</div>
-                        <div className="adm-alert-body">
-                          <div className="adm-alert-kicker">{clientChangesRequested.length} cliente{clientChangesRequested.length > 1 ? 's solicitaron' : ' solicitó'} cambios</div>
-                          <div className="adm-alert-title">{clientChangesRequested[0].title}</div>
-                          <div className="adm-alert-desc">{clientChangesRequested[0].project?.client?.name} — {clientChangesRequested[0].project?.name}</div>
+                      <div className="v2-alert warn" onClick={() => { setSelectedProject(clientChangesRequested[0].project || null); setView('project') }}>
+                        <div className="v2-alert-icon">✍️</div>
+                        <div className="v2-alert-body">
+                          <div className="v2-alert-kicker">{clientChangesRequested.length} cliente{clientChangesRequested.length > 1 ? 's solicitaron' : ' solicitó'} cambios</div>
+                          <div className="v2-alert-title">{clientChangesRequested[0].title}</div>
+                          <div className="v2-alert-desc">{clientChangesRequested[0].project?.client?.name} — {clientChangesRequested[0].project?.name}</div>
                         </div>
-                        <button className="adm-btn adm-btn-warn">Ver cambios</button>
+                        <button className="v2-btn v2-btn-warn">Ver cambios</button>
                       </div>
                     )}
                   </div>
                 )}
 
                 {/* Toolbar: tabs de estado */}
-                <div className="adm-toolbar">
-                  <div className="adm-tabs">
+                <div className="v2-toolbar">
+                  <div className="v2-tabs">
                     {STATUS_FILTER_LABELS.map(({ value, label }) => (
-                      <button key={value} className={`adm-tab ${statusFilter === value ? 'active' : ''}`} onClick={() => setStatusFilter(value)}>
+                      <button key={value} className={`v2-tab ${statusFilter === value ? 'active' : ''}`} onClick={() => setStatusFilter(value)}>
                         {label}
-                        <span className="adm-count">{value === 'todos' ? projects.length : projects.filter(p => p.status === value).length}</span>
+                        <span className="v2-count">{value === 'todos' ? projects.length : projects.filter(p => p.status === value).length}</span>
                       </button>
                     ))}
                   </div>
@@ -316,7 +316,7 @@ export default function AdminDashboard() {
                     </button>
                   </div>
                 ) : (
-                  <div className="adm-grid">
+                  <div className="v2-grid">
                     {filteredProjects.map(project => {
                       const pct = getProjectProgress(project.id)
                       const ptasks = tasks.filter(t => t.project_id === project.id)
@@ -325,33 +325,33 @@ export default function AdminDashboard() {
                       const cardTier = pct === 100 ? 'done' : pct === 0 ? 'idle' : ''
                       const pillClass = project.status === 'activo' ? 'active' : project.status === 'pausado' ? 'paused' : 'completed'
                       return (
-                        <article key={project.id} className={`adm-card ${cardTier}`}
+                        <article key={project.id} className={`v2-card ${cardTier}`}
                           onClick={() => { setSelectedProject(project); setView('project') }}>
-                          <div className="adm-card-top">
-                            <div className="adm-client-avatar" style={{ background: `linear-gradient(145deg, ${avatarColorFor(clientName)}, ${avatarColorFor(clientName)}cc)` }}>
+                          <div className="v2-card-top">
+                            <div className="v2-avatar-sq" style={{ background: `linear-gradient(145deg, ${avatarColorFor(clientName)}, ${avatarColorFor(clientName)}cc)` }}>
                               {initialsOf(clientName)}
                             </div>
-                            <div className="adm-card-headings">
-                              <div className="adm-client-name">{clientName}</div>
-                              <div className="adm-project-name">{project.name}</div>
+                            <div className="v2-card-headings">
+                              <div className="v2-kicker-name">{clientName}</div>
+                              <div className="v2-card-title">{project.name}</div>
                             </div>
-                            <span className={`adm-pill ${pillClass}`}>
-                              <span className="adm-pd" />
+                            <span className={`v2-pill ${pillClass}`}>
+                              <span className="v2-pd" />
                               {project.status === 'activo' ? 'Activo' : project.status === 'pausado' ? 'Pausado' : 'Completado'}
                             </span>
                           </div>
                           <div>
-                            <div className="adm-progress-row">
-                              <span className="adm-progress-label">Progreso</span>
-                              <span className={`adm-progress-val mono ${pct === 100 ? 'adm-v-done' : pct === 0 ? 'adm-v-idle' : pct >= 30 ? 'adm-v-warm' : 'adm-v-mid'}`}>
+                            <div className="v2-progress-row">
+                              <span className="v2-progress-label">Progreso</span>
+                              <span className={`v2-progress-val mono ${pct === 100 ? 'v2-v-done' : pct === 0 ? 'v2-v-idle' : pct >= 30 ? 'v2-v-warm' : 'v2-v-mid'}`}>
                                 {Math.round(pct)}<span style={{ fontSize: 11 }}>%</span>
                               </span>
                             </div>
-                            <div className="adm-track"><div className={`adm-fill ${fillClassFor(pct)}`} style={{ width: `${pct}%` }} /></div>
+                            <div className="v2-track"><div className={`v2-fill ${fillClassFor(pct)}`} style={{ width: `${pct}%` }} /></div>
                           </div>
-                          <div className="adm-card-foot">
-                            <span className="adm-tasks"><CheckCircle2 /> <b>{done}/{ptasks.length}</b> tareas</span>
-                            <button className="adm-report-link" onClick={e => { e.stopPropagation(); setReportProject(project) }}>
+                          <div className="v2-card-foot">
+                            <span className="v2-foot-info"><CheckCircle2 /> <b>{done}/{ptasks.length}</b> tareas</span>
+                            <button className="v2-link-btn" onClick={e => { e.stopPropagation(); setReportProject(project) }}>
                               Ver reporte <ArrowRight />
                             </button>
                           </div>

@@ -1,13 +1,14 @@
 import { useEffect, useState, useRef } from 'react'
-import { MessageSquare, CheckCircle, Clock, ClipboardList, MessageCircle, Map, Plus, CalendarDays, Link2, Loader2, XCircle, FileText, ChevronDown } from 'lucide-react'
+import { MessageSquare, CheckCircle, Clock, ClipboardList, MessageCircle, Map, Plus, CalendarDays, Link2, Loader2, XCircle, FileText, ChevronDown, Menu, Lightbulb } from 'lucide-react'
 import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import type { Task, Project, User, Priority } from '../../types'
 import PriorityBadge from '../shared/PriorityBadge'
 import StatusBadge from '../shared/StatusBadge'
-import Sidebar from '../shared/Sidebar'
+import Logo from '../shared/Logo'
 import TopBarActions from '../shared/TopBarActions'
+import '../../styles/DashboardV2.css'
 import TaskDetailModal from './TaskDetailModal'
 import TeamChat from '../chat/TeamChat'
 import ClientChatsHub from '../chat/ClientChatsHub'
@@ -61,6 +62,7 @@ export default function TeamDashboard({ embedded = false }: Props) {
   const priorityFilterBtnRef = useRef<HTMLButtonElement>(null)
   const [teamView, setTeamView] = useState<TeamView>('tasks')
   const [hiddenSections, setHiddenSections] = useState<Set<string>>(new Set())
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   const isTraffickerOrLider = user?.department === 'trafficker' || user?.department === 'lider'
 
@@ -310,7 +312,7 @@ export default function TeamDashboard({ embedded = false }: Props) {
   )
 
   const taskTable = (
-    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm v2-table-wrap">
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-200">
@@ -560,138 +562,154 @@ export default function TeamDashboard({ embedded = false }: Props) {
 
   // ── Vista completa "Mi espacio" (rol equipo) ──
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-50">
-      <Sidebar
-        items={visibleNavItems}
-        activeId={teamView}
-        onSelect={id => setTeamView(id as TeamView)}
-        collapsible
-        theme="dark"
-        brand={{ title: 'Sinertegia Launch 57', subtitle: 'Gestión de proyectos' }}
-        tip={{ text: 'Organiza tus tareas con prioridades y fechas de entrega para mejorar tu productividad.' }}
-      />
-
-      <div className="flex-1 overflow-y-auto p-6">
-        <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">Hola, {user?.full_name?.split(' ')[0]} 👋</h2>
-            <p className="text-sm text-gray-500">Aquí tienes el estado de tus proyectos.</p>
+    <div className="v2app">
+      <div className={`v2-shell ${sidebarCollapsed ? 'collapsed' : ''}`}>
+        <aside className="v2-sidebar">
+          <div className="v2-brand">
+            <button type="button" className="v2-brand-mark" onClick={() => setSidebarCollapsed(c => !c)} title={sidebarCollapsed ? 'Expandir' : 'Colapsar'}>
+              {sidebarCollapsed ? <Menu size={16} color="#fff" /> : <Logo size={26} />}
+            </button>
+            {!sidebarCollapsed && (
+              <div className="v2-brand-text">
+                <div className="v2-brand-name">Sinertegia Launch 57</div>
+                <div className="v2-brand-sub">Gestión de proyectos</div>
+              </div>
+            )}
           </div>
-          <div className="flex items-center gap-3">
+
+          {visibleNavItems.map(({ id, label, icon: Icon }) => (
+            <button key={id} type="button" onClick={() => setTeamView(id)}
+              className={`v2-nav-item ${teamView === id ? 'active' : ''}`}>
+              <Icon size={17} />
+              {!sidebarCollapsed && label}
+            </button>
+          ))}
+
+          {!sidebarCollapsed && (
+            <div className="v2-tip">
+              <div className="v2-tip-head"><Lightbulb size={13} /> Consejo rápido</div>
+              <p>Organiza tus tareas con prioridades y fechas de entrega para mejorar tu productividad.</p>
+            </div>
+          )}
+        </aside>
+
+        <div className="v2-main">
+          <header className="v2-topbar">
+            <span className="v2-top-title display">Hola, {user?.full_name?.split(' ')[0]} 👋</span>
+            <div className="v2-top-spacer" />
             <button
               onClick={() => setShowCreateTask(true)}
-              className="flex items-center gap-2 bg-gradient-to-r from-blue-700 to-red-600 text-white text-sm font-semibold px-4 py-2.5 rounded-xl hover:opacity-90 transition shrink-0"
+              className="v2-btn v2-btn-primary"
             >
               <Plus size={16} /> Nueva tarea
             </button>
             <TopBarActions />
-          </div>
-        </div>
+          </header>
 
-        {reviewBanners}
-        {otherViews}
+          <div className="v2-content">
+            {reviewBanners}
+            {otherViews}
 
-        {teamView === 'tasks' && (<>
-          {/* Stats con % del total */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
-            {[
-              { label: 'Total de tareas', value: stats.total, icon: ClipboardList, bg: 'bg-purple-100', color: 'text-purple-600' },
-              { label: 'Pendientes', value: stats.pendiente, icon: Clock, bg: 'bg-orange-100', color: 'text-orange-600' },
-              { label: 'En progreso', value: stats.en_progreso, icon: Loader2, bg: 'bg-blue-100', color: 'text-blue-600' },
-              { label: 'Completadas', value: stats.completada, icon: CheckCircle, bg: 'bg-green-100', color: 'text-green-600' },
-              { label: 'Vencidas', value: stats.vencidas, icon: XCircle, bg: 'bg-red-100', color: 'text-red-600' },
-            ].map(({ label, value, icon: Icon, bg, color }) => (
-              <div key={label} className="bg-white border border-gray-200 rounded-2xl p-4 flex items-center gap-3 shadow-sm">
-                <div className={`w-11 h-11 rounded-full flex items-center justify-center shrink-0 ${bg}`}>
-                  <Icon size={18} className={color} />
+            {teamView === 'tasks' && (<>
+              {/* Stats con % del total */}
+              <div className="v2-stats-row">
+                {[
+                  { label: 'Total de tareas', value: stats.total, icon: ClipboardList, bg: '#EEE9FE', color: '#7C3AED' },
+                  { label: 'Pendientes', value: stats.pendiente, icon: Clock, bg: '#FEF0DE', color: '#EA580C' },
+                  { label: 'En progreso', value: stats.en_progreso, icon: Loader2, bg: '#E8EEFE', color: '#2757EB' },
+                  { label: 'Completadas', value: stats.completada, icon: CheckCircle, bg: '#E4F7F0', color: '#0C8A66' },
+                  { label: 'Vencidas', value: stats.vencidas, icon: XCircle, bg: '#FCE4E8', color: '#E0304F' },
+                ].map(({ label, value, icon: Icon, bg, color }) => (
+                  <div key={label} className="v2-stat-card">
+                    <div className="v2-stat-icon" style={{ background: bg }}>
+                      <Icon size={17} color={color} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="v2-stat-num">{value}</p>
+                      <p className="v2-stat-label">{label} · {stats.total > 0 ? Math.round((value / stats.total) * 100) : 0}%</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Gráficas + próximas entregas */}
+              <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6 items-stretch">
+                <div className="lg:col-span-2 v2-surface flex flex-col min-h-[280px]">
+                  <p className="text-sm font-bold text-gray-800 mb-2 display">Resumen de progreso</p>
+                  <ResponsiveContainer width="100%" height={180}>
+                    <AreaChart data={weeklyProgress}>
+                      <defs>
+                        <linearGradient id="progressFill" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#2757EB" stopOpacity={0.35} />
+                          <stop offset="95%" stopColor="#2757EB" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <XAxis dataKey="day" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} width={28} allowDecimals={false} />
+                      <Tooltip formatter={(v: any) => [v, 'Completadas']} />
+                      <Area type="monotone" dataKey="completadas" stroke="#2757EB" strokeWidth={2} fill="url(#progressFill)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
                 </div>
-                <div className="min-w-0">
-                  <p className="text-2xl font-bold text-gray-900 leading-tight">{value}</p>
-                  <p className="text-xs text-gray-500 truncate">{label}</p>
-                  <p className="text-[11px] text-gray-400">
-                    {stats.total > 0 ? Math.round((value / stats.total) * 100) : 0}% del total
-                  </p>
+
+                <div className="v2-surface flex flex-col min-h-[280px]">
+                  <p className="text-sm font-bold text-gray-800 mb-2 display">Tareas por prioridad</p>
+                  {priorityData.length === 0 ? (
+                    <p className="text-xs text-gray-400 flex-1 flex items-center justify-center text-center">Sin tareas aún</p>
+                  ) : (
+                    <>
+                      <ResponsiveContainer width="100%" height={130}>
+                        <PieChart>
+                          <Pie data={priorityData} dataKey="value" nameKey="name" innerRadius={42} outerRadius={62} paddingAngle={2}>
+                            {priorityData.map(d => <Cell key={d.name} fill={d.color} />)}
+                          </Pie>
+                          <Tooltip />
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div className="flex flex-wrap gap-2.5 justify-center mt-2">
+                        {priorityData.map(d => (
+                          <span key={d.name} className="flex items-center gap-1 text-[11px] text-gray-500">
+                            <span className="w-2 h-2 rounded-full" style={{ background: d.color }} /> {d.name} ({d.value})
+                          </span>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                <div className="v2-surface flex flex-col min-h-[280px]">
+                  <p className="text-sm font-bold text-gray-800 mb-3 display">Próximas entregas</p>
+                  {upcoming.length === 0 ? (
+                    <p className="text-xs text-gray-400 flex-1 flex items-center justify-center text-center">No tienes entregas próximas</p>
+                  ) : (
+                    <div className="space-y-2.5 flex-1">
+                      {upcoming.map(t => (
+                        <div key={t.id} className="flex items-center gap-2.5 cursor-pointer" onClick={() => setSelectedTask(t)}>
+                          <div className="w-8 h-8 rounded-lg bg-purple-50 flex items-center justify-center shrink-0">
+                            <CalendarDays size={14} className="text-purple-500" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs text-gray-400">
+                              {new Date(t.commitment_date! + 'T00:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}
+                            </p>
+                            <p className="text-sm text-gray-700 truncate">{t.title}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <button type="button" onClick={() => setTeamView('calendar')}
+                    className="mt-3 text-xs font-semibold text-indigo-600 hover:underline flex items-center gap-1">
+                    Ver calendario →
+                  </button>
                 </div>
               </div>
-            ))}
+
+              {filterPills}
+              {taskTable}
+            </>)}
           </div>
-
-          {/* Gráficas + próximas entregas */}
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6 items-stretch">
-            <div className="lg:col-span-2 bg-white border border-gray-200 rounded-2xl p-4 shadow-sm flex flex-col min-h-[280px]">
-              <p className="text-sm font-bold text-gray-800 mb-2">Resumen de progreso</p>
-              <ResponsiveContainer width="100%" height={180}>
-                <AreaChart data={weeklyProgress}>
-                  <defs>
-                    <linearGradient id="progressFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.35} />
-                      <stop offset="95%" stopColor="#4f46e5" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <XAxis dataKey="day" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} width={28} allowDecimals={false} />
-                  <Tooltip formatter={(v: any) => [v, 'Completadas']} />
-                  <Area type="monotone" dataKey="completadas" stroke="#4f46e5" strokeWidth={2} fill="url(#progressFill)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-
-            <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm flex flex-col min-h-[280px]">
-              <p className="text-sm font-bold text-gray-800 mb-2">Tareas por prioridad</p>
-              {priorityData.length === 0 ? (
-                <p className="text-xs text-gray-400 flex-1 flex items-center justify-center text-center">Sin tareas aún</p>
-              ) : (
-                <>
-                  <ResponsiveContainer width="100%" height={130}>
-                    <PieChart>
-                      <Pie data={priorityData} dataKey="value" nameKey="name" innerRadius={42} outerRadius={62} paddingAngle={2}>
-                        {priorityData.map(d => <Cell key={d.name} fill={d.color} />)}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div className="flex flex-wrap gap-2.5 justify-center mt-2">
-                    {priorityData.map(d => (
-                      <span key={d.name} className="flex items-center gap-1 text-[11px] text-gray-500">
-                        <span className="w-2 h-2 rounded-full" style={{ background: d.color }} /> {d.name} ({d.value})
-                      </span>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-
-            <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm flex flex-col min-h-[280px]">
-              <p className="text-sm font-bold text-gray-800 mb-3">Próximas entregas</p>
-              {upcoming.length === 0 ? (
-                <p className="text-xs text-gray-400 flex-1 flex items-center justify-center text-center">No tienes entregas próximas</p>
-              ) : (
-                <div className="space-y-2.5 flex-1">
-                  {upcoming.map(t => (
-                    <div key={t.id} className="flex items-center gap-2.5 cursor-pointer" onClick={() => setSelectedTask(t)}>
-                      <div className="w-8 h-8 rounded-lg bg-purple-50 flex items-center justify-center shrink-0">
-                        <CalendarDays size={14} className="text-purple-500" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs text-gray-400">
-                          {new Date(t.commitment_date! + 'T00:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}
-                        </p>
-                        <p className="text-sm text-gray-700 truncate">{t.title}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <button type="button" onClick={() => setTeamView('calendar')}
-                className="mt-3 text-xs font-semibold text-indigo-600 hover:underline flex items-center gap-1">
-                Ver calendario →
-              </button>
-            </div>
-          </div>
-
-          {filterPills}
-          {taskTable}
-        </>)}
+        </div>
       </div>
 
       {taskModals}

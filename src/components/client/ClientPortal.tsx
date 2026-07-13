@@ -10,9 +10,11 @@ import ClientChatRoom from '../chat/ClientChatRoom'
 import ClientDeliverables from '../admin/ClientDeliverables'
 import RoadmapView from '../roadmap/RoadmapView'
 import RequestTaskModal from './RequestTaskModal'
-import Sidebar from '../shared/Sidebar'
+import Logo from '../shared/Logo'
+import TopBarActions from '../shared/TopBarActions'
 import StarRating from './StarRating'
 import { DEPT_LABELS, DEPT_COLORS, DEPT_ORDER } from '../../data/projectTemplates'
+import '../../styles/DashboardV2.css'
 
 type Tab = 'mistareas' | 'progreso' | 'area' | 'calendario' | 'roadmap' | 'chat' | 'entregables'
 
@@ -250,69 +252,87 @@ export default function ClientPortal() {
   if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Cargando tu proyecto...</div>
 
   return (
-    <div className="relative min-h-screen bg-white">
-
-      {/* ── Panel izquierdo: foto del cliente tal como es ── */}
-      {coverImage && (
-        <div
-          className="fixed left-0 pointer-events-none overflow-hidden"
-          style={{ width: '380px', top: 0, bottom: 0, zIndex: 1 }}
-        >
-          {/* Foto completa del cliente, visible y clara */}
-          <img
-            src={coverImage}
-            alt=""
-            className="absolute inset-0 w-full h-full object-cover object-top"
-          />
-          {/* Desvanece suavemente hacia la derecha en blanco */}
-          <div className="absolute inset-0" style={{
-            background: 'linear-gradient(to right, transparent 45%, rgba(255,255,255,0.6) 70%, white 100%)',
-          }} />
-        </div>
-      )}
-
-      {/* ── Botón para subir / cambiar foto (cliente) ── */}
-      <div className="fixed left-3 bottom-6 z-30">
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={handleCoverUpload}
-        />
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          disabled={uploadingCover}
-          className="flex items-center gap-1.5 bg-white/90 hover:bg-white border border-gray-200 shadow-lg rounded-full px-3 py-2 text-xs text-gray-600 transition backdrop-blur-sm disabled:opacity-60"
-        >
-          {uploadingCover
-            ? <><Loader2 size={13} className="animate-spin" /> {uploadStatus || 'Procesando...'}</>
-            : <><Camera size={13} /> {coverImage ? 'Cambiar foto' : 'Subir foto de portada'}</>
-          }
-        </button>
-        {coverError && (
-          <div className="mt-2 bg-red-600 text-white text-xs px-3 py-2 rounded-xl shadow-lg max-w-xs">
-            {coverError}
+    <div className="v2app">
+      <div className="v2-shell">
+        <aside className="v2-sidebar">
+          <div className="v2-brand">
+            <div className="v2-brand-mark"><Logo size={26} /></div>
+            <div className="v2-brand-text">
+              <div className="v2-brand-name">Sinertegia Launch 57</div>
+              <div className="v2-brand-sub">Portal de cliente</div>
+            </div>
           </div>
-        )}
-      </div>
 
-      {/* ── Contenido principal ── */}
-      <div className="relative z-10 p-6 max-w-6xl mx-auto">
-      <div className="flex items-start justify-between mb-6">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900">Mi proyecto</h2>
-          <p className="text-sm text-gray-500">Hola {user?.full_name}, aquí puedes ver el avance de tu proyecto en tiempo real</p>
-        </div>
-        <button
-          onClick={() => setShowRequestModal(true)}
-          className="flex items-center gap-2 bg-gradient-to-r from-blue-700 to-red-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:opacity-90 transition shadow-md shrink-0"
-        >
-          <PlusCircle size={16} /> Solicitar tarea
-        </button>
-      </div>
+          {CLIENT_NAV_ITEMS.filter(item => !hiddenSections.has(item.id)).map(({ id, label, icon: Icon }) => (
+            <button key={id} type="button" onClick={() => setActiveTab(id)}
+              className={`v2-nav-item ${activeTab === id ? 'active' : ''}`}>
+              <Icon size={17} />
+              {label}
+            </button>
+          ))}
+        </aside>
 
-      {/* Selector de proyecto */}
+        <div className="v2-main" style={{ position: 'relative' }}>
+          {/* ── Panel: foto del cliente tal como es (detrás del contenido, no de la sidebar) ── */}
+          {coverImage && (
+            <div
+              className="fixed pointer-events-none overflow-hidden"
+              style={{ left: 248, width: '380px', top: 0, bottom: 0, zIndex: 1 }}
+            >
+              <img
+                src={coverImage}
+                alt=""
+                className="absolute inset-0 w-full h-full object-cover object-top"
+              />
+              <div className="absolute inset-0" style={{
+                background: 'linear-gradient(to right, transparent 45%, rgba(255,255,255,0.6) 70%, white 100%)',
+              }} />
+            </div>
+          )}
+
+          {/* ── Botón para subir / cambiar foto (cliente) ── */}
+          <div className="fixed z-30" style={{ left: 262, bottom: 24 }}>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleCoverUpload}
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploadingCover}
+              className="flex items-center gap-1.5 bg-white/90 hover:bg-white border border-gray-200 shadow-lg rounded-full px-3 py-2 text-xs text-gray-600 transition backdrop-blur-sm disabled:opacity-60"
+            >
+              {uploadingCover
+                ? <><Loader2 size={13} className="animate-spin" /> {uploadStatus || 'Procesando...'}</>
+                : <><Camera size={13} /> {coverImage ? 'Cambiar foto' : 'Subir foto de portada'}</>
+              }
+            </button>
+            {coverError && (
+              <div className="mt-2 bg-red-600 text-white text-xs px-3 py-2 rounded-xl shadow-lg max-w-xs">
+                {coverError}
+              </div>
+            )}
+          </div>
+
+          <header className="v2-topbar">
+            <span className="v2-top-title display">Mi proyecto</span>
+            <div className="v2-top-spacer" />
+            <button
+              onClick={() => setShowRequestModal(true)}
+              className="v2-btn v2-btn-primary"
+            >
+              <PlusCircle size={16} /> Solicitar tarea
+            </button>
+            <TopBarActions />
+          </header>
+
+          {/* ── Contenido principal ── */}
+          <div className="v2-content" style={{ position: 'relative', zIndex: 10 }}>
+          <p className="text-sm text-gray-500 mb-4">Hola {user?.full_name}, aquí puedes ver el avance de tu proyecto en tiempo real</p>
+
+          {/* Selector de proyecto */}
       {projects.length > 1 && (
         <div className="flex gap-2 mb-4 flex-wrap">
           {projects.map(p => (
@@ -406,10 +426,6 @@ export default function ClientPortal() {
           </div>
         </div>
       )}
-
-      <div className="flex gap-6 items-start">
-        <Sidebar items={CLIENT_NAV_ITEMS.filter(item => !hiddenSections.has(item.id))} activeId={activeTab} onSelect={id => setActiveTab(id as Tab)} />
-        <div className="flex-1 min-w-0">
 
       {/* ── Tab: Mis tareas ── */}
       {activeTab === 'mistareas' && (
@@ -832,10 +848,9 @@ export default function ClientPortal() {
         </div>
       )}
 
-        </div>
-      </div>
-
-      </div>{/* fin contenido principal */}
+          </div>{/* fin v2-content */}
+        </div>{/* fin v2-main */}
+      </div>{/* fin v2-shell */}
 
       {/* Modal solicitar tarea */}
       {showRequestModal && clientRecord && (

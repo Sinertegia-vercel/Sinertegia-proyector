@@ -5,7 +5,6 @@ import ChangePasswordModal from './components/auth/ChangePasswordModal'
 import ResetPasswordPage from './components/auth/ResetPasswordPage'
 import ClientRegistrationPage from './components/auth/ClientRegistrationPage'
 import TeamRegistrationPage from './components/auth/TeamRegistrationPage'
-import Navbar from './components/shared/Navbar'
 import AdminDashboard from './components/admin/AdminDashboard'
 import TeamDashboard from './components/team/TeamDashboard'
 import ClientPortal from './components/client/ClientPortal'
@@ -42,11 +41,6 @@ function AppContent() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {user.role !== 'team' && user.role !== 'admin' && (
-        <div className="relative z-40">
-          <Navbar />
-        </div>
-      )}
       <main>
         {user.role === 'admin' && <AdminDashboard />}
         {user.role === 'team' && <TeamDashboard />}
