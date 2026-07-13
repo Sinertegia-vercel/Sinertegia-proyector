@@ -17,6 +17,7 @@ export default function NotificationBell() {
   const { user } = useAuth()
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [open, setOpen] = useState(false)
+  const [filter, setFilter] = useState<'todas' | 'no_leidas'>('todas')
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -89,6 +90,8 @@ export default function NotificationBell() {
 
   const unreadMentions = notifications.filter(n => !n.read && n.type === 'mention').length
 
+  const visibleNotifications = filter === 'no_leidas' ? notifications.filter(n => !n.read) : notifications
+
   const typeIcon: Record<string, string> = {
     task: '📋',
     review: '🔍',
@@ -129,11 +132,24 @@ export default function NotificationBell() {
             )}
           </div>
 
+          <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-100">
+            <button type="button" onClick={() => setFilter('todas')}
+              className={`text-xs font-semibold px-3 py-1.5 rounded-full transition ${filter === 'todas' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-100'}`}>
+              Todas
+            </button>
+            <button type="button" onClick={() => setFilter('no_leidas')}
+              className={`text-xs font-semibold px-3 py-1.5 rounded-full transition ${filter === 'no_leidas' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-100'}`}>
+              No leídas{unread > 0 ? ` (${unread})` : ''}
+            </button>
+          </div>
+
           <div className="max-h-80 overflow-y-auto">
-            {notifications.length === 0 && (
-              <div className="py-8 text-center text-gray-400 text-sm">No tienes notificaciones</div>
+            {visibleNotifications.length === 0 && (
+              <div className="py-8 text-center text-gray-400 text-sm">
+                {filter === 'no_leidas' ? 'No tienes notificaciones sin leer' : 'No tienes notificaciones'}
+              </div>
             )}
-            {notifications.map(n => (
+            {visibleNotifications.map(n => (
               <div key={n.id} onClick={() => markRead(n.id, n.task_id, n.title)}
                 className={`group px-4 py-3 border-b border-gray-50 cursor-pointer hover:bg-gray-50 transition ${!n.read ? 'bg-blue-50' : ''}`}>
                 <div className="flex items-start gap-2">
