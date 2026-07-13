@@ -1,20 +1,32 @@
 import { useEffect, useState } from 'react'
-import { ShieldAlert, ShieldCheck } from 'lucide-react'
+import { ShieldAlert, ShieldCheck, Save, Plus } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
 interface License {
   status: 'active' | 'suspended'
-  plan_name: string | null
+  client_name: string | null
+  start_date: string | null
   expires_at: string | null
+  monthly_amount: number
   notes: string | null
+}
+
+function daysUntil(dateStr: string | null): number | null {
+  if (!dateStr) return null
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const target = new Date(dateStr + 'T00:00:00')
+  return Math.round((target.getTime() - today.getTime()) / 86400000)
 }
 
 export default function LicenseManager() {
   const [license, setLicense] = useState<License | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [planName, setPlanName] = useState('')
+  const [clientName, setClientName] = useState('')
+  const [status, setStatus] = useState<'active' | 'suspended'>('active')
+  const [startDate, setStartDate] = useState('')
   const [expiresAt, setExpiresAt] = useState('')
+  const [monthlyAmount, setMonthlyAmount] = useState('0')
   const [notes, setNotes] = useState('')
 
   useEffect(() => {
@@ -24,19 +36,26 @@ export default function LicenseManager() {
   async function fetchLicense() {
     const { data } = await supabase.from('app_license').select('*').eq('id', 1).single()
     if (data) {
-      setLicense(data as License)
-      setPlanName(data.plan_name || '')
-      setExpiresAt(data.expires_at || '')
-      setNotes(data.notes || '')
+      const l = data as License
+      setLicense(l)
+      setClientName(l.client_name || '')
+      setStatus(l.status)
+      setStartDate(l.start_date || '')
+      setExpiresAt(l.expires_at || '')
+      setMonthlyAmount(String(l.monthly_amount ?? 0))
+      setNotes(l.notes || '')
     }
     setLoading(false)
   }
 
-  async function saveDetails() {
+  async function saveAll(overrides?: Partial<{ status: 'active' | 'suspended'; expires_at: string }>) {
     setSaving(true)
     await supabase.from('app_license').update({
-      plan_name: planName.trim() || null,
-      expires_at: expiresAt || null,
+      client_name: clientName.trim() || null,
+      status: overrides?.status ?? status,
+      start_date: startDate || null,
+      expires_at: overrides?.expires_at ?? (expiresAt || null),
+      monthly_amount: parseFloat(monthlyAmount) || 0,
       notes: notes.trim() || null,
       updated_at: new Date().toISOString(),
     }).eq('id', 1)
@@ -45,65 +64,132 @@ export default function LicenseManager() {
   }
 
   async function toggleStatus() {
-    if (!license) return
-    setSaving(true)
-    const newStatus = license.status === 'active' ? 'suspended' : 'active'
-    await supabase.from('app_license').update({ status: newStatus, updated_at: new Date().toISOString() }).eq('id', 1)
-    await fetchLicense()
-    setSaving(false)
+    const newStatus = status === 'active' ? 'suspended' : 'active'
+    setStatus(newStatus)
+    await saveAll({ status: newStatus })
+  }
+
+  function extend(months: number) {
+    const base = expiresAt && new Date(expiresAt + 'T00:00:00') > new Date() ? new Date(expiresAt + 'T00:00:00') : new Date()
+    base.setMonth(base.getMonth() + months)
+    const newExpires = base.toISOString().split('T')[0]
+    setExpiresAt(newExpires)
+    saveAll({ expires_at: newExpires })
   }
 
   if (loading || !license) return <div className="text-center py-12 text-gray-400">Cargando licencia...</div>
 
-  const isActive = license.status === 'active'
+  const isActive = status === 'active'
+  const remaining = daysUntil(expiresAt)
 
   return (
-    <div className="max-w-lg space-y-5">
-      <p className="text-sm text-gray-500">
-        Panel exclusivo de súper administrador. Si suspendes la licencia, <strong>nadie</strong> (excepto tú) podrá entrar a esta aplicación hasta que la reactives — útil si esta instancia se vendió o rentó y el pago no se cubrió.
+    <div className="max-w-4xl">
+      <p className="text-sm text-gray-500 mb-5">
+        Panel exclusivo de súper administrador. Suspende esta instancia si el cliente que renta la app no cubrió su pago — nadie más podrá entrar hasta que la reactives.
       </p>
 
-      <div className={`rounded-xl border p-5 ${isActive ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
-        <div className="flex items-center gap-3">
-          {isActive ? <ShieldCheck size={28} className="text-green-600" /> : <ShieldAlert size={28} className="text-red-600" />}
-          <div>
-            <p className={`font-bold ${isActive ? 'text-green-800' : 'text-red-800'}`}>
-              {isActive ? 'Licencia activa' : 'Licencia suspendida'}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* Columna izquierda: estado */}
+        <div className="space-y-5">
+          <div className={`rounded-2xl border p-6 text-center ${isActive ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+            <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 ${isActive ? 'bg-green-100' : 'bg-red-100'}`}>
+              {isActive ? <ShieldCheck size={30} className="text-green-600" /> : <ShieldAlert size={30} className="text-red-600" />}
+            </div>
+            <p className={`text-xl font-extrabold ${isActive ? 'text-green-700' : 'text-red-700'}`}>
+              {isActive ? 'APP ACTIVA' : 'APP SUSPENDIDA'}
             </p>
-            <p className={`text-xs ${isActive ? 'text-green-600' : 'text-red-600'}`}>
-              {isActive ? 'Todos los usuarios pueden entrar normalmente.' : 'Solo el súper administrador puede entrar.'}
+            <p className="text-sm text-gray-700 mt-2">
+              <strong>Cliente:</strong> {license.client_name || '—'}
+            </p>
+            <p className="text-sm text-gray-700">
+              <strong>Vence:</strong> {expiresAt ? new Date(expiresAt + 'T00:00:00').toLocaleDateString('es-MX') : '—'}
+            </p>
+            {remaining !== null && (
+              <span className={`inline-block mt-2 text-xs font-semibold px-3 py-1 rounded-full ${
+                remaining < 0 ? 'bg-red-100 text-red-700' : remaining <= 7 ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'
+              }`}>
+                {remaining < 0 ? `Vencida hace ${Math.abs(remaining)} días` : `Faltan ${remaining} días`}
+              </span>
+            )}
+            <button onClick={toggleStatus} disabled={saving}
+              className={`mt-4 w-full py-2.5 rounded-lg text-sm font-semibold transition disabled:opacity-50 ${
+                isActive ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-green-600 hover:bg-green-700 text-white'
+              }`}>
+              {saving ? 'Procesando...' : isActive ? 'Suspender ahora' : 'Reactivar ahora'}
+            </button>
+          </div>
+
+          <div className="bg-white border border-gray-200 rounded-xl p-5">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Mensualidad</p>
+            <div className="space-y-1.5 text-sm">
+              <p><span className="text-gray-400">Monto:</span> <strong>${Number(license.monthly_amount || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN</strong></p>
+              <p><span className="text-gray-400">Inicio contrato:</span> {license.start_date ? new Date(license.start_date + 'T00:00:00').toLocaleDateString('es-MX') : '—'}</p>
+              <p><span className="text-gray-400">Estado:</span> <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{isActive ? 'ACTIVA' : 'SUSPENDIDA'}</span></p>
+              {license.notes && <p className="pt-1 text-gray-500 text-xs">{license.notes}</p>}
+            </div>
+          </div>
+        </div>
+
+        {/* Columna derecha: formulario */}
+        <div className="space-y-5">
+          <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-3">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Actualizar licencia</p>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Nombre del cliente (renta)</label>
+              <input value={clientName} onChange={e => setClientName(e.target.value)} placeholder="Ej: Terraza360 — Instalación inicial"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Estado</label>
+              <select value={status} onChange={e => setStatus(e.target.value as 'active' | 'suspended')}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="active">✅ Activa</option>
+                <option value="suspended">🚫 Suspendida</option>
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Fecha inicio</label>
+                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Fecha vencimiento</label>
+                <input type="date" value={expiresAt} onChange={e => setExpiresAt(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Mensualidad (MXN)</label>
+              <input type="number" step="0.01" value={monthlyAmount} onChange={e => setMonthlyAmount(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Notas internas</label>
+              <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+            </div>
+            <button onClick={() => saveAll()} disabled={saving}
+              className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-700 to-red-600 text-white text-sm font-semibold py-2.5 rounded-lg hover:opacity-90 transition disabled:opacity-50">
+              <Save size={14} /> Guardar configuración
+            </button>
+          </div>
+
+          <div className="bg-white border border-gray-200 rounded-xl p-5">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Extensiones rápidas</p>
+            <div className="grid grid-cols-2 gap-2">
+              {[{ n: 1, l: '+1 mes' }, { n: 3, l: '+3 meses' }, { n: 6, l: '+6 meses' }, { n: 12, l: '+1 año' }].map(({ n, l }) => (
+                <button key={n} onClick={() => extend(n)} disabled={saving}
+                  className="flex items-center justify-center gap-1.5 border border-green-300 text-green-700 bg-green-50 hover:bg-green-100 text-sm font-semibold py-2 rounded-lg transition disabled:opacity-50">
+                  <Plus size={13} /> {l}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-gray-400 mt-3">
+              Extiende el vencimiento desde hoy (si ya venció) o desde la fecha de vencimiento actual.
             </p>
           </div>
         </div>
-        <button onClick={toggleStatus} disabled={saving}
-          className={`mt-4 w-full py-2.5 rounded-lg text-sm font-semibold transition disabled:opacity-50 ${
-            isActive ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-green-600 hover:bg-green-700 text-white'
-          }`}>
-          {saving ? 'Procesando...' : isActive ? 'Suspender aplicación' : 'Reactivar aplicación'}
-        </button>
-      </div>
-
-      <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-3">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Detalles de la renta / venta</p>
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Nombre del plan / cliente</label>
-          <input value={planName} onChange={e => setPlanName(e.target.value)} placeholder="Ej: Plan mensual — Agencia XYZ"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-        </div>
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Vence el</label>
-          <input type="date" value={expiresAt} onChange={e => setExpiresAt(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-        </div>
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Notas</label>
-          <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
-        </div>
-        <button onClick={saveDetails} disabled={saving}
-          className="w-full bg-gray-800 hover:bg-gray-900 text-white text-sm font-semibold py-2 rounded-lg transition disabled:opacity-50">
-          Guardar detalles
-        </button>
       </div>
     </div>
   )
