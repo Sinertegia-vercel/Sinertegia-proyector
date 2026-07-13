@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { X, ExternalLink, Send, CheckCircle, RotateCcw, ShieldCheck, ThumbsUp, Plus, Trash2, MessageSquare } from 'lucide-react'
+import { X, ExternalLink, Send, CheckCircle, RotateCcw, ShieldCheck, ThumbsUp, Plus, Trash2, MessageSquare, Pencil } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import type { Task, User, Comment } from '../../types'
@@ -32,6 +32,8 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone 
   const [comments, setComments] = useState<Comment[]>([])
   const [newComment, setNewComment] = useState('')
   const [sendingComment, setSendingComment] = useState(false)
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null)
+  const [editCommentValue, setEditCommentValue] = useState('')
 
   useEffect(() => {
     supabase.from('users').select('*')
@@ -75,6 +77,24 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone 
     setNewComment('')
     await fetchComments()
     setSendingComment(false)
+    onUpdate()
+  }
+
+  function startEditComment(c: Comment) {
+    setEditingCommentId(c.id)
+    setEditCommentValue(c.content)
+  }
+
+  async function saveEditComment(id: string) {
+    if (!editCommentValue.trim()) return
+    await supabase.from('task_comments').update({ content: editCommentValue.trim() }).eq('id', id)
+    setEditingCommentId(null)
+    await fetchComments()
+  }
+
+  async function deleteComment(id: string) {
+    await supabase.from('task_comments').delete().eq('id', id)
+    await fetchComments()
     onUpdate()
   }
 
@@ -591,17 +611,53 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone 
               {comments.length === 0 && (
                 <p className="text-xs text-gray-400">Aún no hay comentarios, escribe el primero</p>
               )}
-              {comments.map(c => (
-                <div key={c.id} className="bg-gray-50 rounded-lg px-3 py-2">
-                  <div className="flex items-center justify-between mb-0.5">
-                    <span className="text-xs font-semibold text-gray-700">{c.user?.full_name || 'Usuario'}</span>
-                    <span className="text-[10px] text-gray-400">
-                      {new Date(c.created_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                    </span>
+              {comments.map(c => {
+                const canEdit = user?.id === c.user_id || isAdmin
+                return (
+                  <div key={c.id} className="bg-gray-50 rounded-lg px-3 py-2 group">
+                    <div className="flex items-center justify-between mb-0.5">
+                      <span className="text-xs font-semibold text-gray-700">{c.user?.full_name || 'Usuario'}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-gray-400">
+                          {new Date(c.created_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                        {canEdit && editingCommentId !== c.id && (
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+                            <button type="button" onClick={() => startEditComment(c)}
+                              title="Editar comentario" className="text-gray-400 hover:text-blue-500 transition">
+                              <Pencil size={11} />
+                            </button>
+                            <button type="button" onClick={() => deleteComment(c.id)}
+                              title="Borrar comentario" className="text-gray-400 hover:text-red-500 transition">
+                              <Trash2 size={11} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    {editingCommentId === c.id ? (
+                      <div className="flex gap-1.5 mt-1">
+                        <input
+                          autoFocus
+                          value={editCommentValue}
+                          onChange={e => setEditCommentValue(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') saveEditComment(c.id)
+                            if (e.key === 'Escape') setEditingCommentId(null)
+                          }}
+                          className="flex-1 border border-blue-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                        />
+                        <button type="button" onClick={() => saveEditComment(c.id)}
+                          className="text-xs font-semibold text-blue-600 hover:text-blue-800 px-2">Guardar</button>
+                        <button type="button" onClick={() => setEditingCommentId(null)}
+                          className="text-xs text-gray-400 hover:text-gray-600 px-1">Cancelar</button>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-700 whitespace-pre-wrap">{c.content}</p>
+                    )}
                   </div>
-                  <p className="text-sm text-gray-700 whitespace-pre-wrap">{c.content}</p>
-                </div>
-              ))}
+                )
+              })}
             </div>
             <form onSubmit={sendComment} className="flex gap-2">
               <input value={newComment} onChange={e => setNewComment(e.target.value)}
