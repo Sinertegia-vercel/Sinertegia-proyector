@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Users, FolderKanban, AlertTriangle, TrendingUp, Calendar, ClipboardList, MessageSquare, MessageCircle, Map, Inbox, UserCheck, SpellCheck, Link2, ShieldCheck, KeyRound } from 'lucide-react'
+import { Users, FolderKanban, TrendingUp, Calendar, ClipboardList, MessageSquare, MessageCircle, Map, Inbox, UserCheck, SpellCheck, Link2, ShieldCheck, KeyRound, Plus, Search, CheckCircle2, AlertTriangle as AlertTriangleIcon, ArrowRight } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import type { Task, Project, User, Client } from '../../types'
-import ProgressBar from '../shared/ProgressBar'
-import Sidebar from '../shared/Sidebar'
+import Logo from '../shared/Logo'
+import TopBarActions from '../shared/TopBarActions'
 import ProjectDetail from './ProjectDetail'
 import TeamCapacity from './TeamCapacity'
 import TeamCalendar from './TeamCalendar'
@@ -24,6 +24,7 @@ import LicenseManager from './LicenseManager'
 import { usePresence } from '../../hooks/usePresence'
 import { useAuth } from '../../contexts/AuthContext'
 import TaskDetailModal from '../team/TaskDetailModal'
+import './AdminDashboardV2.css'
 
 type View = 'overview' | 'project' | 'team' | 'calendar' | 'performance' | 'mytasks' | 'roadmap' | 'requests' | 'chat_team' | 'chat_clients' | 'clientes' | 'spelling' | 'entregables' | 'create' | 'create_project' | 'permisos' | 'licencia'
 type StatusFilter = 'activo' | 'pausado' | 'completado' | 'todos'
@@ -51,10 +52,22 @@ const ADMIN_NAV_ITEMS = [
   { id: 'permisos', label: 'Permisos', icon: KeyRound },
 ]
 
-const STATUS_BADGE: Record<string, string> = {
-  activo: 'bg-green-100 text-green-700',
-  pausado: 'bg-yellow-100 text-yellow-700',
-  completado: 'bg-gray-100 text-gray-600',
+const AVATAR_COLORS = ['#2757EB', '#0EA5E9', '#EC4899', '#12B886', '#F59E0B', '#8B5CF6', '#EF4444', '#0891B2', '#DB2777']
+
+function initialsOf(name: string): string {
+  return name.split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase()
+}
+
+function avatarColorFor(name: string): string {
+  let hash = 0
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) | 0
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length]
+}
+
+function fillClassFor(pct: number): string {
+  if (pct >= 60) return 'g2'
+  if (pct >= 30) return 'g1'
+  return 'g0'
 }
 
 export default function AdminDashboard() {
@@ -164,230 +177,244 @@ export default function AdminDashboard() {
     ? projects
     : projects.filter(p => p.status === statusFilter)
 
+  const navItems = [
+    ...ADMIN_NAV_ITEMS.map(item => ({
+      ...item,
+      badge: item.id === 'chat_team' ? unreadTeamChat : item.id === 'chat_clients' ? unreadClientChat : 0,
+    })),
+    ...(user?.is_super_admin ? [{ id: 'licencia', label: 'Licencia', icon: ShieldCheck, badge: 0 }] : []),
+  ]
+
+  function selectView(id: string) {
+    setView(id as View)
+    if (id === 'chat_team') setUnreadTeamChat(0)
+    if (id === 'chat_clients') setUnreadClientChat(0)
+  }
+
   if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Cargando...</div>
 
+  const currentNavLabel = navItems.find(i => i.id === view)?.label || 'Panel de Control'
+
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900">Panel de Control</h2>
-          <p className="text-sm text-gray-500">{projects.filter(p => p.status === 'activo').length} proyectos activos · {teamMembers.length} personas en el equipo</p>
-        </div>
-
-
-        <div className="flex gap-2">
-          <button
-            onClick={() => setView('create_project')}
-            className="border border-blue-600 text-blue-600 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-50 transition"
-          >
-            + Nuevo proyecto
-          </button>
-          <button
-            onClick={() => setView('create')}
-            className="bg-gradient-to-r from-blue-700 to-red-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90 transition"
-          >
-            + Nueva tarea
-          </button>
-        </div>
-      </div>
-
-      {/* ── Panel: revisiones pendientes del trafficker ── */}
-      {(pendingTraffickerReview.length > 0 || clientChangesRequested.length > 0) && (
-        <div className="mb-5 space-y-3">
-          {pendingTraffickerReview.length > 0 && (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
-              <p className="text-sm font-bold text-yellow-800 mb-3">
-                🔍 {pendingTraffickerReview.length} tarea{pendingTraffickerReview.length > 1 ? 's' : ''} esperando tu autorización
-              </p>
-              <div className="space-y-2">
-                {pendingTraffickerReview.map(t => (
-                  <div key={t.id}
-                    onClick={() => { setSelectedProject(t.project || null); setView('project') }}
-                    className="flex items-center gap-3 bg-white rounded-lg px-3 py-2 border border-yellow-100 cursor-pointer hover:border-yellow-300 transition">
-                    <span className="text-yellow-500 shrink-0">🔍</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-800 truncate">{t.title}</p>
-                      <p className="text-xs text-gray-400">{t.project?.client?.name} — {t.project?.name}</p>
-                    </div>
-                    <span className="text-xs text-yellow-700 font-semibold bg-yellow-100 px-2 py-0.5 rounded-full shrink-0">Autorizar</span>
-                  </div>
-                ))}
-              </div>
+    <div className="adminv2">
+      <div className="adm-shell">
+        {/* ── Sidebar ── */}
+        <aside className="adm-sidebar">
+          <div className="adm-brand">
+            <div className="adm-brand-mark"><Logo size={26} /></div>
+            <div>
+              <div className="adm-brand-name">Sinertegia Launch 57</div>
+              <div className="adm-brand-sub">Gestión de proyectos</div>
             </div>
-          )}
-          {clientChangesRequested.length > 0 && (
-            <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
-              <p className="text-sm font-bold text-orange-800 mb-3">
-                ✍️ {clientChangesRequested.length} cliente{clientChangesRequested.length > 1 ? 's solicitaron' : ' solicitó'} cambios
-              </p>
-              <div className="space-y-2">
-                {clientChangesRequested.map(t => (
-                  <div key={t.id}
-                    onClick={() => { setSelectedProject(t.project || null); setView('project') }}
-                    className="flex items-center gap-3 bg-white rounded-lg px-3 py-2 border border-orange-100 cursor-pointer hover:border-orange-300 transition">
-                    <span className="text-orange-500 shrink-0">✍️</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-800 truncate">{t.title}</p>
-                      <p className="text-xs text-gray-400">{t.project?.client?.name} — {t.project?.name}</p>
-                    </div>
-                    <span className="text-xs text-orange-700 font-semibold bg-orange-100 px-2 py-0.5 rounded-full shrink-0">Ver cambios</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      <div className="flex gap-6 items-start">
-        <Sidebar
-          items={[
-            ...ADMIN_NAV_ITEMS.map(item => ({
-              ...item,
-              badge: item.id === 'chat_team' ? unreadTeamChat : item.id === 'chat_clients' ? unreadClientChat : 0,
-            })),
-            ...(user?.is_super_admin ? [{ id: 'licencia', label: 'Licencia', icon: ShieldCheck, badge: 0 }] : []),
-          ]}
-          activeId={view}
-          onSelect={id => {
-            setView(id as View)
-            if (id === 'chat_team') setUnreadTeamChat(0)
-            if (id === 'chat_clients') setUnreadClientChat(0)
-          }}
-        />
-        <div className="flex-1 min-w-0">
-
-      {/* Alertas */}
-      {overdueTasks.length > 0 && view === 'overview' && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 flex items-start gap-3">
-          <AlertTriangle size={18} className="text-red-500 shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm font-semibold text-red-700">{overdueTasks.length} tarea{overdueTasks.length > 1 ? 's' : ''} vencida{overdueTasks.length > 1 ? 's' : ''}</p>
-            <p className="text-xs text-red-500 mt-0.5">{overdueTasks.slice(0, 5).map(t => t.title).join(', ')}{overdueTasks.length > 5 ? ` +${overdueTasks.length - 5} más` : ''}</p>
-          </div>
-        </div>
-      )}
-
-      {/* Vista de proyectos */}
-      {view === 'overview' && (
-        <div>
-          {/* Filtro por estado */}
-          <div className="flex gap-2 mb-4">
-            {STATUS_FILTER_LABELS.map(({ value, label }) => (
-              <button key={value} onClick={() => setStatusFilter(value)}
-                className={`px-4 py-1.5 rounded-full text-sm font-medium transition ${statusFilter === value ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-                {label}
-                <span className="ml-1.5 text-xs opacity-70">
-                  {value === 'todos' ? projects.length : projects.filter(p => p.status === value).length}
-                </span>
-              </button>
-            ))}
           </div>
 
-          {filteredProjects.length === 0 ? (
-            <div className="text-center py-16 text-gray-400">
-              <FolderKanban size={32} className="mx-auto mb-2 opacity-30" />
-              <p>No hay proyectos {statusFilter !== 'todos' ? `"${STATUS_FILTER_LABELS.find(s => s.value === statusFilter)?.label.toLowerCase()}"` : ''}</p>
-              <button onClick={() => setView('create_project')} className="mt-3 text-blue-600 text-sm hover:underline">
-                + Crear el primer proyecto
-              </button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredProjects.map(project => {
-                const pct = getProjectProgress(project.id)
-                const ptasks = tasks.filter(t => t.project_id === project.id)
-                const overdue = ptasks.filter(t => t.commitment_date && t.status !== 'completada' && new Date(t.commitment_date) < new Date())
-                return (
-                  <div key={project.id}
-                    className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm hover:shadow-md transition hover:border-blue-300">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex-1 min-w-0 cursor-pointer" onClick={() => { setSelectedProject(project); setView('project') }}>
-                        <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide truncate">{project.client?.name}</p>
-                        <h3 className="font-semibold text-gray-800 mt-0.5 truncate">{project.name}</h3>
-                      </div>
-                      <div className="flex flex-col items-end gap-1 ml-2 shrink-0">
-                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${STATUS_BADGE[project.status] || 'bg-gray-100 text-gray-600'}`}>
-                          {project.status === 'activo' ? 'Activo' : project.status === 'pausado' ? 'Pausado' : 'Completado'}
-                        </span>
-                        {overdue.length > 0 && (
-                          <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full">⚠ {overdue.length}</span>
-                        )}
-                      </div>
+          {navItems.map(({ id, label, icon: Icon, badge }) => (
+            <button key={id} type="button" onClick={() => selectView(id)}
+              className={`adm-nav-item ${view === id ? 'active' : ''}`}>
+              <Icon size={17} />
+              {label}
+              {!!badge && <span className="adm-badge">{badge > 9 ? '9+' : badge}</span>}
+            </button>
+          ))}
+
+          <div className="adm-tip">
+            <div className="adm-tip-head">💡 Consejo rápido</div>
+            <p>Organiza tus tareas con prioridades y fechas de entrega para mejorar tu productividad.</p>
+          </div>
+        </aside>
+
+        {/* ── Main ── */}
+        <div className="adm-main">
+          <header className="adm-topbar">
+            <span className="adm-top-title display">{currentNavLabel}</span>
+            <div className="adm-top-spacer" />
+            <TopBarActions />
+          </header>
+
+          <div className="adm-content">
+
+            {/* ═══ Vista: Proyectos (overview) ═══ */}
+            {view === 'overview' && (
+              <>
+                <div className="adm-page-head">
+                  <div>
+                    <h1 className="adm-page-title display">Panel de Control</h1>
+                    <div className="adm-page-meta">
+                      <span className="adm-stat"><b className="mono">{projects.filter(p => p.status === 'activo').length}</b> proyectos activos</span>
+                      <span className="adm-sep" />
+                      <span className="adm-stat"><b className="mono">{teamMembers.length}</b> personas en el equipo</span>
                     </div>
-                    <div onClick={() => { setSelectedProject(project); setView('project') }} className="cursor-pointer">
-                      <ProgressBar percentage={pct} />
-                      <div className="flex justify-between text-xs text-gray-400 mt-3">
-                        <span>{ptasks.filter(t => t.status === 'completada').length}/{ptasks.length} tareas</span>
-                        <span className="flex items-center gap-1"><TrendingUp size={11} /> {Math.round(pct)}%</span>
-                      </div>
-                    </div>
-                    <button
-                      onClick={e => { e.stopPropagation(); setReportProject(project) }}
-                      className="mt-3 w-full text-xs font-semibold text-indigo-600 border border-indigo-200 rounded-lg py-1.5 hover:bg-indigo-50 transition"
-                    >
-                      Ver reporte del cliente
+                  </div>
+                  <div className="adm-actions">
+                    <button className="adm-btn adm-btn-ghost" onClick={() => setView('create_project')}>
+                      <Plus /> Nuevo proyecto
+                    </button>
+                    <button className="adm-btn adm-btn-primary" onClick={() => setView('create')}>
+                      <Plus /> Nueva tarea
                     </button>
                   </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-      )}
+                </div>
 
-      {/* Vista detalle de proyecto */}
-      {view === 'project' && selectedProject && (
-        <ProjectDetail
-          project={selectedProject}
-          tasks={tasks.filter(t => t.project_id === selectedProject.id)}
-          onBack={() => setView('overview')}
-          onUpdate={fetchAll}
-          teamMembers={teamMembers}
-          projects={projects}
-        />
-      )}
+                {/* Triage: autorizaciones y vencidas */}
+                {(pendingTraffickerReview.length > 0 || overdueTasks.length > 0 || clientChangesRequested.length > 0) && (
+                  <div className="adm-triage">
+                    {pendingTraffickerReview.length > 0 && (
+                      <div className="adm-alert warn" onClick={() => { setSelectedProject(pendingTraffickerReview[0].project || null); setView('project') }}>
+                        <div className="adm-alert-icon"><Search /></div>
+                        <div className="adm-alert-body">
+                          <div className="adm-alert-kicker">{pendingTraffickerReview.length} tarea{pendingTraffickerReview.length > 1 ? 's' : ''} espera{pendingTraffickerReview.length > 1 ? 'n' : ''} tu autorización</div>
+                          <div className="adm-alert-title">{pendingTraffickerReview[0].title}</div>
+                          <div className="adm-alert-desc">{pendingTraffickerReview[0].project?.client?.name} — {pendingTraffickerReview[0].project?.name}</div>
+                        </div>
+                        <button className="adm-btn adm-btn-warn">Autorizar</button>
+                      </div>
+                    )}
+                    {overdueTasks.length > 0 && (
+                      <div className="adm-alert due" onClick={() => { setSelectedProject(overdueTasks[0].project || null); setView('project') }}>
+                        <div className="adm-alert-icon"><AlertTriangleIcon /></div>
+                        <div className="adm-alert-body">
+                          <div className="adm-alert-kicker">{overdueTasks.length} tarea{overdueTasks.length > 1 ? 's' : ''} vencida{overdueTasks.length > 1 ? 's' : ''}</div>
+                          <div className="adm-alert-title">{overdueTasks[0].title}</div>
+                          <div className="adm-alert-desc">{overdueTasks[0].project?.client?.name} — {overdueTasks[0].project?.name}</div>
+                        </div>
+                        <button className="adm-btn adm-btn-ghost">Revisar</button>
+                      </div>
+                    )}
+                    {clientChangesRequested.length > 0 && (
+                      <div className="adm-alert warn" onClick={() => { setSelectedProject(clientChangesRequested[0].project || null); setView('project') }}>
+                        <div className="adm-alert-icon">✍️</div>
+                        <div className="adm-alert-body">
+                          <div className="adm-alert-kicker">{clientChangesRequested.length} cliente{clientChangesRequested.length > 1 ? 's solicitaron' : ' solicitó'} cambios</div>
+                          <div className="adm-alert-title">{clientChangesRequested[0].title}</div>
+                          <div className="adm-alert-desc">{clientChangesRequested[0].project?.client?.name} — {clientChangesRequested[0].project?.name}</div>
+                        </div>
+                        <button className="adm-btn adm-btn-warn">Ver cambios</button>
+                      </div>
+                    )}
+                  </div>
+                )}
 
-      {/* Vista capacidad del equipo */}
-      {view === 'team' && <TeamCapacity teamMembers={teamMembers} tasks={tasks} onAssign={() => setView('create')} onUpdate={fetchAll} />}
+                {/* Toolbar: tabs de estado */}
+                <div className="adm-toolbar">
+                  <div className="adm-tabs">
+                    {STATUS_FILTER_LABELS.map(({ value, label }) => (
+                      <button key={value} className={`adm-tab ${statusFilter === value ? 'active' : ''}`} onClick={() => setStatusFilter(value)}>
+                        {label}
+                        <span className="adm-count">{value === 'todos' ? projects.length : projects.filter(p => p.status === value).length}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-      {/* Vista calendario */}
-      {view === 'calendar' && <TeamCalendar teamMembers={teamMembers} tasks={tasks} onlineIds={onlineIds} />}
+                {/* Grid de proyectos */}
+                {filteredProjects.length === 0 ? (
+                  <div className="text-center py-16 text-gray-400">
+                    <FolderKanban size={32} className="mx-auto mb-2 opacity-30" />
+                    <p>No hay proyectos {statusFilter !== 'todos' ? `"${STATUS_FILTER_LABELS.find(s => s.value === statusFilter)?.label.toLowerCase()}"` : ''}</p>
+                    <button onClick={() => setView('create_project')} className="mt-3 text-blue-600 text-sm hover:underline">
+                      + Crear el primer proyecto
+                    </button>
+                  </div>
+                ) : (
+                  <div className="adm-grid">
+                    {filteredProjects.map(project => {
+                      const pct = getProjectProgress(project.id)
+                      const ptasks = tasks.filter(t => t.project_id === project.id)
+                      const done = ptasks.filter(t => t.status === 'completada').length
+                      const clientName = project.client?.name || '—'
+                      const cardTier = pct === 100 ? 'done' : pct === 0 ? 'idle' : ''
+                      const pillClass = project.status === 'activo' ? 'active' : project.status === 'pausado' ? 'paused' : 'completed'
+                      return (
+                        <article key={project.id} className={`adm-card ${cardTier}`}
+                          onClick={() => { setSelectedProject(project); setView('project') }}>
+                          <div className="adm-card-top">
+                            <div className="adm-client-avatar" style={{ background: `linear-gradient(145deg, ${avatarColorFor(clientName)}, ${avatarColorFor(clientName)}cc)` }}>
+                              {initialsOf(clientName)}
+                            </div>
+                            <div className="adm-card-headings">
+                              <div className="adm-client-name">{clientName}</div>
+                              <div className="adm-project-name">{project.name}</div>
+                            </div>
+                            <span className={`adm-pill ${pillClass}`}>
+                              <span className="adm-pd" />
+                              {project.status === 'activo' ? 'Activo' : project.status === 'pausado' ? 'Pausado' : 'Completado'}
+                            </span>
+                          </div>
+                          <div>
+                            <div className="adm-progress-row">
+                              <span className="adm-progress-label">Progreso</span>
+                              <span className={`adm-progress-val mono ${pct === 100 ? 'adm-v-done' : pct === 0 ? 'adm-v-idle' : pct >= 30 ? 'adm-v-warm' : 'adm-v-mid'}`}>
+                                {Math.round(pct)}<span style={{ fontSize: 11 }}>%</span>
+                              </span>
+                            </div>
+                            <div className="adm-track"><div className={`adm-fill ${fillClassFor(pct)}`} style={{ width: `${pct}%` }} /></div>
+                          </div>
+                          <div className="adm-card-foot">
+                            <span className="adm-tasks"><CheckCircle2 /> <b>{done}/{ptasks.length}</b> tareas</span>
+                            <button className="adm-report-link" onClick={e => { e.stopPropagation(); setReportProject(project) }}>
+                              Ver reporte <ArrowRight />
+                            </button>
+                          </div>
+                        </article>
+                      )
+                    })}
+                  </div>
+                )}
+              </>
+            )}
 
-      {/* Vista rendimiento */}
-      {view === 'performance' && <TeamPerformance teamMembers={teamMembers} tasks={tasks} />}
+            {/* Vista detalle de proyecto */}
+            {view === 'project' && selectedProject && (
+              <ProjectDetail
+                project={selectedProject}
+                tasks={tasks.filter(t => t.project_id === selectedProject.id)}
+                onBack={() => setView('overview')}
+                onUpdate={fetchAll}
+                teamMembers={teamMembers}
+                projects={projects}
+              />
+            )}
 
-      {/* Vista mis tareas */}
-      {view === 'mytasks' && <TeamDashboard embedded />}
+            {/* Vista capacidad del equipo */}
+            {view === 'team' && <TeamCapacity teamMembers={teamMembers} tasks={tasks} onAssign={() => setView('create')} onUpdate={fetchAll} />}
 
-      {/* Vista hoja de ruta */}
-      {view === 'roadmap' && <RoadmapView tasks={tasks} title="Todas las tareas del equipo" />}
+            {/* Vista calendario */}
+            {view === 'calendar' && <TeamCalendar teamMembers={teamMembers} tasks={tasks} onlineIds={onlineIds} />}
 
-      {/* Vista solicitudes de clientes */}
-      {view === 'requests' && <TaskRequestsPanel />}
+            {/* Vista rendimiento */}
+            {view === 'performance' && <TeamPerformance teamMembers={teamMembers} tasks={tasks} />}
 
-      {/* Vista chat interno del equipo */}
-      {view === 'chat_team' && <TeamChat />}
+            {/* Vista mis tareas */}
+            {view === 'mytasks' && <TeamDashboard embedded />}
 
-      {/* Vista chat con clientes */}
-      {view === 'chat_clients' && <ClientChatsHub initialClients={clients} />}
+            {/* Vista hoja de ruta */}
+            {view === 'roadmap' && <RoadmapView tasks={tasks} title="Todas las tareas del equipo" />}
 
-      {view === 'entregables' && <ClientDeliverables />}
+            {/* Vista solicitudes de clientes */}
+            {view === 'requests' && <TaskRequestsPanel />}
 
-      {view === 'spelling' && <SpellingChecker />}
+            {/* Vista chat interno del equipo */}
+            {view === 'chat_team' && <TeamChat />}
 
-      {/* Vista: Asignación de clientes */}
-      {view === 'clientes' && (
-        <ClientAssignmentManager clients={clients} teamMembers={teamMembers} />
-      )}
+            {/* Vista chat con clientes */}
+            {view === 'chat_clients' && <ClientChatsHub initialClients={clients} />}
 
-      {/* Vista: Permisos por rol */}
-      {view === 'permisos' && <RolePermissionsManager />}
+            {view === 'entregables' && <ClientDeliverables />}
 
-      {/* Vista: Licencia (solo súper admin) */}
-      {view === 'licencia' && user?.is_super_admin && <LicenseManager />}
+            {view === 'spelling' && <SpellingChecker />}
 
+            {/* Vista: Asignación de clientes */}
+            {view === 'clientes' && (
+              <ClientAssignmentManager clients={clients} teamMembers={teamMembers} />
+            )}
+
+            {/* Vista: Permisos por rol */}
+            {view === 'permisos' && <RolePermissionsManager />}
+
+            {/* Vista: Licencia (solo súper admin) */}
+            {view === 'licencia' && user?.is_super_admin && <LicenseManager />}
+
+          </div>
         </div>
       </div>
 
