@@ -87,15 +87,26 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone 
 
   async function saveEditComment(id: string) {
     if (!editCommentValue.trim()) return
-    await supabase.from('task_comments').update({ content: editCommentValue.trim() }).eq('id', id)
-    setEditingCommentId(null)
-    await fetchComments()
+    try {
+      const { error } = await supabase.from('task_comments').update({ content: editCommentValue.trim() }).eq('id', id)
+      if (error) console.error('Error al editar comentario:', error)
+      setEditingCommentId(null)
+      await fetchComments()
+    } catch (err) {
+      console.error('Error al editar comentario:', err)
+      setEditingCommentId(null)
+    }
   }
 
   async function deleteComment(id: string) {
-    await supabase.from('task_comments').delete().eq('id', id)
-    await fetchComments()
-    onUpdate()
+    try {
+      const { error } = await supabase.from('task_comments').delete().eq('id', id)
+      if (error) console.error('Error al borrar comentario:', error)
+      await fetchComments()
+      onUpdate()
+    } catch (err) {
+      console.error('Error al borrar comentario:', err)
+    }
   }
 
   // ─── determinar paso actual ───────────────────────────────────────────────
