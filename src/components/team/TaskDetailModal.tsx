@@ -75,6 +75,7 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone 
     setNewComment('')
     await fetchComments()
     setSendingComment(false)
+    onUpdate()
   }
 
   // ─── determinar paso actual ───────────────────────────────────────────────
