@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { Bell, CheckCheck } from 'lucide-react'
+import { Bell, CheckCheck, Check, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 
@@ -56,6 +56,18 @@ export default function NotificationBell() {
   async function markAllRead() {
     await supabase.from('notifications').update({ read: true }).eq('user_id', user!.id).eq('read', false)
     fetchNotifications()
+  }
+
+  async function markReadOnly(e: React.MouseEvent, id: string) {
+    e.stopPropagation()
+    await supabase.from('notifications').update({ read: true }).eq('id', id)
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n))
+  }
+
+  async function deleteNotification(e: React.MouseEvent, id: string) {
+    e.stopPropagation()
+    setNotifications(prev => prev.filter(n => n.id !== id))
+    await supabase.from('notifications').delete().eq('id', id)
   }
 
   async function markRead(id: string, taskId?: string, title?: string) {
@@ -123,7 +135,7 @@ export default function NotificationBell() {
             )}
             {notifications.map(n => (
               <div key={n.id} onClick={() => markRead(n.id, n.task_id, n.title)}
-                className={`px-4 py-3 border-b border-gray-50 cursor-pointer hover:bg-gray-50 transition ${!n.read ? 'bg-blue-50' : ''}`}>
+                className={`group px-4 py-3 border-b border-gray-50 cursor-pointer hover:bg-gray-50 transition ${!n.read ? 'bg-blue-50' : ''}`}>
                 <div className="flex items-start gap-2">
                   <span className="text-base shrink-0 mt-0.5">{typeIcon[n.type] || '🔔'}</span>
                   <div className="flex-1 min-w-0">
@@ -133,7 +145,19 @@ export default function NotificationBell() {
                       {new Date(n.created_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>
-                  {!n.read && <span className="w-2 h-2 bg-blue-500 rounded-full shrink-0 mt-1.5" />}
+                  <div className="flex items-center gap-1 shrink-0">
+                    {!n.read && (
+                      <button type="button" onClick={e => markReadOnly(e, n.id)} title="Marcar como leída"
+                        className="opacity-0 group-hover:opacity-100 transition text-gray-400 hover:text-green-600 p-1 rounded hover:bg-green-50">
+                        <Check size={13} />
+                      </button>
+                    )}
+                    <button type="button" onClick={e => deleteNotification(e, n.id)} title="Eliminar notificación"
+                      className="opacity-0 group-hover:opacity-100 transition text-gray-400 hover:text-red-600 p-1 rounded hover:bg-red-50">
+                      <X size={13} />
+                    </button>
+                    {!n.read && <span className="w-2 h-2 bg-blue-500 rounded-full shrink-0 mt-1.5 group-hover:hidden" />}
+                  </div>
                 </div>
               </div>
             ))}
