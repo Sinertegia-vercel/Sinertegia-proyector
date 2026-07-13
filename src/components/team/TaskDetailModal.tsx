@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { X, ExternalLink, Send, CheckCircle, RotateCcw, ShieldCheck, ThumbsUp, Plus, Trash2, MessageSquare, Pencil } from 'lucide-react'
+import { X, ExternalLink, Send, CheckCircle, RotateCcw, ShieldCheck, ThumbsUp, Plus, Trash2, MessageSquare, Pencil, Upload, FileCode } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import type { Task, User, Comment } from '../../types'
@@ -34,6 +34,8 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone 
   const [sendingComment, setSendingComment] = useState(false)
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null)
   const [editCommentValue, setEditCommentValue] = useState('')
+  const [uploadingFile, setUploadingFile] = useState(false)
+  const [uploadError, setUploadError] = useState('')
 
   useEffect(() => {
     supabase.from('users').select('*')
@@ -131,6 +133,31 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone 
   async function removeLink(id: string) {
     await supabase.from('task_links').delete().eq('id', id)
     setLinks(prev => prev.filter(l => l.id !== id))
+  }
+
+  async function uploadHtmlFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file || !user) return
+    if (!file.name.toLowerCase().endsWith('.html')) {
+      setUploadError('Solo se aceptan archivos .html')
+      return
+    }
+    setUploadError('')
+    setUploadingFile(true)
+    const path = `task-deliverables/${task.id}/${Date.now()}_${file.name}`
+    const { error } = await supabase.storage.from('chat-files').upload(path, file, { contentType: 'text/html' })
+    if (error) {
+      setUploadError('No se pudo subir el archivo')
+      setUploadingFile(false)
+      return
+    }
+    const { data: { publicUrl } } = supabase.storage.from('chat-files').getPublicUrl(path)
+    const { data } = await supabase.from('task_links')
+      .insert({ task_id: task.id, label: file.name, url: publicUrl })
+      .select().single()
+    if (data) setLinks(prev => [...prev, data])
+    setUploadingFile(false)
   }
 
   async function updateReviewStatus(newStatus: string) {
@@ -403,39 +430,51 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone 
           <div>
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Entregables</p>
             {links.length === 0 && (
-              <p className="text-xs text-orange-500 mb-2">📎 Recuerda añadir el link del entregable</p>
+              <p className="text-xs text-red-500 mb-2 font-medium">📎 Es obligatorio añadir al menos un link o archivo del entregable</p>
             )}
             <div className="space-y-1.5 mb-3">
-              {links.map(link => (
-                <div key={link.id} className="flex items-center gap-2 bg-blue-50 rounded-lg px-3 py-2">
-                  <ExternalLink size={13} className="text-blue-500 shrink-0" />
-                  <a href={link.url} target="_blank" rel="noreferrer"
-                    className="text-sm text-blue-600 hover:underline flex-1 truncate font-medium">
-                    {link.label}
-                  </a>
-                  {(isTeam || isAdmin) && (
-                    <button type="button" onClick={() => removeLink(link.id)}
-                      className="text-gray-300 hover:text-red-400 transition shrink-0">
-                      <Trash2 size={13} />
-                    </button>
-                  )}
-                </div>
-              ))}
+              {links.map(link => {
+                const isHtmlFile = link.url.toLowerCase().includes('.html')
+                return (
+                  <div key={link.id} className="flex items-center gap-2 bg-blue-50 rounded-lg px-3 py-2">
+                    {isHtmlFile ? <FileCode size={13} className="text-blue-500 shrink-0" /> : <ExternalLink size={13} className="text-blue-500 shrink-0" />}
+                    <a href={link.url} target="_blank" rel="noreferrer"
+                      className="text-sm text-blue-600 hover:underline flex-1 truncate font-medium">
+                      {link.label}
+                    </a>
+                    {(isTeam || isAdmin) && (
+                      <button type="button" onClick={() => removeLink(link.id)}
+                        className="text-gray-300 hover:text-red-400 transition shrink-0">
+                        <Trash2 size={13} />
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
             </div>
-            {/* Agregar link (solo equipo o admin, y solo en pasos 1-2) */}
+            {/* Agregar link o archivo .html (solo equipo o admin, y solo en pasos 1-2) */}
             {(isTeam || isAdmin) && step <= 2 && (
-              <form onSubmit={addLink} className="flex gap-2">
-                <input value={newLabel} onChange={e => setNewLabel(e.target.value)}
-                  placeholder="Nombre del link" required
-                  className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                <input value={newUrl} onChange={e => setNewUrl(e.target.value)}
-                  placeholder="https://..." type="url" required
-                  className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                <button type="submit"
-                  className="bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 transition text-xs font-semibold">
-                  <Plus size={14} />
-                </button>
-              </form>
+              <div className="space-y-2">
+                <form onSubmit={addLink} className="flex gap-2">
+                  <input value={newLabel} onChange={e => setNewLabel(e.target.value)}
+                    placeholder="Nombre del link" required
+                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <input value={newUrl} onChange={e => setNewUrl(e.target.value)}
+                    placeholder="https://..." type="url" required
+                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <button type="submit"
+                    className="bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 transition text-xs font-semibold">
+                    <Plus size={14} />
+                  </button>
+                </form>
+
+                <label className="flex items-center justify-center gap-2 border border-dashed border-gray-300 rounded-lg px-3 py-2 text-xs text-gray-500 hover:border-blue-400 hover:text-blue-600 cursor-pointer transition">
+                  <Upload size={13} />
+                  {uploadingFile ? 'Subiendo...' : 'Subir archivo .html (ej: exportado de Claude)'}
+                  <input type="file" accept=".html" className="hidden" onChange={uploadHtmlFile} disabled={uploadingFile} />
+                </label>
+                {uploadError && <p className="text-xs text-red-500">{uploadError}</p>}
+              </div>
             )}
           </div>
 
@@ -451,7 +490,8 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone 
                 await supabase.from('tasks').update({ status: 'completada' }).eq('id', task.id)
                 await updateReviewStatus('aprobada')
                 setBusy(false); onUpdate(); onClose()
-              }} disabled={busy}
+              }} disabled={busy || links.length === 0}
+                title={links.length === 0 ? 'Añade al menos un entregable primero' : undefined}
                 className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold py-2.5 rounded-lg transition disabled:opacity-50">
                 <CheckCircle size={14} />
                 {busy ? 'Completando...' : 'Marcar como completada'}
@@ -476,10 +516,11 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone 
                   ))}
                 </select>
               </div>
-              <button type="button" onClick={submitForReview} disabled={busy}
+              <button type="button" onClick={submitForReview} disabled={busy || links.length === 0}
+                title={links.length === 0 ? 'Añade al menos un entregable primero' : undefined}
                 className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold py-2.5 rounded-lg transition disabled:opacity-50">
                 <Send size={14} />
-                {busy ? 'Enviando...' : 'Solicitar revisión'}
+                {busy ? 'Enviando...' : links.length === 0 ? 'Añade un entregable para continuar' : 'Solicitar revisión'}
               </button>
             </div>
           )}
