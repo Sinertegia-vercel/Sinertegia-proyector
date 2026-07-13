@@ -61,10 +61,19 @@ export default function ClientPortal() {
   const [changeImage, setChangeImage] = useState<File | null>(null)
   const [submittingFeedback, setSubmittingFeedback] = useState(false)
   const [reviewPanelOpen, setReviewPanelOpen] = useState(true)
+  const [hiddenSections, setHiddenSections] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     if (user) fetchData()
+    fetchPermissions()
   }, [user])
+
+  async function fetchPermissions() {
+    const { data } = await supabase.from('role_permissions').select('section_key, allowed').eq('role', 'client')
+    const hidden = new Set((data || []).filter(r => !r.allowed).map(r => r.section_key))
+    setHiddenSections(hidden)
+    if (hidden.has(activeTab)) setActiveTab('mistareas')
+  }
 
   useEffect(() => {
     function handleOpenChat(e: Event) {
@@ -399,7 +408,7 @@ export default function ClientPortal() {
       )}
 
       <div className="flex gap-6 items-start">
-        <Sidebar items={CLIENT_NAV_ITEMS} activeId={activeTab} onSelect={id => setActiveTab(id as Tab)} />
+        <Sidebar items={CLIENT_NAV_ITEMS.filter(item => !hiddenSections.has(item.id))} activeId={activeTab} onSelect={id => setActiveTab(id as Tab)} />
         <div className="flex-1 min-w-0">
 
       {/* ── Tab: Mis tareas ── */}

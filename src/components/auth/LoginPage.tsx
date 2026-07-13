@@ -7,9 +7,10 @@ import FloatingLines from './FloatingLines'
 interface Props {
   unauthorizedEmail?: string | null
   deactivatedEmail?: string | null
+  licenseSuspended?: boolean
 }
 
-export default function LoginPage({ unauthorizedEmail, deactivatedEmail }: Props) {
+export default function LoginPage({ unauthorizedEmail, deactivatedEmail, licenseSuspended }: Props) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -94,6 +95,11 @@ export default function LoginPage({ unauthorizedEmail, deactivatedEmail }: Props
             {deactivatedEmail && (
               <p className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-4 py-2">
                 La cuenta <strong>{deactivatedEmail}</strong> fue desactivada. Contacta a tu administrador si crees que es un error.
+              </p>
+            )}
+            {licenseSuspended && (
+              <p className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-4 py-2">
+                Esta aplicación está temporalmente suspendida. Contacta a tu proveedor del servicio para reactivarla.
               </p>
             )}
 

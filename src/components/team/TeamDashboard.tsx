@@ -60,6 +60,7 @@ export default function TeamDashboard({ embedded = false }: Props) {
   const [priorityFilterPos, setPriorityFilterPos] = useState({ top: 0, left: 0 })
   const priorityFilterBtnRef = useRef<HTMLButtonElement>(null)
   const [teamView, setTeamView] = useState<TeamView>('tasks')
+  const [hiddenSections, setHiddenSections] = useState<Set<string>>(new Set())
 
   const isTraffickerOrLider = user?.department === 'trafficker' || user?.department === 'lider'
 
@@ -70,8 +71,16 @@ export default function TeamDashboard({ embedded = false }: Props) {
       fetchTeamMembers()
       fetchMyReviewTasks()
       if (isTraffickerOrLider) fetchReviewTasks()
+      fetchPermissions()
     }
   }, [user])
+
+  async function fetchPermissions() {
+    const { data } = await supabase.from('role_permissions').select('section_key, allowed').eq('role', 'team')
+    const hidden = new Set((data || []).filter(r => !r.allowed).map(r => r.section_key))
+    setHiddenSections(hidden)
+    if (hidden.has(teamView)) setTeamView('tasks')
+  }
 
   useEffect(() => {
     async function handleOpenTask(e: Event) {
@@ -157,6 +166,7 @@ export default function TeamDashboard({ embedded = false }: Props) {
   const clientOptions = Array.from(new Set(tasks.map(t => t.project?.client?.name).filter((n): n is string => !!n))).sort()
   const priorityOptions = (['critica', 'alta', 'media', 'baja'] as Priority[]).filter(p => tasks.some(t => t.priority === p))
   const isOverdue = (t: Task) => t.commitment_date && t.status !== 'completada' && new Date(t.commitment_date) < new Date()
+  const visibleNavItems = TEAM_NAV_ITEMS.filter(item => !hiddenSections.has(item.id))
 
   const stats = {
     total: tasks.length,
@@ -509,7 +519,7 @@ export default function TeamDashboard({ embedded = false }: Props) {
         {reviewBanners}
 
         <div className="flex gap-2 mb-6 border-b border-gray-200 overflow-x-auto">
-          {TEAM_NAV_ITEMS.map(({ id, label, icon: Icon }) => (
+          {visibleNavItems.map(({ id, label, icon: Icon }) => (
             <button key={id} onClick={() => setTeamView(id)}
               className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition whitespace-nowrap ${teamView === id ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
               <Icon size={15} /> {label}
@@ -552,7 +562,7 @@ export default function TeamDashboard({ embedded = false }: Props) {
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
       <Sidebar
-        items={TEAM_NAV_ITEMS}
+        items={visibleNavItems}
         activeId={teamView}
         onSelect={id => setTeamView(id as TeamView)}
         collapsible

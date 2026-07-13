@@ -51,6 +51,7 @@ export interface User {
   work_start?: number
   work_end?: number
   active?: boolean
+  is_super_admin?: boolean
 }
 
 export interface Client {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Users, FolderKanban, AlertTriangle, TrendingUp, Calendar, ClipboardList, MessageSquare, MessageCircle, Map, Inbox, UserCheck, SpellCheck, Link2 } from 'lucide-react'
+import { Users, FolderKanban, AlertTriangle, TrendingUp, Calendar, ClipboardList, MessageSquare, MessageCircle, Map, Inbox, UserCheck, SpellCheck, Link2, ShieldCheck, KeyRound } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import type { Task, Project, User, Client } from '../../types'
 import ProgressBar from '../shared/ProgressBar'
@@ -19,11 +19,13 @@ import ClientAssignmentManager from './ClientAssignmentManager'
 import ClientReportModal from './ClientReportModal'
 import SpellingChecker from './SpellingChecker'
 import ClientDeliverables from './ClientDeliverables'
+import RolePermissionsManager from './RolePermissionsManager'
+import LicenseManager from './LicenseManager'
 import { usePresence } from '../../hooks/usePresence'
 import { useAuth } from '../../contexts/AuthContext'
 import TaskDetailModal from '../team/TaskDetailModal'
 
-type View = 'overview' | 'project' | 'team' | 'calendar' | 'performance' | 'mytasks' | 'roadmap' | 'requests' | 'chat_team' | 'chat_clients' | 'clientes' | 'spelling' | 'entregables' | 'create' | 'create_project'
+type View = 'overview' | 'project' | 'team' | 'calendar' | 'performance' | 'mytasks' | 'roadmap' | 'requests' | 'chat_team' | 'chat_clients' | 'clientes' | 'spelling' | 'entregables' | 'create' | 'create_project' | 'permisos' | 'licencia'
 type StatusFilter = 'activo' | 'pausado' | 'completado' | 'todos'
 
 const STATUS_FILTER_LABELS: { value: StatusFilter; label: string }[] = [
@@ -46,6 +48,7 @@ const ADMIN_NAV_ITEMS = [
   { id: 'chat_clients', label: 'Chat Clientes', icon: MessageCircle },
   { id: 'entregables', label: 'Entregables', icon: Link2 },
   { id: 'spelling', label: 'Ortografía', icon: SpellCheck },
+  { id: 'permisos', label: 'Permisos', icon: KeyRound },
 ]
 
 const STATUS_BADGE: Record<string, string> = {
@@ -239,10 +242,13 @@ export default function AdminDashboard() {
 
       <div className="flex gap-6 items-start">
         <Sidebar
-          items={ADMIN_NAV_ITEMS.map(item => ({
-            ...item,
-            badge: item.id === 'chat_team' ? unreadTeamChat : item.id === 'chat_clients' ? unreadClientChat : 0,
-          }))}
+          items={[
+            ...ADMIN_NAV_ITEMS.map(item => ({
+              ...item,
+              badge: item.id === 'chat_team' ? unreadTeamChat : item.id === 'chat_clients' ? unreadClientChat : 0,
+            })),
+            ...(user?.is_super_admin ? [{ id: 'licencia', label: 'Licencia', icon: ShieldCheck, badge: 0 }] : []),
+          ]}
           activeId={view}
           onSelect={id => {
             setView(id as View)
@@ -375,6 +381,12 @@ export default function AdminDashboard() {
       {view === 'clientes' && (
         <ClientAssignmentManager clients={clients} teamMembers={teamMembers} />
       )}
+
+      {/* Vista: Permisos por rol */}
+      {view === 'permisos' && <RolePermissionsManager />}
+
+      {/* Vista: Licencia (solo súper admin) */}
+      {view === 'licencia' && user?.is_super_admin && <LicenseManager />}
 
         </div>
       </div>

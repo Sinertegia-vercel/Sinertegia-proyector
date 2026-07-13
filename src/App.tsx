@@ -14,7 +14,7 @@ import OvertimeModal from './components/shared/OvertimeModal'
 import './index.css'
 
 function AppContent() {
-  const { session, user, loading, isPasswordRecovery, unauthorizedEmail, deactivatedEmail } = useAuth()
+  const { session, user, loading, isPasswordRecovery, unauthorizedEmail, deactivatedEmail, licenseSuspended } = useAuth()
   const { needsCheckIn, showOvertimeModal } = useWorkSession()
   const inviteToken = new URLSearchParams(window.location.search).get('invite')
   const teamInviteToken = new URLSearchParams(window.location.search).get('team_invite')
@@ -35,7 +35,7 @@ function AppContent() {
   if (!session || !user) {
     if (inviteToken) return <ClientRegistrationPage inviteToken={inviteToken} />
     if (teamInviteToken) return <TeamRegistrationPage inviteToken={teamInviteToken} />
-    return <LoginPage unauthorizedEmail={unauthorizedEmail} deactivatedEmail={deactivatedEmail} />
+    return <LoginPage unauthorizedEmail={unauthorizedEmail} deactivatedEmail={deactivatedEmail} licenseSuspended={licenseSuspended} />
   }
 
   if (user.must_change_password) return <ChangePasswordModal />
