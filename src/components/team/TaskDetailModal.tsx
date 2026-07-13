@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
-import { X, ExternalLink, Send, CheckCircle, RotateCcw, ShieldCheck, ThumbsUp, Plus, Trash2, MessageSquare, Pencil, Upload, FileCode } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { X, ExternalLink, Send, CheckCircle, RotateCcw, ShieldCheck, ThumbsUp, Plus, Trash2, MessageSquare, Pencil, Upload, FileCode, Image as ImageIcon, File as FileIcon, ListChecks, Timer, Play, Square, Link2, AlertTriangle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import type { Task, User, Comment } from '../../types'
+import type { Task, User, Comment, Subtask, TimeEntry } from '../../types'
 
 interface Props {
   task: Task
@@ -37,6 +37,20 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone 
   const [uploadingFile, setUploadingFile] = useState(false)
   const [uploadError, setUploadError] = useState('')
 
+  // Subtareas
+  const [subtasks, setSubtasks] = useState<Subtask[]>([])
+  const [newSubtask, setNewSubtask] = useState('')
+
+  // Tiempo trabajado
+  const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([])
+  const [activeEntry, setActiveEntry] = useState<TimeEntry | null>(null)
+  const [elapsedSec, setElapsedSec] = useState(0)
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Dependencias
+  const [projectTasks, setProjectTasks] = useState<Task[]>([])
+  const [dependsOn, setDependsOn] = useState(task.depends_on_task_id || '')
+
   useEffect(() => {
     supabase.from('users').select('*')
       .in('role', ['admin', 'team'])
@@ -46,7 +60,50 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone 
 
   useEffect(() => {
     fetchComments()
+    fetchSubtasks()
+    fetchTimeEntries()
+    if (task.project_id) fetchProjectTasks()
   }, [task.id])
+
+  useEffect(() => {
+    if (activeEntry) {
+      const startedAt = new Date(activeEntry.started_at).getTime()
+      timerRef.current = setInterval(() => {
+        setElapsedSec(Math.floor((Date.now() - startedAt) / 1000))
+      }, 1000)
+      return () => { if (timerRef.current) clearInterval(timerRef.current) }
+    }
+  }, [activeEntry])
+
+  async function fetchSubtasks() {
+    const { data } = await supabase
+      .from('task_subtasks')
+      .select('*')
+      .eq('task_id', task.id)
+      .order('position', { ascending: true })
+    setSubtasks((data as Subtask[]) || [])
+  }
+
+  async function fetchTimeEntries() {
+    const { data } = await supabase
+      .from('task_time_entries')
+      .select('*, user:users(full_name)')
+      .eq('task_id', task.id)
+      .order('started_at', { ascending: false })
+    const entries = (data as TimeEntry[]) || []
+    setTimeEntries(entries)
+    const mine = entries.find(e => e.user_id === user?.id && !e.ended_at)
+    setActiveEntry(mine || null)
+  }
+
+  async function fetchProjectTasks() {
+    const { data } = await supabase
+      .from('tasks')
+      .select('id, title, status')
+      .eq('project_id', task.project_id)
+      .neq('id', task.id)
+    setProjectTasks((data as any) || [])
+  }
 
   async function fetchComments() {
     const { data } = await supabase
@@ -111,6 +168,59 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone 
     }
   }
 
+  // ─── Subtareas ───────────────────────────────────────────────────────────
+  async function addSubtask(e: React.FormEvent) {
+    e.preventDefault()
+    if (!newSubtask.trim()) return
+    const { data } = await supabase.from('task_subtasks')
+      .insert({ task_id: task.id, title: newSubtask.trim(), position: subtasks.length })
+      .select().single()
+    if (data) setSubtasks(prev => [...prev, data])
+    setNewSubtask('')
+  }
+
+  async function toggleSubtask(s: Subtask) {
+    setSubtasks(prev => prev.map(x => x.id === s.id ? { ...x, completed: !x.completed } : x))
+    await supabase.from('task_subtasks').update({ completed: !s.completed }).eq('id', s.id)
+  }
+
+  async function deleteSubtask(id: string) {
+    setSubtasks(prev => prev.filter(s => s.id !== id))
+    await supabase.from('task_subtasks').delete().eq('id', id)
+  }
+
+  // ─── Tiempo trabajado (cronómetro manual) ───────────────────────────────
+  async function startTimer() {
+    if (!user) return
+    const { data } = await supabase.from('task_time_entries')
+      .insert({ task_id: task.id, user_id: user.id, started_at: new Date().toISOString() })
+      .select('*, user:users(full_name)').single()
+    if (data) {
+      setActiveEntry(data as TimeEntry)
+      setElapsedSec(0)
+      await fetchTimeEntries()
+    }
+  }
+
+  async function stopTimer() {
+    if (!activeEntry) return
+    const endedAt = new Date()
+    const minutes = Math.max(1, Math.round((endedAt.getTime() - new Date(activeEntry.started_at).getTime()) / 60000))
+    await supabase.from('task_time_entries')
+      .update({ ended_at: endedAt.toISOString(), minutes })
+      .eq('id', activeEntry.id)
+    setActiveEntry(null)
+    setElapsedSec(0)
+    await fetchTimeEntries()
+  }
+
+  // ─── Dependencia entre tareas ────────────────────────────────────────────
+  async function saveDependsOn(value: string) {
+    setDependsOn(value)
+    await supabase.from('tasks').update({ depends_on_task_id: value || null }).eq('id', task.id)
+    onUpdate()
+  }
+
   // ─── determinar paso actual ───────────────────────────────────────────────
   const step = !task.review_status ? 1
     : task.review_status === 'pendiente_revision' ? 2
@@ -135,18 +245,18 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone 
     setLinks(prev => prev.filter(l => l.id !== id))
   }
 
-  async function uploadHtmlFile(e: React.ChangeEvent<HTMLInputElement>) {
+  async function uploadFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file || !user) return
-    if (!file.name.toLowerCase().endsWith('.html')) {
-      setUploadError('Solo se aceptan archivos .html')
+    if (file.size > 20 * 1024 * 1024) {
+      setUploadError('El archivo no puede pesar más de 20MB')
       return
     }
     setUploadError('')
     setUploadingFile(true)
     const path = `task-deliverables/${task.id}/${Date.now()}_${file.name}`
-    const { error } = await supabase.storage.from('chat-files').upload(path, file, { contentType: 'text/html' })
+    const { error } = await supabase.storage.from('chat-files').upload(path, file, { contentType: file.type || undefined })
     if (error) {
       setUploadError('No se pudo subir el archivo')
       setUploadingFile(false)
@@ -158,6 +268,14 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone 
       .select().single()
     if (data) setLinks(prev => [...prev, data])
     setUploadingFile(false)
+  }
+
+  function fileIconFor(url: string) {
+    const lower = url.toLowerCase()
+    if (lower.match(/\.(png|jpe?g|gif|webp|svg)(\?|$)/)) return ImageIcon
+    if (lower.includes('.html')) return FileCode
+    if (lower.match(/\.(pdf|docx?|xlsx?|pptx?|txt)(\?|$)/)) return FileIcon
+    return ExternalLink
   }
 
   async function updateReviewStatus(newStatus: string) {
@@ -426,6 +544,112 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone 
             </div>
           )}
 
+          {/* ── Dependencia con otra tarea ── */}
+          {(() => {
+            const depTask = dependsOn ? projectTasks.find(t => t.id === dependsOn) : null
+            const depBlocking = depTask && depTask.status !== 'completada'
+            return (
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                  <Link2 size={13} /> Depende de
+                </p>
+                {(isTeam || isAdmin) ? (
+                  <select value={dependsOn} onChange={e => saveDependsOn(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">Ninguna</option>
+                    {projectTasks.map(t => (
+                      <option key={t.id} value={t.id}>{t.title}{t.status === 'completada' ? ' ✓' : ''}</option>
+                    ))}
+                  </select>
+                ) : depTask ? (
+                  <p className="text-sm text-gray-600">{depTask.title}</p>
+                ) : (
+                  <p className="text-sm text-gray-400">Ninguna</p>
+                )}
+                {depBlocking && (
+                  <div className="mt-2 flex items-center gap-2 bg-orange-50 border border-orange-200 rounded-lg px-3 py-2">
+                    <AlertTriangle size={13} className="text-orange-500 shrink-0" />
+                    <p className="text-xs text-orange-700">Esta tarea depende de "<strong>{depTask!.title}</strong>", que aún no está completada.</p>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
+
+          {/* ── Subtareas ── */}
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+              <ListChecks size={13} /> Subtareas
+              {subtasks.length > 0 && (
+                <span className="text-gray-400 font-normal normal-case">
+                  ({subtasks.filter(s => s.completed).length}/{subtasks.length})
+                </span>
+              )}
+            </p>
+            <div className="space-y-1.5 mb-2">
+              {subtasks.map(s => (
+                <div key={s.id} className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2 group">
+                  <input type="checkbox" checked={s.completed} onChange={() => toggleSubtask(s)}
+                    className="w-4 h-4 accent-blue-600 shrink-0 cursor-pointer" />
+                  <span className={`text-sm flex-1 ${s.completed ? 'line-through text-gray-400' : 'text-gray-700'}`}>{s.title}</span>
+                  <button type="button" onClick={() => deleteSubtask(s.id)}
+                    className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-400 transition shrink-0">
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              ))}
+              {subtasks.length === 0 && (
+                <p className="text-xs text-gray-400">Sin subtareas — desglosa esta tarea en pasos más chicos si lo necesitas</p>
+              )}
+            </div>
+            <form onSubmit={addSubtask} className="flex gap-2">
+              <input value={newSubtask} onChange={e => setNewSubtask(e.target.value)}
+                placeholder="Agregar subtarea..."
+                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <button type="submit" className="bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 transition text-xs font-semibold">
+                <Plus size={14} />
+              </button>
+            </form>
+          </div>
+
+          {/* ── Tiempo trabajado ── */}
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+              <Timer size={13} /> Tiempo trabajado
+              {timeEntries.length > 0 && (
+                <span className="text-gray-400 font-normal normal-case">
+                  (total: {Math.round(timeEntries.reduce((acc, e) => acc + (e.minutes || 0), 0) / 6) / 10}h)
+                </span>
+              )}
+            </p>
+            {(isTeam || isAdmin) && (
+              <div className="mb-2">
+                {activeEntry ? (
+                  <button type="button" onClick={stopTimer}
+                    className="w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold py-2 rounded-lg transition">
+                    <Square size={13} /> Detener — {String(Math.floor(elapsedSec / 60)).padStart(2, '0')}:{String(elapsedSec % 60).padStart(2, '0')}
+                  </button>
+                ) : (
+                  <button type="button" onClick={startTimer}
+                    className="w-full flex items-center justify-center gap-2 border border-green-300 bg-green-50 hover:bg-green-100 text-green-700 text-sm font-semibold py-2 rounded-lg transition">
+                    <Play size={13} /> Iniciar tiempo
+                  </button>
+                )}
+              </div>
+            )}
+            <div className="space-y-1 max-h-28 overflow-y-auto">
+              {timeEntries.filter(e => e.ended_at).map(e => (
+                <div key={e.id} className="flex items-center justify-between text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-1.5">
+                  <span>{e.user?.full_name || 'Usuario'}</span>
+                  <span>{e.minutes} min · {new Date(e.started_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}</span>
+                </div>
+              ))}
+              {timeEntries.filter(e => e.ended_at).length === 0 && (
+                <p className="text-xs text-gray-400">Sin tiempo registrado todavía</p>
+              )}
+            </div>
+          </div>
+
           {/* ── Links / Entregables ── */}
           <div>
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Entregables</p>
@@ -434,10 +658,10 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone 
             )}
             <div className="space-y-1.5 mb-3">
               {links.map(link => {
-                const isHtmlFile = link.url.toLowerCase().includes('.html')
+                const LinkIcon = fileIconFor(link.url)
                 return (
                   <div key={link.id} className="flex items-center gap-2 bg-blue-50 rounded-lg px-3 py-2">
-                    {isHtmlFile ? <FileCode size={13} className="text-blue-500 shrink-0" /> : <ExternalLink size={13} className="text-blue-500 shrink-0" />}
+                    <LinkIcon size={13} className="text-blue-500 shrink-0" />
                     <a href={link.url} target="_blank" rel="noreferrer"
                       className="text-sm text-blue-600 hover:underline flex-1 truncate font-medium">
                       {link.label}
@@ -470,8 +694,8 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone 
 
                 <label className="flex items-center justify-center gap-2 border border-dashed border-gray-300 rounded-lg px-3 py-2 text-xs text-gray-500 hover:border-blue-400 hover:text-blue-600 cursor-pointer transition">
                   <Upload size={13} />
-                  {uploadingFile ? 'Subiendo...' : 'Subir archivo .html (ej: exportado de Claude)'}
-                  <input type="file" accept=".html" className="hidden" onChange={uploadHtmlFile} disabled={uploadingFile} />
+                  {uploadingFile ? 'Subiendo...' : 'Subir archivo (imagen, PDF, Word, .html, etc.)'}
+                  <input type="file" className="hidden" onChange={uploadFile} disabled={uploadingFile} />
                 </label>
                 {uploadError && <p className="text-xs text-red-500">{uploadError}</p>}
               </div>

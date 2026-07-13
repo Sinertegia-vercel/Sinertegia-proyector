@@ -91,6 +91,27 @@ export interface Comment {
   user?: User
 }
 
+export interface Subtask {
+  id: string
+  task_id: string
+  title: string
+  completed: boolean
+  position: number
+  created_at: string
+}
+
+export interface TimeEntry {
+  id: string
+  task_id: string
+  user_id: string
+  started_at: string
+  ended_at?: string
+  minutes?: number
+  note?: string
+  created_at: string
+  user?: User
+}
+
 export interface Task {
   id: string
   project_id: string
@@ -108,6 +129,7 @@ export interface Task {
   review_status?: 'pendiente_revision' | 'pendiente_trafficker' | 'en_revision' | 'aprobada' | 'cambios_solicitados'
   client_approval?: 'aprobada' | 'cambios_solicitados'
   change_count?: number
+  depends_on_task_id?: string
   created_by: string
   created_at: string
   updated_at: string
