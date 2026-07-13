@@ -79,7 +79,7 @@ export default function TeamDashboard({ embedded = false }: Props) {
       if (!taskId) return
       const { data } = await supabase
         .from('tasks')
-        .select('*, project:projects(*, client:clients(*)), links:task_links(*), comments:task_comments(count)')
+        .select('*, project:projects(*, client:clients(*)), links:task_links(*), comments:task_comments(content, created_at)')
         .eq('id', taskId)
         .single()
       if (data) {
@@ -104,7 +104,7 @@ export default function TeamDashboard({ embedded = false }: Props) {
   async function fetchTasks() {
     const { data } = await supabase
       .from('tasks')
-      .select('*, project:projects(*, client:clients(*)), links:task_links(*), comments:task_comments(count)')
+      .select('*, project:projects(*, client:clients(*)), links:task_links(*), comments:task_comments(content, created_at)')
       .eq('assigned_to', user!.id)
       .order('priority', { ascending: true })
       .order('commitment_date', { ascending: true })
@@ -377,11 +377,30 @@ export default function TeamDashboard({ embedded = false }: Props) {
                     {task.links && task.links.length > 0 && task.links.length}
                   </span>
                 </td>
-                <td className="px-4 py-3">
-                  <span className="flex items-center gap-1 text-gray-400 text-xs">
-                    <MessageSquare size={14} />
-                    {(task.comments as any)?.[0]?.count > 0 && (task.comments as any)[0].count}
-                  </span>
+                <td className="px-4 py-3 max-w-[200px]">
+                  {(() => {
+                    const taskComments = ((task.comments as any[]) || []).slice()
+                      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+                    const latest = taskComments[taskComments.length - 1]
+                    if (!latest) {
+                      return (
+                        <span className="flex items-center gap-1 text-gray-300 text-xs">
+                          <MessageSquare size={14} />
+                        </span>
+                      )
+                    }
+                    return (
+                      <span title={latest.content} className="flex items-center gap-1.5 text-xs text-blue-600 min-w-0">
+                        <MessageSquare size={14} className="shrink-0" />
+                        <span className="truncate min-w-0">{latest.content}</span>
+                        {taskComments.length > 1 && (
+                          <span className="shrink-0 bg-blue-100 text-blue-700 rounded-full px-1.5 text-[10px] font-semibold">
+                            +{taskComments.length - 1}
+                          </span>
+                        )}
+                      </span>
+                    )
+                  })()}
                 </td>
               </tr>
             ))}
