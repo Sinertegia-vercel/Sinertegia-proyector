@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { Eye, EyeOff, ArrowLeft, Mail } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import logoImg from '../../assets/logo.png'
-import FloatingLines from './FloatingLines'
+
+const FloatingLines = lazy(() => import('./FloatingLines'))
 
 interface Props {
   unauthorizedEmail?: string | null
@@ -64,17 +65,19 @@ export default function LoginPage({ unauthorizedEmail, deactivatedEmail, license
   return (
     <div className="min-h-screen relative bg-[#0b1230] flex items-center justify-center p-4 overflow-hidden">
       <div className="absolute inset-0">
-        <FloatingLines
-          enabledWaves={['top', 'middle', 'bottom']}
-          lineCount={8}
-          lineDistance={8}
-          bendRadius={8}
-          bendStrength={-2}
-          interactive
-          parallax
-          animationSpeed={1}
-          linesGradient={['#1e3a8a', '#3b82f6', '#dc2626']}
-        />
+        <Suspense fallback={null}>
+          <FloatingLines
+            enabledWaves={['top', 'middle', 'bottom']}
+            lineCount={8}
+            lineDistance={8}
+            bendRadius={8}
+            bendStrength={-2}
+            interactive
+            parallax
+            animationSpeed={1}
+            linesGradient={['#1e3a8a', '#3b82f6', '#dc2626']}
+          />
+        </Suspense>
       </div>
 
       <div className="relative z-10 bg-white rounded-2xl shadow-2xl w-full max-w-md p-8">

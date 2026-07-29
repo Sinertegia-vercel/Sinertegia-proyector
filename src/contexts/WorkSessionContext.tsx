@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useRef } from 'react'
+import { createContext, useCallback, useContext, useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
 
@@ -36,8 +36,11 @@ function getEndHour() {
   return new Date().getDay() === 6 ? 14 : 18 // Sábado = 2pm, L-V = 6pm
 }
 
-function isWorkDay() {
-  return new Date().getDay() !== 0 // No domingo
+function getLocalDateKey(date = new Date()) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
 function calcMinutes(startedAt: string, endedAt: string) {
@@ -70,35 +73,51 @@ export function WorkSessionProvider({ children }: { children: React.ReactNode })
 
   const isInOvertime = new Date().getHours() >= getEndHour()
 
-  useEffect(() => {
+  const loadTodaySession = useCallback(async () => {
     if (!user || user.role === 'client') return
-    loadTodaySession()
-  }, [user])
 
-  async function loadTodaySession() {
-    const today = new Date().toISOString().split('T')[0]
-    const { data } = await supabase
+    // La sesión abierta es la fuente de verdad. No se filtra por `date` porque
+    // una fecha UTC, una sesión nocturna o filas duplicadas podían ocultarla.
+    const { data, error } = await supabase
       .from('work_sessions')
       .select('*')
-      .eq('user_id', user!.id)
-      .eq('date', today)
+      .eq('user_id', user.id)
       .is('ended_at', null)
+      .order('started_at', { ascending: false })
+      .limit(1)
       .maybeSingle()
 
+    if (error) {
+      // Ante un fallo temporal no mostramos el check-in: hacerlo podría crear
+      // otra sesión y aparentar que el tiempo anterior se perdió.
+      console.error('No se pudo recuperar la sesión laboral activa', error)
+      setNeedsCheckIn(false)
+      return
+    }
+
     if (data) {
-      setCurrentSession(data)
+      const session = data as WorkSession
+      setCurrentSession(session)
+      setElapsedMinutes(Math.max(0, Math.floor((Date.now() - new Date(session.started_at).getTime()) / 60000)))
       setNeedsCheckIn(false)
     } else {
+      setCurrentSession(null)
+      setElapsedMinutes(0)
       setNeedsCheckIn(true)
     }
-  }
+  }, [user])
+
+  useEffect(() => {
+    const id = window.setTimeout(() => { void loadTodaySession() }, 0)
+    return () => window.clearTimeout(id)
+  }, [loadTodaySession])
 
   // Reloj — actualiza cada minuto
   useEffect(() => {
     if (!currentSession) return
     const tick = () => {
       const start = new Date(currentSession.started_at)
-      setElapsedMinutes(Math.round((Date.now() - start.getTime()) / 60000))
+      setElapsedMinutes(Math.max(0, Math.floor((Date.now() - start.getTime()) / 60000)))
 
       const now = new Date()
       const endHour = getEndHour()
@@ -113,12 +132,35 @@ export function WorkSessionProvider({ children }: { children: React.ReactNode })
   }, [currentSession])
 
   async function checkIn(location: 'oficina' | 'home_office') {
+    // Evita duplicar sesiones si el modal apareció por una recarga o una
+    // respuesta lenta: primero recuperamos cualquier sesión que siga abierta.
+    const { data: existingSession } = await supabase
+      .from('work_sessions')
+      .select('*')
+      .eq('user_id', user!.id)
+      .is('ended_at', null)
+      .order('started_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (existingSession) {
+      const session = existingSession as WorkSession
+      setCurrentSession(session)
+      setElapsedMinutes(Math.max(0, Math.floor((Date.now() - new Date(session.started_at).getTime()) / 60000)))
+      setNeedsCheckIn(false)
+      return
+    }
+
     const { data } = await supabase
       .from('work_sessions')
-      .insert({ user_id: user!.id, location, date: new Date().toISOString().split('T')[0] })
+      .insert({ user_id: user!.id, location, date: getLocalDateKey() })
       .select()
       .single()
-    if (data) { setCurrentSession(data); setNeedsCheckIn(false) }
+    if (data) {
+      setCurrentSession(data as WorkSession)
+      setElapsedMinutes(0)
+      setNeedsCheckIn(false)
+    }
   }
 
   async function checkOut() {

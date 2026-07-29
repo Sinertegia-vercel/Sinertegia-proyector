@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { ChevronLeft, ChevronRight, FileDown } from 'lucide-react'
 import type { Task, User } from '../../types'
 import UserAvatar from '../shared/UserAvatar'
-import { generateClientReportPdf } from '../../lib/clientReportPdf'
 
 interface Props {
   teamMembers: User[]
@@ -77,6 +76,7 @@ export default function TeamCalendar({ teamMembers, tasks, onlineIds = new Set()
 
     setGeneratingPdf(true)
     try {
+      const { generateClientReportPdf } = await import('../../lib/clientReportPdf')
       await generateClientReportPdf({
         titulo: clientName,
         subtitulo: 'Estado del embudo y producción de campaña',
@@ -210,7 +210,7 @@ export default function TeamCalendar({ teamMembers, tasks, onlineIds = new Set()
             {teamMembers.map(member => {
               const memberTasks = tasks.filter(t => t.assigned_to === member.id)
               const undatedCount = memberTasks.filter(t => {
-                const effectiveEnd = (t as any).completion_date || t.commitment_date
+                const effectiveEnd = t.completion_date || t.commitment_date
                 return !t.start_date && !effectiveEnd
               }).length
               const totalMemberTasks = memberTasks.length

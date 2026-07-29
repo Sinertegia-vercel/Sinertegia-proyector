@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { X, CheckCircle, Clock, AlertCircle, TrendingUp, Download } from 'lucide-react'
 import type { Project, Task } from '../../types'
-import { generateClientReportPdf } from '../../lib/clientReportPdf'
 
 interface Props {
   project: Project
@@ -30,7 +29,7 @@ export default function ClientReportModal({ project, tasks, onClose }: Props) {
 
   const toReportTask = (t: Task) => ({
     title: t.title,
-    responsable: (t as any).assignee?.full_name || 'Sin asignar',
+    responsable: t.assignee?.full_name || 'Sin asignar',
     priority: t.priority,
     date: t.commitment_date ? new Date(t.commitment_date + 'T00:00:00').toLocaleDateString('es-MX') : null,
   })
@@ -38,6 +37,7 @@ export default function ClientReportModal({ project, tasks, onClose }: Props) {
   async function handleExport() {
     setGeneratingPdf(true)
     try {
+      const { generateClientReportPdf } = await import('../../lib/clientReportPdf')
       await generateClientReportPdf({
         titulo: `${project.client?.name} — ${project.name}`,
         subtitulo: 'Estado del embudo y producción de campaña',

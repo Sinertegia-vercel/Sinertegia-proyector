@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Users, FolderKanban, TrendingUp, Calendar, ClipboardList, MessageSquare, MessageCircle, Map, Inbox, UserCheck, SpellCheck, Link2, ShieldCheck, KeyRound, Plus, Search, CheckCircle2, AlertTriangle as AlertTriangleIcon, ArrowRight } from 'lucide-react'
+import { Users, FolderKanban, TrendingUp, Calendar, ClipboardList, MessageSquare, MessageCircle, Map, Inbox, UserCheck, SpellCheck, Link2, ShieldCheck, KeyRound, Plus, Search, CheckCircle2, ArrowRight, Activity, Clock3, RotateCcw, Sparkles } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import type { Task, Project, User, Client } from '../../types'
 import Logo from '../shared/Logo'
@@ -128,7 +128,7 @@ export default function AdminDashboard() {
       const channel = supabase.channel('admin-chat-badges')
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' },
           (payload) => {
-            const msg = payload.new as any
+            const msg = payload.new as { user_id?: string; room_id?: string }
             if (msg.user_id === user?.id) return
             if (teamRoomId && msg.room_id === teamRoomId) {
               setUnreadTeamChat(n => n + 1)
@@ -171,7 +171,21 @@ export default function AdminDashboard() {
   // Tareas que el equipo mandó a revisión y esperan autorización del trafficker
   const pendingTraffickerReview = tasks.filter(t => t.review_status === 'pendiente_revision')
   // Tareas donde el cliente solicitó cambios
-  const clientChangesRequested = tasks.filter(t => (t as any).client_approval === 'cambios_solicitados')
+  const clientChangesRequested = tasks.filter(t => t.client_approval === 'cambios_solicitados')
+  const openTasks = tasks.filter(t => t.status !== 'completada')
+  const completedThisWeek = tasks.filter(t => {
+    if (!t.completion_date) return false
+    const completedAt = new Date(`${t.completion_date}T00:00:00`)
+    const sevenDaysAgo = new Date()
+    sevenDaysAgo.setHours(0, 0, 0, 0)
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6)
+    return completedAt >= sevenDaysAgo
+  })
+  const atRiskProjectIds = new Set(overdueTasks.map(t => t.project_id))
+  const activeProjects = projects.filter(p => p.status === 'activo')
+  const healthyProjects = activeProjects.filter(p => !atRiskProjectIds.has(p.id))
+  const healthPct = activeProjects.length ? Math.round((healthyProjects.length / activeProjects.length) * 100) : 100
+  const attentionTotal = pendingTraffickerReview.length + overdueTasks.length + clientChangesRequested.length
 
   const filteredProjects = statusFilter === 'todos'
     ? projects
@@ -255,42 +269,74 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
-                {/* Triage: autorizaciones y vencidas */}
-                {(pendingTraffickerReview.length > 0 || overdueTasks.length > 0 || clientChangesRequested.length > 0) && (
-                  <div className="v2-triage">
-                    {pendingTraffickerReview.length > 0 && (
-                      <div className="v2-alert warn" onClick={() => { setSelectedProject(pendingTraffickerReview[0].project || null); setView('project') }}>
-                        <div className="v2-alert-icon"><Search /></div>
-                        <div className="v2-alert-body">
-                          <div className="v2-alert-kicker">{pendingTraffickerReview.length} tarea{pendingTraffickerReview.length > 1 ? 's' : ''} espera{pendingTraffickerReview.length > 1 ? 'n' : ''} tu autorización</div>
-                          <div className="v2-alert-title">{pendingTraffickerReview[0].title}</div>
-                          <div className="v2-alert-desc">{pendingTraffickerReview[0].project?.client?.name} — {pendingTraffickerReview[0].project?.name}</div>
-                        </div>
-                        <button className="v2-btn v2-btn-warn">Autorizar</button>
+                <div className="v2-exec-grid">
+                  <section className="v2-exec-summary">
+                    <div className="v2-exec-summary-head">
+                      <div>
+                        <span className="v2-eyebrow"><Sparkles size={13} /> Resumen ejecutivo</span>
+                        <h2>Así marcha la operación</h2>
                       </div>
-                    )}
-                    {overdueTasks.length > 0 && (
-                      <div className="v2-alert due" onClick={() => { setSelectedProject(overdueTasks[0].project || null); setView('project') }}>
-                        <div className="v2-alert-icon"><AlertTriangleIcon /></div>
-                        <div className="v2-alert-body">
-                          <div className="v2-alert-kicker">{overdueTasks.length} tarea{overdueTasks.length > 1 ? 's' : ''} vencida{overdueTasks.length > 1 ? 's' : ''}</div>
-                          <div className="v2-alert-title">{overdueTasks[0].title}</div>
-                          <div className="v2-alert-desc">{overdueTasks[0].project?.client?.name} — {overdueTasks[0].project?.name}</div>
-                        </div>
-                        <button className="v2-btn v2-btn-ghost">Revisar</button>
+                      <span className={`v2-health-pill ${healthPct >= 80 ? 'good' : healthPct >= 60 ? 'medium' : 'risk'}`}>
+                        <span /> {healthPct}% saludable
+                      </span>
+                    </div>
+                    <div className="v2-exec-metrics">
+                      <button type="button" onClick={() => setStatusFilter('activo')}>
+                        <span className="v2-metric-icon blue"><FolderKanban /></span>
+                        <span><b className="mono">{activeProjects.length}</b><small>Proyectos activos</small></span>
+                      </button>
+                      <button type="button" onClick={() => setView('mytasks')}>
+                        <span className="v2-metric-icon violet"><Activity /></span>
+                        <span><b className="mono">{openTasks.length}</b><small>Tareas abiertas</small></span>
+                      </button>
+                      <button type="button" onClick={() => setView('performance')}>
+                        <span className="v2-metric-icon green"><CheckCircle2 /></span>
+                        <span><b className="mono">{completedThisWeek.length}</b><small>Terminadas en 7 días</small></span>
+                      </button>
+                      <button type="button" onClick={() => setView('team')}>
+                        <span className="v2-metric-icon amber"><Users /></span>
+                        <span><b className="mono">{teamMembers.length}</b><small>Personas activas</small></span>
+                      </button>
+                    </div>
+                  </section>
+
+                  <section className="v2-attention">
+                    <div className="v2-attention-head">
+                      <div>
+                        <span className="v2-eyebrow">Prioridad de hoy</span>
+                        <h2>Requiere atención</h2>
                       </div>
-                    )}
-                    {clientChangesRequested.length > 0 && (
-                      <div className="v2-alert warn" onClick={() => { setSelectedProject(clientChangesRequested[0].project || null); setView('project') }}>
-                        <div className="v2-alert-icon">✍️</div>
-                        <div className="v2-alert-body">
-                          <div className="v2-alert-kicker">{clientChangesRequested.length} cliente{clientChangesRequested.length > 1 ? 's solicitaron' : ' solicitó'} cambios</div>
-                          <div className="v2-alert-title">{clientChangesRequested[0].title}</div>
-                          <div className="v2-alert-desc">{clientChangesRequested[0].project?.client?.name} — {clientChangesRequested[0].project?.name}</div>
-                        </div>
-                        <button className="v2-btn v2-btn-warn">Ver cambios</button>
-                      </div>
-                    )}
+                      <span className={`v2-attention-total ${attentionTotal === 0 ? 'clear' : ''}`}>
+                        {attentionTotal === 0 ? 'Todo al día' : attentionTotal}
+                      </span>
+                    </div>
+                    <div className="v2-attention-list">
+                      <button type="button" className="review" disabled={!pendingTraffickerReview.length}
+                        onClick={() => { setSelectedProject(pendingTraffickerReview[0]?.project || null); setView('project') }}>
+                        <span className="v2-attention-icon"><Search /></span>
+                        <span><b>Por autorizar</b><small>{pendingTraffickerReview.length ? pendingTraffickerReview[0].title : 'Sin revisiones pendientes'}</small></span>
+                        <strong className="mono">{pendingTraffickerReview.length}</strong><ArrowRight />
+                      </button>
+                      <button type="button" className="overdue" disabled={!overdueTasks.length}
+                        onClick={() => { setSelectedProject(overdueTasks[0]?.project || null); setView('project') }}>
+                        <span className="v2-attention-icon"><Clock3 /></span>
+                        <span><b>Fuera de fecha</b><small>{overdueTasks.length ? overdueTasks[0].title : 'Ninguna tarea vencida'}</small></span>
+                        <strong className="mono">{overdueTasks.length}</strong><ArrowRight />
+                      </button>
+                      <button type="button" className="changes" disabled={!clientChangesRequested.length}
+                        onClick={() => { setSelectedProject(clientChangesRequested[0]?.project || null); setView('project') }}>
+                        <span className="v2-attention-icon"><RotateCcw /></span>
+                        <span><b>Cambios de clientes</b><small>{clientChangesRequested.length ? clientChangesRequested[0].title : 'Sin cambios solicitados'}</small></span>
+                        <strong className="mono">{clientChangesRequested.length}</strong><ArrowRight />
+                      </button>
+                    </div>
+                  </section>
+                </div>
+
+                {attentionTotal === 0 && (
+                  <div className="v2-all-clear">
+                    <CheckCircle2 />
+                    <div><b>Operación al día</b><span>No hay autorizaciones, vencimientos ni cambios pendientes.</span></div>
                   </div>
                 )}
 

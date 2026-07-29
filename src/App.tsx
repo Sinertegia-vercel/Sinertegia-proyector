@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { WorkSessionProvider, useWorkSession } from './contexts/WorkSessionContext'
 import LoginPage from './components/auth/LoginPage'
@@ -5,12 +6,25 @@ import ChangePasswordModal from './components/auth/ChangePasswordModal'
 import ResetPasswordPage from './components/auth/ResetPasswordPage'
 import ClientRegistrationPage from './components/auth/ClientRegistrationPage'
 import TeamRegistrationPage from './components/auth/TeamRegistrationPage'
-import AdminDashboard from './components/admin/AdminDashboard'
-import TeamDashboard from './components/team/TeamDashboard'
-import ClientPortal from './components/client/ClientPortal'
 import CheckInModal from './components/shared/CheckInModal'
 import OvertimeModal from './components/shared/OvertimeModal'
+import AppErrorBoundary from './components/shared/AppErrorBoundary'
 import './index.css'
+
+const AdminDashboard = lazy(() => import('./components/admin/AdminDashboard'))
+const TeamDashboard = lazy(() => import('./components/team/TeamDashboard'))
+const ClientPortal = lazy(() => import('./components/client/ClientPortal'))
+
+function AppLoading() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-900 to-red-700 flex items-center justify-center">
+      <div className="text-white text-center">
+        <div className="w-12 h-12 border-4 border-white/30 border-t-white rounded-full animate-spin mx-auto mb-4" />
+        <p className="text-sm opacity-70">Cargando...</p>
+      </div>
+    </div>
+  )
+}
 
 function AppContent() {
   const { session, user, loading, isPasswordRecovery, unauthorizedEmail, deactivatedEmail, licenseSuspended } = useAuth()
@@ -18,16 +32,7 @@ function AppContent() {
   const inviteToken = new URLSearchParams(window.location.search).get('invite')
   const teamInviteToken = new URLSearchParams(window.location.search).get('team_invite')
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-900 to-red-700 flex items-center justify-center">
-        <div className="text-white text-center">
-          <div className="w-12 h-12 border-4 border-white/30 border-t-white rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-sm opacity-70">Cargando...</p>
-        </div>
-      </div>
-    )
-  }
+  if (loading) return <AppLoading />
 
   if (isPasswordRecovery) return <ResetPasswordPage />
 
@@ -41,11 +46,13 @@ function AppContent() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <main>
-        {user.role === 'admin' && <AdminDashboard />}
-        {user.role === 'team' && <TeamDashboard />}
-        {user.role === 'client' && <ClientPortal />}
-      </main>
+      <Suspense fallback={<AppLoading />}>
+        <main>
+          {user.role === 'admin' && <AdminDashboard />}
+          {user.role === 'team' && <TeamDashboard />}
+          {user.role === 'client' && <ClientPortal />}
+        </main>
+      </Suspense>
 
       {/* Modales del reloj checador (equipo y admin) */}
       {user.role !== 'client' && needsCheckIn && <CheckInModal />}
@@ -56,10 +63,12 @@ function AppContent() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <WorkSessionProvider>
-        <AppContent />
-      </WorkSessionProvider>
-    </AuthProvider>
+    <AppErrorBoundary>
+      <AuthProvider>
+        <WorkSessionProvider>
+          <AppContent />
+        </WorkSessionProvider>
+      </AuthProvider>
+    </AppErrorBoundary>
   )
 }
