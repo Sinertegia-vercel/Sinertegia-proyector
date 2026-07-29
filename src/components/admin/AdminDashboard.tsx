@@ -310,35 +310,41 @@ export default function AdminDashboard() {
                         {attentionTotal === 0 ? 'Todo al día' : attentionTotal}
                       </span>
                     </div>
-                    <div className="v2-attention-list">
-                      <button type="button" className="review" disabled={!pendingTraffickerReview.length}
-                        onClick={() => { setSelectedProject(pendingTraffickerReview[0]?.project || null); setView('project') }}>
-                        <span className="v2-attention-icon"><Search /></span>
-                        <span><b>Por autorizar</b><small>{pendingTraffickerReview.length ? pendingTraffickerReview[0].title : 'Sin revisiones pendientes'}</small></span>
-                        <strong className="mono">{pendingTraffickerReview.length}</strong><ArrowRight />
-                      </button>
-                      <button type="button" className="overdue" disabled={!overdueTasks.length}
-                        onClick={() => { setSelectedProject(overdueTasks[0]?.project || null); setView('project') }}>
-                        <span className="v2-attention-icon"><Clock3 /></span>
-                        <span><b>Fuera de fecha</b><small>{overdueTasks.length ? overdueTasks[0].title : 'Ninguna tarea vencida'}</small></span>
-                        <strong className="mono">{overdueTasks.length}</strong><ArrowRight />
-                      </button>
-                      <button type="button" className="changes" disabled={!clientChangesRequested.length}
-                        onClick={() => { setSelectedProject(clientChangesRequested[0]?.project || null); setView('project') }}>
-                        <span className="v2-attention-icon"><RotateCcw /></span>
-                        <span><b>Cambios de clientes</b><small>{clientChangesRequested.length ? clientChangesRequested[0].title : 'Sin cambios solicitados'}</small></span>
-                        <strong className="mono">{clientChangesRequested.length}</strong><ArrowRight />
-                      </button>
-                    </div>
+                    {attentionTotal === 0 ? (
+                      <div className="v2-attention-empty">
+                        <CheckCircle2 />
+                        <div><b>Todo al día</b><span>No tienes pendientes que atender.</span></div>
+                      </div>
+                    ) : (
+                      <div className="v2-attention-list">
+                        {pendingTraffickerReview.length > 0 && (
+                          <button type="button" className="review"
+                            onClick={() => { setSelectedProject(pendingTraffickerReview[0].project || null); setView('project') }}>
+                            <span className="v2-attention-icon"><Search /></span>
+                            <span><b>Por autorizar</b><small>{pendingTraffickerReview[0].title}</small></span>
+                            <strong className="mono">{pendingTraffickerReview.length}</strong><ArrowRight />
+                          </button>
+                        )}
+                        {overdueTasks.length > 0 && (
+                          <button type="button" className="overdue"
+                            onClick={() => { setSelectedProject(overdueTasks[0].project || null); setView('project') }}>
+                            <span className="v2-attention-icon"><Clock3 /></span>
+                            <span><b>Fuera de fecha</b><small>{overdueTasks[0].title}</small></span>
+                            <strong className="mono">{overdueTasks.length}</strong><ArrowRight />
+                          </button>
+                        )}
+                        {clientChangesRequested.length > 0 && (
+                          <button type="button" className="changes"
+                            onClick={() => { setSelectedProject(clientChangesRequested[0].project || null); setView('project') }}>
+                            <span className="v2-attention-icon"><RotateCcw /></span>
+                            <span><b>Cambios de clientes</b><small>{clientChangesRequested[0].title}</small></span>
+                            <strong className="mono">{clientChangesRequested.length}</strong><ArrowRight />
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </section>
                 </div>
-
-                {attentionTotal === 0 && (
-                  <div className="v2-all-clear">
-                    <CheckCircle2 />
-                    <div><b>Operación al día</b><span>No hay autorizaciones, vencimientos ni cambios pendientes.</span></div>
-                  </div>
-                )}
 
                 {/* Toolbar: tabs de estado */}
                 <div className="v2-toolbar">
