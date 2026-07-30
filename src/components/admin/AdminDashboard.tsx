@@ -83,6 +83,7 @@ export default function AdminDashboard() {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('activo')
   const [notifTask, setNotifTask] = useState<Task | null>(null)
+  const [reviewFocusTask, setReviewFocusTask] = useState<Task | null>(null)
   const [unreadTeamChat, setUnreadTeamChat] = useState(0)
   const [unreadClientChat, setUnreadClientChat] = useState(0)
 
@@ -319,7 +320,7 @@ export default function AdminDashboard() {
                       <div className="v2-attention-list">
                         {pendingTraffickerReview.length > 0 && (
                           <button type="button" className="review"
-                            onClick={() => { setSelectedProject(pendingTraffickerReview[0].project || null); setView('project') }}>
+                            onClick={() => setReviewFocusTask(pendingTraffickerReview[0])}>
                             <span className="v2-attention-icon"><Search /></span>
                             <span><b>Por autorizar</b><small>{pendingTraffickerReview[0].title}</small></span>
                             <strong className="mono">{pendingTraffickerReview.length}</strong><ArrowRight />
@@ -489,6 +490,16 @@ export default function AdminDashboard() {
       {/* Modal tarea desde campanita */}
       {notifTask && (
         <TaskDetailModal task={notifTask} onClose={() => setNotifTask(null)} onUpdate={fetchAll} />
+      )}
+
+      {/* Tarea exacta abierta desde "Requiere atención" */}
+      {reviewFocusTask && (
+        <TaskDetailModal
+          task={reviewFocusTask}
+          reviewAttention
+          onClose={() => setReviewFocusTask(null)}
+          onUpdate={fetchAll}
+        />
       )}
     </div>
   )
