@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { MessageSquare, CheckCircle, Clock, ClipboardList, MessageCircle, Map, Plus, CalendarDays, Link2, Loader2, XCircle, FileText, ChevronDown, Menu, Lightbulb, Home, AlertTriangle, ArrowRight, PlayCircle, Eye, UserRound } from 'lucide-react'
+import { MessageSquare, CheckCircle, Clock, ClipboardList, MessageCircle, Map, Plus, CalendarDays, Link2, Loader2, XCircle, FileText, ChevronDown, Menu, Lightbulb, Home, AlertTriangle, ArrowRight, PlayCircle, Eye, UserRound, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -689,6 +689,15 @@ export default function TeamDashboard({ embedded = false }: Props) {
           >
             <UserRound size={17} />
             {!sidebarCollapsed && <span>Mi perfil</span>}
+          </button>
+          <button
+            type="button"
+            onClick={() => setSidebarCollapsed(value => !value)}
+            className="v2-sidebar-toggle"
+            title={sidebarCollapsed ? 'Expandir menú' : 'Contraer menú'}
+            aria-label={sidebarCollapsed ? 'Expandir menú' : 'Contraer menú'}
+          >
+            {sidebarCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
           </button>
         </aside>
 
