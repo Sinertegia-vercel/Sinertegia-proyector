@@ -16,8 +16,9 @@ import RoadmapView from '../roadmap/RoadmapView'
 import TeamCalendarView from './TeamCalendarView'
 import CreateTaskModal from '../admin/CreateTaskModal'
 import ClientDeliverables from '../admin/ClientDeliverables'
+import UserProfile from '../shared/UserProfile'
 
-type TeamView = 'today' | 'tasks' | 'calendar' | 'roadmap' | 'chat_team' | 'chat_clients' | 'entregables'
+type TeamView = 'today' | 'tasks' | 'calendar' | 'roadmap' | 'chat_team' | 'chat_clients' | 'entregables' | 'profile'
 
 const TEAM_NAV_ITEMS = [
   { id: 'today' as TeamView, label: 'Mi día', icon: Home },
@@ -101,6 +102,12 @@ export default function TeamDashboard({ embedded = false }: Props) {
     }
     window.addEventListener('open-task', handleOpenTask)
     return () => window.removeEventListener('open-task', handleOpenTask)
+  }, [])
+
+  useEffect(() => {
+    const openProfile = () => setTeamView('profile')
+    window.addEventListener('open-profile', openProfile)
+    return () => window.removeEventListener('open-profile', openProfile)
   }, [])
 
   useEffect(() => {
@@ -373,6 +380,14 @@ export default function TeamDashboard({ embedded = false }: Props) {
 
       {/* Vista: Entregables */}
       {teamView === 'entregables' && <ClientDeliverables />}
+
+      {teamView === 'profile' && (
+        <UserProfile
+          embedded
+          onChangePhoto={() => window.dispatchEvent(new CustomEvent('change-profile-photo'))}
+          onChangePassword={() => window.dispatchEvent(new CustomEvent('change-profile-password'))}
+        />
+      )}
     </>
   )
 
@@ -668,8 +683,8 @@ export default function TeamDashboard({ embedded = false }: Props) {
           )}
           <button
             type="button"
-            onClick={() => window.dispatchEvent(new CustomEvent('open-profile'))}
-            className="v2-profile-link"
+            onClick={() => setTeamView('profile')}
+            className={`v2-profile-link ${teamView === 'profile' ? 'active' : ''}`}
             title="Mi perfil"
           >
             <UserRound size={17} />

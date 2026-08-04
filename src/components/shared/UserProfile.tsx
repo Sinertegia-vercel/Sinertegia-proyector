@@ -5,11 +5,11 @@ import { useWorkSession } from '../../contexts/WorkSessionContext'
 import { supabase } from '../../lib/supabase'
 import UserAvatar from './UserAvatar'
 
-interface Props { onClose: () => void; onChangePhoto: () => void; onChangePassword: () => void }
+interface Props { onClose?: () => void; onChangePhoto: () => void; onChangePassword: () => void; embedded?: boolean }
 type Tab = 'datos' | 'laboral' | 'seguridad' | 'preferencias'
 const DEPTS: Record<string, string> = { edicion: 'Edición', grabacion: 'Grabación', diseno: 'Diseño', copy: 'Copy', webmaster: 'Webmaster', trafficker: 'Trafficker', lider: 'Líder', cliente: 'Cliente' }
 
-export default function UserProfile({ onClose, onChangePhoto, onChangePassword }: Props) {
+export default function UserProfile({ onClose, onChangePhoto, onChangePassword, embedded = false }: Props) {
   const { user, session, refreshUser } = useAuth()
   const { currentSession, elapsedMinutes } = useWorkSession()
   const metadata = session?.user?.user_metadata || {}
@@ -43,9 +43,10 @@ export default function UserProfile({ onClose, onChangePhoto, onChangePassword }
   const progress = Math.min(100, elapsedMinutes / Math.max(60, (end - start) * 60) * 100)
   const lastSignIn = session?.user?.last_sign_in_at ? new Date(session.user.last_sign_in_at).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' }) : 'Sin registro'
 
-  return <div className="fixed inset-0 z-[60] overflow-y-auto bg-[#f5f6fb]">
-    <header className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-5 py-3 shadow-sm"><div><h1 className="text-xl font-bold text-slate-900">Mi perfil</h1><p className="text-xs text-slate-500">Administra tu información personal y laboral</p></div><button onClick={onClose} className="rounded-xl border border-slate-200 p-2 text-slate-500 hover:bg-slate-50"><X size={20} /></button></header>
-    <main className="mx-auto max-w-[1380px] space-y-5 p-4 sm:p-6">
+  return <div className={embedded ? 'w-full' : 'fixed inset-0 z-[60] overflow-y-auto bg-[#f5f6fb]'}>
+    {!embedded && <header className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-5 py-3 shadow-sm"><div><h1 className="text-xl font-bold text-slate-900">Mi perfil</h1><p className="text-xs text-slate-500">Administra tu información personal y laboral</p></div><button onClick={onClose} className="rounded-xl border border-slate-200 p-2 text-slate-500 hover:bg-slate-50"><X size={20} /></button></header>}
+    <main className={`mx-auto max-w-[1380px] space-y-5 ${embedded ? '' : 'p-4 sm:p-6'}`}>
+      {embedded && <div className="mb-1"><h1 className="text-2xl font-bold text-slate-900">Mi perfil</h1><p className="mt-1 text-sm text-slate-500">Administra tu información personal y laboral</p></div>}
       <div className="grid gap-5 lg:grid-cols-[1.12fr_1fr]">
         <Card className="flex flex-wrap items-center gap-6"><UserAvatar name={user?.full_name || 'Usuario'} avatarUrl={user?.avatar_url} size={112} isOnline={Boolean(currentSession)} /><div className="min-w-0 flex-1"><h2 className="truncate text-2xl font-bold text-slate-900">{user?.full_name}</h2><p className="mt-1 flex items-center gap-2 text-sm capitalize text-slate-500"><UserRound size={15} />{user?.role}</p><p className="mt-3 flex items-center gap-2 text-sm text-slate-600"><BriefcaseBusiness size={15} />Departamento: {DEPTS[user?.department || ''] || 'Sin asignar'}</p>{currentSession && <span className="mt-3 inline-flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-1 text-xs font-semibold text-green-700"><i className="h-2 w-2 animate-pulse rounded-full bg-green-500" />En sesión</span>}</div><button onClick={onChangePhoto} className="flex items-center gap-2 rounded-xl border border-blue-300 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50"><Camera size={16} />Cambiar foto</button></Card>
         <Card><h3 className="flex items-center gap-2 font-bold text-slate-900"><CalendarDays size={18} />Jornada de hoy</h3><div className="mt-6 grid grid-cols-3 divide-x divide-slate-200 text-center"><Small label="Entrada" value={`${start}:00`} /><Small label="Salida" value={`${end}:00`} /><Small label="Tiempo trabajado" value={`${hours} h ${minutes} min`} green /></div><div className="mt-5 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-green-500" style={{ width: `${progress}%` }} /></div><div className="mt-1 flex justify-between text-[10px] text-slate-400"><span>0 h</span><span>{end - start} h</span></div></Card>

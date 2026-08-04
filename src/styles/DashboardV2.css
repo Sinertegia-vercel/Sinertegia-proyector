@@ -88,6 +88,7 @@
   transition:background .15s,color .15s,border-color .15s;
 }
 .v2app .v2-profile-link:hover{background:rgba(39,87,235,.22);border-color:rgba(78,123,255,.35);color:#fff}
+.v2app .v2-profile-link.active{background:linear-gradient(90deg,rgba(39,87,235,.35),rgba(39,87,235,.12));border-color:rgba(78,123,255,.45);color:#fff}
 .v2app .v2-profile-link svg{flex:none;color:#7EA0FF}
 .v2app .v2-shell.collapsed .v2-profile-link{justify-content:center;padding:10px}
 

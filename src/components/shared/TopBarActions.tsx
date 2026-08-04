@@ -6,7 +6,6 @@ import { supabase } from '../../lib/supabase'
 import NotificationBell from './NotificationBell'
 import UserAvatar from './UserAvatar'
 import GlobalSearch from './GlobalSearch'
-import UserProfile from './UserProfile'
 
 export default function TopBarActions() {
   const { user, signOut, refreshUser } = useAuth()
@@ -21,7 +20,6 @@ export default function TopBarActions() {
   const [passwordMsg, setPasswordMsg] = useState('')
   const [changingPassword, setChangingPassword] = useState(false)
   const [showSessionSummary, setShowSessionSummary] = useState(false)
-  const [showProfile, setShowProfile] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const isTeam = user?.role === 'team' || user?.role === 'admin'
@@ -30,12 +28,14 @@ export default function TopBarActions() {
   const timerLabel = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`
 
   useEffect(() => {
-    const openProfile = () => {
-      setMenuOpen(false)
-      setShowProfile(true)
+    const changePhoto = () => fileInputRef.current?.click()
+    const changePassword = () => setShowChangePassword(true)
+    window.addEventListener('change-profile-photo', changePhoto)
+    window.addEventListener('change-profile-password', changePassword)
+    return () => {
+      window.removeEventListener('change-profile-photo', changePhoto)
+      window.removeEventListener('change-profile-password', changePassword)
     }
-    window.addEventListener('open-profile', openProfile)
-    return () => window.removeEventListener('open-profile', openProfile)
   }, [])
 
   async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -160,7 +160,7 @@ export default function TopBarActions() {
                   )}
                 </div>
                 <button
-                  onClick={() => { setMenuOpen(false); setShowProfile(true) }}
+                  onClick={() => { setMenuOpen(false); window.dispatchEvent(new CustomEvent('open-profile')) }}
                   className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 transition"
                 >
                   <UserRound size={15} className="text-blue-600" />
@@ -194,14 +194,6 @@ export default function TopBarActions() {
 
         <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
       </div>
-
-      {showProfile && (
-        <UserProfile
-          onClose={() => setShowProfile(false)}
-          onChangePhoto={() => fileInputRef.current?.click()}
-          onChangePassword={() => { setShowProfile(false); setShowChangePassword(true) }}
-        />
-      )}
 
       {/* Modal cambiar contraseña */}
       {showSessionSummary && currentSession && (
