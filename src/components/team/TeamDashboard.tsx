@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { MessageSquare, CheckCircle, Clock, ClipboardList, MessageCircle, Map, Plus, CalendarDays, Link2, Loader2, XCircle, FileText, ChevronDown, Menu, Lightbulb } from 'lucide-react'
+import { MessageSquare, CheckCircle, Clock, ClipboardList, MessageCircle, Map, Plus, CalendarDays, Link2, Loader2, XCircle, FileText, ChevronDown, Menu, Lightbulb, Home, AlertTriangle, ArrowRight, PlayCircle, Eye } from 'lucide-react'
 import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -17,9 +17,10 @@ import TeamCalendarView from './TeamCalendarView'
 import CreateTaskModal from '../admin/CreateTaskModal'
 import ClientDeliverables from '../admin/ClientDeliverables'
 
-type TeamView = 'tasks' | 'calendar' | 'roadmap' | 'chat_team' | 'chat_clients' | 'entregables'
+type TeamView = 'today' | 'tasks' | 'calendar' | 'roadmap' | 'chat_team' | 'chat_clients' | 'entregables'
 
 const TEAM_NAV_ITEMS = [
+  { id: 'today' as TeamView, label: 'Mi día', icon: Home },
   { id: 'tasks' as TeamView, label: 'Mis tareas', icon: ClipboardList },
   { id: 'calendar' as TeamView, label: 'Mi Calendario', icon: CalendarDays },
   { id: 'roadmap' as TeamView, label: 'Hoja de Ruta', icon: Map },
@@ -60,7 +61,7 @@ export default function TeamDashboard({ embedded = false }: Props) {
   const [priorityFilterOpen, setPriorityFilterOpen] = useState(false)
   const [priorityFilterPos, setPriorityFilterPos] = useState({ top: 0, left: 0 })
   const priorityFilterBtnRef = useRef<HTMLButtonElement>(null)
-  const [teamView, setTeamView] = useState<TeamView>('tasks')
+  const [teamView, setTeamView] = useState<TeamView>(embedded ? 'tasks' : 'today')
   const [hiddenSections, setHiddenSections] = useState<Set<string>>(new Set())
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
@@ -81,7 +82,7 @@ export default function TeamDashboard({ embedded = false }: Props) {
     const { data } = await supabase.from('role_permissions').select('section_key, allowed').eq('role', 'team')
     const hidden = new Set((data || []).filter(r => !r.allowed).map(r => r.section_key))
     setHiddenSections(hidden)
-    if (hidden.has(teamView)) setTeamView('tasks')
+    if (hidden.has(teamView)) setTeamView(embedded ? 'tasks' : 'today')
   }
 
   useEffect(() => {
@@ -206,6 +207,45 @@ export default function TeamDashboard({ embedded = false }: Props) {
     .filter(t => t.status !== 'completada' && t.commitment_date)
     .sort((a, b) => new Date(a.commitment_date!).getTime() - new Date(b.commitment_date!).getTime())
     .slice(0, 3)
+
+  const localDateKey = (date: Date) => {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+  const todayKey = localDateKey(new Date())
+  const weekStart = new Date()
+  weekStart.setHours(0, 0, 0, 0)
+  weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7))
+  const activeTasks = tasks.filter(t => t.status !== 'completada')
+  const todayTasks = activeTasks.filter(t => t.commitment_date?.slice(0, 10) === todayKey)
+  const inProgressTasks = activeTasks.filter(t => t.status === 'en_progreso')
+  const overdueTasks = activeTasks.filter(isOverdue)
+  const completedThisWeek = tasks.filter(t => {
+    if (t.status !== 'completada') return false
+    const value = t.completion_date || t.updated_at
+    return value ? new Date(value).getTime() >= weekStart.getTime() : false
+  })
+  const priorityWeight: Record<Priority, number> = { critica: 0, alta: 1, media: 2, baja: 3 }
+  const priorityTasks = activeTasks.slice().sort((a, b) => {
+    const overdueDiff = Number(isOverdue(b)) - Number(isOverdue(a))
+    if (overdueDiff) return overdueDiff
+    const dateA = a.commitment_date ? new Date(a.commitment_date).getTime() : Number.MAX_SAFE_INTEGER
+    const dateB = b.commitment_date ? new Date(b.commitment_date).getTime() : Number.MAX_SAFE_INTEGER
+    return priorityWeight[a.priority] - priorityWeight[b.priority] || dateA - dateB
+  }).slice(0, 3)
+  const currentTask = inProgressTasks[0] || priorityTasks[0]
+  const attentionItems = [
+    ...myReviewTasks.slice(0, 2).map(task => ({ task, label: 'Esperando tu revisión', color: 'purple' })),
+    ...overdueTasks.slice(0, 2).map(task => ({ task, label: 'Tarea vencida', color: 'red' })),
+    ...activeTasks.filter(t => t.review_status === 'cambios_solicitados' || t.client_approval === 'cambios_solicitados').slice(0, 2).map(task => ({ task, label: 'Cambios solicitados', color: 'orange' })),
+    ...activeTasks.filter(t => !t.commitment_date).slice(0, 2).map(task => ({ task, label: 'Falta fecha de compromiso', color: 'amber' })),
+  ].filter((item, index, array) => array.findIndex(other => other.task.id === item.task.id) === index).slice(0, 4)
+
+  const formatShortDate = (value?: string) => value
+    ? new Date(value.slice(0, 10) + 'T00:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })
+    : 'Sin fecha'
 
   if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Cargando tareas...</div>
 
@@ -607,8 +647,88 @@ export default function TeamDashboard({ embedded = false }: Props) {
           </header>
 
           <div className="v2-content">
-            {reviewBanners}
+            {teamView !== 'today' && reviewBanners}
             {otherViews}
+
+            {teamView === 'today' && (
+              <div className="space-y-5">
+                <section className="rounded-2xl bg-gradient-to-r from-[#173c9f] via-[#2857d9] to-[#7b3fd1] p-6 text-white shadow-lg shadow-blue-900/10">
+                  <p className="text-sm text-blue-100 mb-1">Tu espacio de trabajo</p>
+                  <h1 className="text-2xl font-bold display">Hola, {user?.full_name?.split(' ')[0]} 👋</h1>
+                  <p className="mt-1 text-sm text-blue-100">Esto es lo más importante para avanzar hoy.</p>
+                  {currentTask ? (
+                    <button type="button" onClick={() => setSelectedTask(currentTask)} className="mt-5 w-full max-w-2xl rounded-xl border border-white/20 bg-white/10 p-4 text-left backdrop-blur transition hover:bg-white/15">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15"><PlayCircle size={23} /></div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-blue-100">Continúa donde te quedaste</p>
+                          <p className="mt-1 truncate font-semibold">{currentTask.title}</p>
+                          <p className="mt-0.5 text-xs text-blue-100">{currentTask.project?.client?.name || currentTask.project?.name || 'Trabajo interno'} · {currentTask.status === 'en_progreso' ? 'En progreso' : 'Lista para iniciar'}</p>
+                        </div>
+                        <span className="inline-flex items-center gap-1 rounded-lg bg-white px-3 py-2 text-xs font-bold text-blue-700">Abrir tarea <ArrowRight size={14} /></span>
+                      </div>
+                    </button>
+                  ) : (
+                    <div className="mt-5 max-w-2xl rounded-xl border border-white/20 bg-white/10 p-4 text-sm text-blue-50">No tienes tareas pendientes. ¡Buen trabajo!</div>
+                  )}
+                </section>
+
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+                  {[
+                    { label: 'Para hoy', value: todayTasks.length, icon: CalendarDays, bg: 'bg-blue-50', color: 'text-blue-600' },
+                    { label: 'En progreso', value: inProgressTasks.length, icon: Loader2, bg: 'bg-indigo-50', color: 'text-indigo-600' },
+                    { label: 'Vencidas', value: overdueTasks.length, icon: AlertTriangle, bg: 'bg-red-50', color: 'text-red-600' },
+                    { label: 'En revisión', value: myReviewTasks.length, icon: Eye, bg: 'bg-purple-50', color: 'text-purple-600' },
+                    { label: 'Completadas esta semana', value: completedThisWeek.length, icon: CheckCircle, bg: 'bg-emerald-50', color: 'text-emerald-600' },
+                  ].map(({ label, value, icon: Icon, bg, color }) => (
+                    <div key={label} className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                      <div className={`mb-3 flex h-9 w-9 items-center justify-center rounded-xl ${bg}`}><Icon size={17} className={color} /></div>
+                      <p className="text-2xl font-bold text-gray-900">{value}</p>
+                      <p className="mt-0.5 text-xs text-gray-500">{label}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-1 gap-5 lg:grid-cols-5">
+                  <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm lg:col-span-3">
+                    <div className="mb-4 flex items-center justify-between">
+                      <div><p className="text-xs font-bold uppercase tracking-wide text-blue-600">Prioridad de hoy</p><h2 className="mt-1 text-lg font-bold text-gray-900 display">Requiere mi atención</h2></div>
+                      <span className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-bold text-red-600">{attentionItems.length}</span>
+                    </div>
+                    {attentionItems.length ? <div className="space-y-2">{attentionItems.map(({ task, label, color }) => (
+                      <button key={task.id} type="button" onClick={() => setSelectedTask(task)} className="flex w-full items-center gap-3 rounded-xl border border-gray-100 p-3 text-left transition hover:border-blue-200 hover:bg-blue-50/40">
+                        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${color === 'red' ? 'bg-red-50 text-red-500' : color === 'orange' ? 'bg-orange-50 text-orange-500' : color === 'purple' ? 'bg-purple-50 text-purple-600' : 'bg-amber-50 text-amber-600'}`}>{color === 'purple' ? <Eye size={16} /> : <AlertTriangle size={16} />}</span>
+                        <span className="min-w-0 flex-1"><span className="block text-sm font-semibold text-gray-800">{label}</span><span className="block truncate text-xs text-gray-500">{task.title} · {task.project?.client?.name || task.project?.name || 'Trabajo interno'}</span></span>
+                        <ArrowRight size={16} className="shrink-0 text-gray-400" />
+                      </button>
+                    ))}</div> : <div className="flex min-h-36 flex-col items-center justify-center text-center"><CheckCircle className="mb-2 text-emerald-500" size={28} /><p className="text-sm font-semibold text-gray-700">Todo está en orden</p><p className="text-xs text-gray-400">No hay asuntos urgentes por resolver.</p></div>}
+                  </section>
+
+                  <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm lg:col-span-2">
+                    <div className="mb-4 flex items-center justify-between"><h2 className="text-lg font-bold text-gray-900 display">Próximas entregas</h2><button type="button" onClick={() => setTeamView('calendar')} className="text-xs font-semibold text-blue-600 hover:underline">Ver calendario</button></div>
+                    {upcoming.length ? <div className="space-y-3">{upcoming.map(task => (
+                      <button key={task.id} type="button" onClick={() => setSelectedTask(task)} className="flex w-full items-center gap-3 rounded-xl p-2 text-left transition hover:bg-gray-50">
+                        <span className="flex h-11 w-12 shrink-0 flex-col items-center justify-center rounded-xl bg-purple-50 text-purple-700"><CalendarDays size={14} /><span className="mt-0.5 text-[10px] font-bold">{formatShortDate(task.commitment_date)}</span></span>
+                        <span className="min-w-0"><span className="block truncate text-sm font-semibold text-gray-800">{task.title}</span><span className="block truncate text-xs text-gray-400">{task.project?.client?.name || task.project?.name || 'Trabajo interno'}</span></span>
+                      </button>
+                    ))}</div> : <p className="flex min-h-36 items-center justify-center text-center text-sm text-gray-400">No tienes entregas próximas.</p>}
+                  </section>
+                </div>
+
+                <section className="rounded-2xl border border-gray-200 bg-white shadow-sm">
+                  <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4"><div><p className="text-xs font-bold uppercase tracking-wide text-blue-600">Orden sugerido</p><h2 className="mt-1 text-lg font-bold text-gray-900 display">Mis tareas prioritarias</h2></div><button type="button" onClick={() => setTeamView('tasks')} className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:underline">Ver todas <ArrowRight size={13} /></button></div>
+                  {priorityTasks.length ? <div className="divide-y divide-gray-100">{priorityTasks.map(task => (
+                    <button key={task.id} type="button" onClick={() => setSelectedTask(task)} className="flex w-full items-center gap-4 px-5 py-3.5 text-left transition hover:bg-gray-50">
+                      <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${task.priority === 'critica' ? 'bg-red-500' : task.priority === 'alta' ? 'bg-orange-500' : task.priority === 'media' ? 'bg-amber-400' : 'bg-green-500'}`} />
+                      <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-gray-800">{task.title}</span><span className="block truncate text-xs text-gray-400">{task.project?.client?.name || task.project?.name || 'Trabajo interno'}</span></span>
+                      <StatusBadge status={task.status} />
+                      <span className={`hidden text-xs sm:block ${isOverdue(task) ? 'font-bold text-red-600' : 'text-gray-500'}`}>{formatShortDate(task.commitment_date)}</span>
+                      <ArrowRight size={15} className="text-gray-400" />
+                    </button>
+                  ))}</div> : <p className="p-8 text-center text-sm text-gray-400">No tienes tareas pendientes.</p>}
+                </section>
+              </div>
+            )}
 
             {teamView === 'tasks' && (<>
               {/* Stats con % del total */}
