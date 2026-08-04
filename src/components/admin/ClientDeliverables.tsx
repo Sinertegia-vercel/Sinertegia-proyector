@@ -43,6 +43,31 @@ const DEPT_COLORS: Record<string, string> = {
   cliente: 'bg-green-100 text-green-700',
 }
 
+function fileKind(url: string) {
+  const clean = url.split('?')[0].toLowerCase()
+  const extension = clean.split('.').pop() || ''
+  if (['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg'].includes(extension)) return { type: 'image', label: extension.toUpperCase() }
+  if (['mp4', 'webm', 'mov', 'm4v'].includes(extension)) return { type: 'video', label: extension.toUpperCase() }
+  if (extension === 'pdf') return { type: 'document', label: 'PDF' }
+  if (['doc', 'docx'].includes(extension)) return { type: 'office', label: extension.toUpperCase() }
+  if (['xls', 'xlsx'].includes(extension)) return { type: 'office', label: extension.toUpperCase() }
+  if (['html', 'htm'].includes(extension)) return { type: 'website', label: 'HTML' }
+  return { type: 'website', label: 'ENLACE' }
+}
+
+function DeliverablePreview({ url, label }: { url: string; label: string }) {
+  const kind = fileKind(url)
+  if (kind.type === 'image') return <img src={url} alt={label} className="h-full w-full object-cover" />
+  if (kind.type === 'video') return <video src={url} muted preload="metadata" className="h-full w-full object-cover" />
+  if (kind.type === 'office') return <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-orange-50 to-orange-100 text-orange-600"><FileText size={23} /><span className="mt-1 text-[9px] font-black">{kind.label}</span></div>
+  return (
+    <div className="relative h-full w-full overflow-hidden bg-gray-100">
+      <iframe src={url} title={`Vista previa de ${label}`} tabIndex={-1} className="pointer-events-none absolute left-0 top-0 border-0 bg-white" style={{ width: 640, height: 400, transform: 'scale(.14)', transformOrigin: 'top left' }} />
+      <span className="absolute bottom-1 right-1 rounded bg-black/65 px-1.5 py-0.5 text-[8px] font-bold text-white">{kind.label}</span>
+    </div>
+  )
+}
+
 export default function ClientDeliverables({ fixedClientId, onlyApproved = false }: Props) {
   const [clients, setClients] = useState<Client[]>([])
   const [selectedClientId, setSelectedClientId] = useState(fixedClientId || '')
@@ -191,7 +216,7 @@ export default function ClientDeliverables({ fixedClientId, onlyApproved = false
                       const changes = task.review_status === 'cambios_solicitados'
                       const reviewing = task.review_status === 'pendiente_revision' || task.review_status === 'pendiente_trafficker' || task.review_status === 'en_revision'
                       return <tr key={link.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3"><div className="flex items-center gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600"><FileText size={18} /></span><div className="min-w-0"><p className="max-w-[220px] truncate font-semibold text-gray-800">{link.label || task.title}</p><p className="max-w-[220px] truncate text-xs text-gray-400">{task.title}</p></div></div></td>
+                        <td className="px-4 py-3"><div className="flex items-center gap-3"><a href={link.url} target="_blank" rel="noreferrer" className="block h-[58px] w-[92px] shrink-0 overflow-hidden rounded-lg border border-gray-200 bg-gray-50 shadow-sm"><DeliverablePreview url={link.url} label={link.label || task.title} /></a><div className="min-w-0"><p className="max-w-[190px] truncate font-semibold text-gray-800">{link.label || task.title}</p><p className="mt-0.5 max-w-[190px] truncate text-xs text-gray-400">{fileKind(link.url).label} · {task.title}</p></div></div></td>
                         <td className="px-4 py-3 text-xs text-gray-600">{task.project?.name || 'Sin proyecto'}</td>
                         <td className="px-4 py-3"><span className="rounded-md bg-gray-100 px-2 py-1 text-xs font-bold text-gray-600">{version}</span></td>
                         <td className="px-4 py-3 text-xs text-gray-600">{task.assignee?.full_name || 'Sin registrar'}</td>
