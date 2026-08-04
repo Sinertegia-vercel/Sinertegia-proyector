@@ -17,12 +17,37 @@ body {
 }
 
 .ui-large-text { font-size: 17px; }
-.ui-dark body, .ui-dark #root { background: #0f172a; color: #e2e8f0; }
-.ui-dark .bg-white { background-color: #172033 !important; }
-.ui-dark .bg-slate-50 { background-color: #1e293b !important; }
+.ui-dark { color-scheme: dark; }
+.ui-dark body, .ui-dark #root { background: #0b1220; color: #e2e8f0; }
+.ui-dark .bg-white,
+.ui-dark .bg-white\/80,
+.ui-dark .bg-white\/90 { background-color: #172033 !important; }
+.ui-dark .bg-slate-50,
+.ui-dark .bg-slate-50\/50,
+.ui-dark .bg-slate-50\/70 { background-color: #1e293b !important; }
+.ui-dark .bg-slate-100 { background-color: #263348 !important; }
+.ui-dark .bg-slate-200 { background-color: #334155 !important; }
+.ui-dark .bg-slate-300 { background-color: #475569 !important; }
 .ui-dark .bg-\[\#f5f6fb\] { background-color: #0f172a !important; }
 .ui-dark .text-slate-900, .ui-dark .text-slate-800 { color: #f8fafc !important; }
 .ui-dark .text-slate-700, .ui-dark .text-slate-600 { color: #cbd5e1 !important; }
 .ui-dark .text-slate-500, .ui-dark .text-slate-400 { color: #94a3b8 !important; }
-.ui-dark .border-slate-200, .ui-dark .border-slate-300 { border-color: #334155 !important; }
-.ui-dark input, .ui-dark select, .ui-dark textarea { background-color: #111827 !important; color: #f8fafc !important; }
+.ui-dark .border-slate-100,
+.ui-dark .border-slate-200,
+.ui-dark .border-slate-300 { border-color: #354258 !important; }
+.ui-dark input,
+.ui-dark select,
+.ui-dark textarea { background-color: #111827 !important; border-color: #475569 !important; color: #f8fafc !important; }
+.ui-dark input::placeholder,
+.ui-dark textarea::placeholder { color: #7c8aa0 !important; }
+.ui-dark input:read-only { background-color: #1e293b !important; }
+.ui-dark .shadow-sm,
+.ui-dark .shadow-md,
+.ui-dark .shadow-lg,
+.ui-dark .shadow-xl,
+.ui-dark .shadow-2xl { box-shadow: 0 12px 34px rgba(0,0,0,.28) !important; }
+.ui-dark [class*="hover:bg-slate-50"]:hover,
+.ui-dark [class*="hover:bg-slate-100"]:hover { background-color: #263348 !important; }
+.ui-dark table thead { background-color: #1d273a !important; }
+.ui-dark table tbody tr { border-color: #354258 !important; }
+.ui-dark [role="dialog"] { color: #e2e8f0; }

@@ -135,11 +135,15 @@
 }
 .ui-dark .v2app .v2-topbar{background:rgba(23,32,51,.84)}
 .ui-dark .v2app .v2-btn-ghost,.ui-dark .v2app .v2-tabs{background:var(--surface);color:var(--ink-soft)}
+.ui-dark .v2app .v2-sidebar-toggle{border-color:#0F172A}
+.ui-dark .v2app .v2-btn-warn{background:var(--surface)}
 .ui-dark .v2app .v2-exec-summary{background:radial-gradient(circle at 90% 0,rgba(78,123,255,.15),transparent 34%),linear-gradient(145deg,#172033,#151D2E)}
 .ui-dark .v2app .v2-exec-metrics button{background:rgba(30,41,59,.9)}
 .ui-dark .v2app .v2-table-wrap thead{background:#1D273A}
 .ui-dark .v2app .v2-track{background:#2C374B}
 .ui-dark .v2app .v2-pill.completed{background:#334155;color:#CBD5E1}
+.ui-dark .v2app input,.ui-dark .v2app select,.ui-dark .v2app textarea{background:#111827;color:var(--ink);border-color:var(--line-strong)}
+.ui-dark .v2app input::placeholder,.ui-dark .v2app textarea::placeholder{color:var(--faint)}
 
 /* Main + topbar */
 .v2app .v2-main{display:flex;flex-direction:column;min-width:0}
