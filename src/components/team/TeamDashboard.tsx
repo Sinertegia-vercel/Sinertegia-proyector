@@ -667,15 +667,6 @@ export default function TeamDashboard({ embedded = false }: Props) {
                 <div className="v2-brand-sub">Gestión de proyectos</div>
               </div>
             )}
-            <button
-              type="button"
-              onClick={() => setSidebarCollapsed(value => !value)}
-              className="v2-sidebar-toggle"
-              title={sidebarCollapsed ? 'Expandir menú' : 'Contraer menú'}
-              aria-label={sidebarCollapsed ? 'Expandir menú' : 'Contraer menú'}
-            >
-              {sidebarCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
-            </button>
           </div>
 
           {visibleNavItems.map(({ id, label, icon: Icon }) => (
@@ -705,6 +696,16 @@ export default function TeamDashboard({ embedded = false }: Props) {
             {!sidebarCollapsed && <span>Cerrar sesión</span>}
           </button>
         </aside>
+
+        <button
+          type="button"
+          onClick={() => setSidebarCollapsed(value => !value)}
+          className="v2-sidebar-toggle"
+          title={sidebarCollapsed ? 'Expandir menú' : 'Contraer menú'}
+          aria-label={sidebarCollapsed ? 'Expandir menú' : 'Contraer menú'}
+        >
+          {sidebarCollapsed ? <PanelLeftOpen size={15} /> : <PanelLeftClose size={15} />}
+        </button>
 
         <div className="v2-main">
           <header className="v2-topbar">

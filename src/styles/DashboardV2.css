@@ -102,12 +102,12 @@
 .v2app .v2-logout-link svg{flex:none}
 .v2app .v2-shell.collapsed .v2-logout-link{justify-content:center;padding:10px}
 .v2app .v2-sidebar-toggle{
-  display:grid;place-items:center;flex:none;width:30px;height:30px;margin-left:auto;border-radius:9px;
-  border:1px solid rgba(255,255,255,.14);background:transparent;color:#8FA0C8;cursor:pointer;
-  transition:background .15s,color .15s,border-color .15s,transform .15s;
+  display:grid;place-items:center;position:fixed;z-index:35;left:233px;bottom:30px;width:30px;height:30px;border-radius:50%;
+  border:2px solid #F5F4FA;background:linear-gradient(145deg,#4E7BFF,var(--brand-deep));color:#fff;cursor:pointer;
+  box-shadow:0 5px 14px rgba(29,63,191,.35);transition:filter .15s,transform .15s,left .15s;
 }
-.v2app .v2-sidebar-toggle:hover{background:rgba(255,255,255,.08);border-color:rgba(126,160,255,.5);color:#fff;transform:translateY(-1px)}
-.v2app .v2-shell.collapsed .v2-sidebar-toggle{margin:0}
+.v2app .v2-sidebar-toggle:hover{filter:brightness(1.12);transform:scale(1.06)}
+.v2app .v2-shell.collapsed .v2-sidebar-toggle{left:61px}
 
 /* Preferencia funcional: aumenta la densidad sin ocultar información. */
 .ui-compact .v2app .v2-content{padding-top:18px;padding-bottom:30px}
@@ -292,6 +292,7 @@
 @media(max-width:1000px){
   .v2app .v2-shell{grid-template-columns:1fr}
   .v2app .v2-sidebar{display:none}
+  .v2app .v2-sidebar-toggle{display:none}
   .v2app .v2-triage{grid-template-columns:1fr}
   .v2app .v2-exec-grid{grid-template-columns:1fr}
 }
