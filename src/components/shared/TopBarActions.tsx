@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { LogOut, Camera, Clock, Building2, Home, X, KeyRound, UserRound } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useWorkSession } from '../../contexts/WorkSessionContext'
@@ -200,6 +201,7 @@ export default function TopBarActions() {
 
       {/* Modal cambiar contraseña */}
       {showSessionSummary && currentSession && (
+        <Portal>
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
             <div className="mb-5 flex items-start justify-between"><div><p className="text-xs font-bold uppercase tracking-wide text-blue-600">Jornada de hoy</p><h3 className="mt-1 text-xl font-bold text-gray-900">Resumen de sesión</h3></div><button type="button" onClick={() => setShowSessionSummary(false)} className="rounded-lg p-1 text-gray-400 hover:bg-gray-100"><X size={18} /></button></div>
@@ -208,11 +210,13 @@ export default function TopBarActions() {
             <button type="button" onClick={() => setShowSessionSummary(false)} className="mt-5 w-full rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700">Cerrar</button>
           </div>
         </div>
+        </Portal>
       )}
 
       {showChangePassword && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+        <Portal>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-black/50 p-4 backdrop-blur-sm">
+          <div className="my-auto max-h-[calc(100vh-2rem)] w-full max-w-sm overflow-y-auto rounded-2xl bg-white shadow-2xl">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
               <h3 className="font-bold text-gray-900 flex items-center gap-2"><KeyRound size={16} className="text-purple-500" /> Cambiar contraseña</h3>
               <button onClick={() => { setShowChangePassword(false); setPasswordMsg(''); setNewPassword(''); setConfirmPassword('') }} className="text-gray-400 hover:text-gray-600">
@@ -247,10 +251,12 @@ export default function TopBarActions() {
             </div>
           </div>
         </div>
+        </Portal>
       )}
 
       {/* Popup confirmación de cierre de sesión */}
       {showLogoutConfirm && (
+        <Portal>
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
@@ -292,7 +298,12 @@ export default function TopBarActions() {
             </div>
           </div>
         </div>
+        </Portal>
       )}
     </>
   )
+}
+
+function Portal({ children }: { children: React.ReactNode }) {
+  return createPortal(children, document.body)
 }
