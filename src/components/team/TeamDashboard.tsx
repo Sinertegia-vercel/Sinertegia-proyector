@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { MessageSquare, CheckCircle, Clock, ClipboardList, MessageCircle, Map, Plus, CalendarDays, Link2, Loader2, XCircle, FileText, ChevronDown, Menu, Home, AlertTriangle, ArrowRight, PlayCircle, Eye, UserRound, PanelLeftClose, PanelLeftOpen, LogOut } from 'lucide-react'
+import { MessageSquare, CheckCircle, Clock, ClipboardList, MessageCircle, Map, Plus, CalendarDays, Link2, Loader2, XCircle, FileText, ChevronDown, Home, AlertTriangle, ArrowRight, PlayCircle, Eye, UserRound, PanelLeftClose, PanelLeftOpen, LogOut } from 'lucide-react'
 import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -108,6 +108,10 @@ export default function TeamDashboard({ embedded = false }: Props) {
     const openProfile = () => setTeamView('profile')
     window.addEventListener('open-profile', openProfile)
     return () => window.removeEventListener('open-profile', openProfile)
+  }, [])
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('ui-compact', localStorage.getItem('sinertegia-compact') === 'true')
   }, [])
 
   useEffect(() => {
@@ -654,8 +658,8 @@ export default function TeamDashboard({ embedded = false }: Props) {
       <div className={`v2-shell ${sidebarCollapsed ? 'collapsed' : ''}`}>
         <aside className="v2-sidebar">
           <div className="v2-brand">
-            <button type="button" className="v2-brand-mark" onClick={() => setSidebarCollapsed(c => !c)} title={sidebarCollapsed ? 'Expandir' : 'Colapsar'}>
-              {sidebarCollapsed ? <Menu size={16} color="#fff" /> : <Logo size={26} />}
+            <button type="button" className="v2-brand-mark" title="Sinertegia Launch 57">
+              <Logo size={26} />
             </button>
             {!sidebarCollapsed && (
               <div className="v2-brand-text">
@@ -663,6 +667,15 @@ export default function TeamDashboard({ embedded = false }: Props) {
                 <div className="v2-brand-sub">Gestión de proyectos</div>
               </div>
             )}
+            <button
+              type="button"
+              onClick={() => setSidebarCollapsed(value => !value)}
+              className="v2-sidebar-toggle"
+              title={sidebarCollapsed ? 'Expandir menú' : 'Contraer menú'}
+              aria-label={sidebarCollapsed ? 'Expandir menú' : 'Contraer menú'}
+            >
+              {sidebarCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+            </button>
           </div>
 
           {visibleNavItems.map(({ id, label, icon: Icon }) => (
@@ -690,15 +703,6 @@ export default function TeamDashboard({ embedded = false }: Props) {
           >
             <LogOut size={17} />
             {!sidebarCollapsed && <span>Cerrar sesión</span>}
-          </button>
-          <button
-            type="button"
-            onClick={() => setSidebarCollapsed(value => !value)}
-            className="v2-sidebar-toggle"
-            title={sidebarCollapsed ? 'Expandir menú' : 'Contraer menú'}
-            aria-label={sidebarCollapsed ? 'Expandir menú' : 'Contraer menú'}
-          >
-            {sidebarCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
           </button>
         </aside>
 

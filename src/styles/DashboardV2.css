@@ -46,7 +46,7 @@
   transition:padding .15s;
 }
 .v2app .v2-shell.collapsed .v2-sidebar{padding:22px 12px;}
-.v2app .v2-brand{display:flex;align-items:center;gap:12px;padding:6px 8px 20px;}
+.v2app .v2-brand{display:flex;align-items:center;gap:10px;padding:6px 2px 20px;}
 .v2app .v2-brand-mark{
   width:38px;height:38px;border-radius:11px;flex:none;
   background:linear-gradient(145deg,#4E7BFF,var(--brand-deep));
@@ -58,6 +58,8 @@
 .v2app .v2-brand-text{min-width:0;overflow:hidden;}
 .v2app .v2-brand-name{font-family:'Space Grotesk';font-weight:700;font-size:15px;color:#fff;letter-spacing:-.01em;line-height:1.15;white-space:nowrap;}
 .v2app .v2-brand-sub{font-size:11.5px;color:#7C81A0;font-weight:450;white-space:nowrap;}
+.v2app .v2-shell.collapsed .v2-brand{justify-content:center}
+.v2app .v2-shell.collapsed .v2-brand-mark,.v2app .v2-shell.collapsed .v2-brand-text{display:none}
 
 .v2app .v2-nav-item{
   display:flex;align-items:center;gap:11px;
@@ -100,12 +102,18 @@
 .v2app .v2-logout-link svg{flex:none}
 .v2app .v2-shell.collapsed .v2-logout-link{justify-content:center;padding:10px}
 .v2app .v2-sidebar-toggle{
-  display:grid;place-items:center;position:absolute;right:6px;bottom:104px;width:30px;height:30px;border-radius:50%;
+  display:grid;place-items:center;flex:none;width:30px;height:30px;margin-left:auto;border-radius:9px;
   border:1px solid rgba(255,255,255,.14);background:transparent;color:#8FA0C8;cursor:pointer;
   transition:background .15s,color .15s,border-color .15s,transform .15s;
 }
 .v2app .v2-sidebar-toggle:hover{background:rgba(255,255,255,.08);border-color:rgba(126,160,255,.5);color:#fff;transform:translateY(-1px)}
-.v2app .v2-shell.collapsed .v2-sidebar-toggle{right:4px;bottom:104px}
+.v2app .v2-shell.collapsed .v2-sidebar-toggle{margin:0}
+
+/* Preferencia funcional: aumenta la densidad sin ocultar información. */
+.ui-compact .v2app .v2-content{padding-top:18px;padding-bottom:30px}
+.ui-compact .v2app .v2-nav-item{padding-top:7px;padding-bottom:7px}
+.ui-compact .v2app .v2-topbar{padding-top:9px;padding-bottom:9px}
+.ui-compact .v2app .v2-table-wrap th,.ui-compact .v2app .v2-table-wrap td{padding-top:8px!important;padding-bottom:8px!important}
 
 /* Main + topbar */
 .v2app .v2-main{display:flex;flex-direction:column;min-width:0}
