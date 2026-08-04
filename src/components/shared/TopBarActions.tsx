@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { LogOut, Camera, Clock, Building2, Home, X, KeyRound, UserRound } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useWorkSession } from '../../contexts/WorkSessionContext'
@@ -28,6 +28,15 @@ export default function TopBarActions() {
   const hours = Math.floor(elapsedMinutes / 60)
   const mins = elapsedMinutes % 60
   const timerLabel = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`
+
+  useEffect(() => {
+    const openProfile = () => {
+      setMenuOpen(false)
+      setShowProfile(true)
+    }
+    window.addEventListener('open-profile', openProfile)
+    return () => window.removeEventListener('open-profile', openProfile)
+  }, [])
 
   async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]

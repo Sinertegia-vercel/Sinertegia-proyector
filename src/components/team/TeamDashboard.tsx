@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { MessageSquare, CheckCircle, Clock, ClipboardList, MessageCircle, Map, Plus, CalendarDays, Link2, Loader2, XCircle, FileText, ChevronDown, Menu, Lightbulb, Home, AlertTriangle, ArrowRight, PlayCircle, Eye } from 'lucide-react'
+import { MessageSquare, CheckCircle, Clock, ClipboardList, MessageCircle, Map, Plus, CalendarDays, Link2, Loader2, XCircle, FileText, ChevronDown, Menu, Lightbulb, Home, AlertTriangle, ArrowRight, PlayCircle, Eye, UserRound } from 'lucide-react'
 import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -666,6 +666,15 @@ export default function TeamDashboard({ embedded = false }: Props) {
               <p>{inProgressTasks.length} en progreso</p>
             </div>
           )}
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent('open-profile'))}
+            className="v2-profile-link"
+            title="Mi perfil"
+          >
+            <UserRound size={17} />
+            {!sidebarCollapsed && <span>Mi perfil</span>}
+          </button>
         </aside>
 
         <div className="v2-main">
