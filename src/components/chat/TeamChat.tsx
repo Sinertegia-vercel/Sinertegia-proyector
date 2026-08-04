@@ -63,6 +63,7 @@ export default function TeamChat() {
   const [loading, setLoading] = useState(true)
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [messageFilter, setMessageFilter] = useState<'todos' | 'menciones' | 'archivos' | 'tareas' | 'fijados'>('todos')
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null)
   const [reactionMessageId, setReactionMessageId] = useState<string | null>(null)
   const [convertMessage, setConvertMessage] = useState<ChatMessage | null>(null)
@@ -226,7 +227,15 @@ export default function TeamChat() {
 
   if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Cargando chat...</div>
 
-  const visibleMessages = messages.filter(m => !(m.deleted_for || []).includes(user?.id || '') && (!search.trim() || (m.content || '').toLowerCase().includes(search.toLowerCase())))
+  const visibleMessages = messages.filter(message => {
+    if ((message.deleted_for || []).includes(user?.id || '')) return false
+    if (search.trim() && !(message.content || '').toLowerCase().includes(search.toLowerCase())) return false
+    if (messageFilter === 'menciones') return !!user?.full_name && (message.content || '').includes(`@${user.full_name}`)
+    if (messageFilter === 'archivos') return !!message.file_url
+    if (messageFilter === 'tareas') return !!message.task_id || message.converted_to_task
+    if (messageFilter === 'fijados') return !!message.is_pinned
+    return true
+  })
   const pinnedMessage = messages.find(message => message.is_pinned)
 
   return (
@@ -246,6 +255,7 @@ export default function TeamChat() {
 
       <div className="border-b border-gray-100 bg-white px-4 py-2.5">
         <div className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2"><Search size={14} className="text-gray-400" /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar en el chat" className="w-full bg-transparent text-sm outline-none" /></div>
+        <div className="mt-2 flex gap-2 overflow-x-auto pb-0.5">{([['todos', 'Todos'], ['menciones', 'Menciones'], ['archivos', 'Archivos'], ['tareas', 'Tareas'], ['fijados', 'Fijados']] as const).map(([value, label]) => <button key={value} type="button" onClick={() => setMessageFilter(value)} className={`whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold transition ${messageFilter === value ? 'bg-blue-600 text-white' : 'border border-gray-200 bg-white text-gray-500 hover:bg-gray-50'}`}>{label}</button>)}</div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">

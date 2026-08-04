@@ -10,7 +10,7 @@ import Logo from '../shared/Logo'
 import TopBarActions from '../shared/TopBarActions'
 import '../../styles/DashboardV2.css'
 import TaskDetailModal from './TaskDetailModal'
-import TeamChat from '../chat/TeamChat'
+import TeamMessagingHub from '../chat/TeamMessagingHub'
 import ClientChatsHub from '../chat/ClientChatsHub'
 import RoadmapView from '../roadmap/RoadmapView'
 import TeamCalendarView from './TeamCalendarView'
@@ -366,7 +366,7 @@ export default function TeamDashboard({ embedded = false }: Props) {
       {teamView === 'roadmap' && <RoadmapView tasks={tasks} title="Mis tareas en el tiempo" onSelectTask={setSelectedTask} />}
 
       {/* Vista: Chat del Equipo */}
-      {teamView === 'chat_team' && <TeamChat />}
+      {teamView === 'chat_team' && <TeamMessagingHub />}
 
       {/* Vista: Chat con Clientes */}
       {teamView === 'chat_clients' && <ClientChatsHub />}

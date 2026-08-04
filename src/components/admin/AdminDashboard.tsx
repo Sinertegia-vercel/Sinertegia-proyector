@@ -11,7 +11,7 @@ import TeamPerformance from './TeamPerformance'
 import CreateTaskModal from './CreateTaskModal'
 import CreateProjectModal from './CreateProjectModal'
 import TeamDashboard from '../team/TeamDashboard'
-import TeamChat from '../chat/TeamChat'
+import TeamMessagingHub from '../chat/TeamMessagingHub'
 import ClientChatsHub from '../chat/ClientChatsHub'
 import RoadmapView from '../roadmap/RoadmapView'
 import TaskRequestsPanel from './TaskRequestsPanel'
@@ -447,7 +447,7 @@ export default function AdminDashboard() {
             {view === 'requests' && <TaskRequestsPanel />}
 
             {/* Vista chat interno del equipo */}
-            {view === 'chat_team' && <TeamChat />}
+            {view === 'chat_team' && <TeamMessagingHub />}
 
             {/* Vista chat con clientes */}
             {view === 'chat_clients' && <ClientChatsHub initialClients={clients} />}
