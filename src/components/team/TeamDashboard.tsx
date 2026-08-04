@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { MessageSquare, CheckCircle, Clock, ClipboardList, MessageCircle, Map, Plus, CalendarDays, Link2, Loader2, XCircle, FileText, ChevronDown, Menu, Lightbulb, Home, AlertTriangle, ArrowRight, PlayCircle, Eye, UserRound, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { MessageSquare, CheckCircle, Clock, ClipboardList, MessageCircle, Map, Plus, CalendarDays, Link2, Loader2, XCircle, FileText, ChevronDown, Menu, Home, AlertTriangle, ArrowRight, PlayCircle, Eye, UserRound, PanelLeftClose, PanelLeftOpen, LogOut } from 'lucide-react'
 import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -673,14 +673,6 @@ export default function TeamDashboard({ embedded = false }: Props) {
             </button>
           ))}
 
-          {!sidebarCollapsed && (
-            <div className="v2-tip">
-              <div className="v2-tip-head"><Lightbulb size={13} /> Resumen de hoy</div>
-              <p>{todayTasks.length} tarea{todayTasks.length === 1 ? '' : 's'} para hoy</p>
-              <p>{upcoming.length} entrega{upcoming.length === 1 ? '' : 's'} próxima{upcoming.length === 1 ? '' : 's'}</p>
-              <p>{inProgressTasks.length} en progreso</p>
-            </div>
-          )}
           <button
             type="button"
             onClick={() => setTeamView('profile')}
@@ -689,6 +681,15 @@ export default function TeamDashboard({ embedded = false }: Props) {
           >
             <UserRound size={17} />
             {!sidebarCollapsed && <span>Mi perfil</span>}
+          </button>
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent('request-logout'))}
+            className="v2-logout-link"
+            title="Cerrar sesión"
+          >
+            <LogOut size={17} />
+            {!sidebarCollapsed && <span>Cerrar sesión</span>}
           </button>
           <button
             type="button"

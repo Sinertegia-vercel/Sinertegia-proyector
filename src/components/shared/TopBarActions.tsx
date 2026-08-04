@@ -30,13 +30,16 @@ export default function TopBarActions() {
   useEffect(() => {
     const changePhoto = () => fileInputRef.current?.click()
     const changePassword = () => setShowChangePassword(true)
+    const requestLogout = () => { void handleLogout() }
     window.addEventListener('change-profile-photo', changePhoto)
     window.addEventListener('change-profile-password', changePassword)
+    window.addEventListener('request-logout', requestLogout)
     return () => {
       window.removeEventListener('change-profile-photo', changePhoto)
       window.removeEventListener('change-profile-password', changePassword)
+      window.removeEventListener('request-logout', requestLogout)
     }
-  }, [])
+  }, [currentSession])
 
   async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
