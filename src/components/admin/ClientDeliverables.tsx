@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ExternalLink, ChevronDown, Link2, CheckSquare, Square, Search, Copy, FileText, Eye } from 'lucide-react'
+import { ChevronDown, Link2, CheckSquare, Search, Copy, FileText, Eye } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import type { Client } from '../../types'
 
@@ -13,34 +13,12 @@ interface TaskRow {
   project?: { id: string; name: string }
   assignee?: { full_name: string }
   links: { id: string; label: string; url: string }[]
-}
-
-interface CheckItem {
-  id: string
-  text: string
-  done: boolean
+  comments?: { id: string; user_id: string; content: string; created_at: string; user?: { full_name: string; role: string } }[]
 }
 
 interface Props {
   fixedClientId?: string   // si se pasa, no muestra dropdown y usa este cliente
   onlyApproved?: boolean   // si true, solo muestra tareas con review_status='aprobada'
-}
-
-const DEPT_LABELS: Record<string, string> = {
-  edicion: 'Edición', grabacion: 'Grabación', diseno: 'Diseño',
-  copy: 'Copy', webmaster: 'Webmaster', trafficker: 'Trafficker',
-  lider: 'Líder', cliente: 'Cliente',
-}
-
-const DEPT_COLORS: Record<string, string> = {
-  edicion: 'bg-orange-100 text-orange-700',
-  grabacion: 'bg-red-100 text-red-700',
-  diseno: 'bg-pink-100 text-pink-700',
-  copy: 'bg-yellow-100 text-yellow-700',
-  webmaster: 'bg-cyan-100 text-cyan-700',
-  trafficker: 'bg-blue-100 text-blue-700',
-  lider: 'bg-purple-100 text-purple-700',
-  cliente: 'bg-green-100 text-green-700',
 }
 
 function fileKind(url: string) {
@@ -72,8 +50,6 @@ export default function ClientDeliverables({ fixedClientId, onlyApproved = false
   const [clients, setClients] = useState<Client[]>([])
   const [selectedClientId, setSelectedClientId] = useState(fixedClientId || '')
   const [tasks, setTasks] = useState<TaskRow[]>([])
-  const [checkItems, setCheckItems] = useState<CheckItem[]>([])
-  const [newCheckText, setNewCheckText] = useState('')
   const [loading, setLoading] = useState(false)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'todos' | 'pendientes' | 'revision' | 'aprobados'>('todos')
@@ -107,7 +83,7 @@ export default function ClientDeliverables({ fixedClientId, onlyApproved = false
 
     let query = supabase
       .from('tasks')
-      .select('id, title, status, review_status, department, updated_at, project:projects(id, name), assignee:users!assigned_to(full_name), links:task_links(id, label, url)')
+      .select('id, title, status, review_status, department, updated_at, project:projects(id, name), assignee:users!assigned_to(full_name), links:task_links(id, label, url), comments:task_comments(id, user_id, content, created_at, user:users!user_id(full_name, role))')
       .in('project_id', projectIds)
       .order('department')
       .order('created_at')
@@ -122,19 +98,8 @@ export default function ClientDeliverables({ fixedClientId, onlyApproved = false
     setLoading(false)
   }
 
-  function addCheckItem() {
-    if (!newCheckText.trim()) return
-    setCheckItems(prev => [...prev, { id: crypto.randomUUID(), text: newCheckText.trim(), done: false }])
-    setNewCheckText('')
-  }
-
-  function toggleCheck(id: string) {
-    setCheckItems(prev => prev.map(i => i.id === id ? { ...i, done: !i.done } : i))
-  }
-
   const done = tasks.filter(t => t.status === 'completada').length
   const total = tasks.length
-  const checkDone = checkItems.filter(i => i.done).length
   const projectOptions = Array.from(new Map(tasks.map(task => task.project).filter(Boolean).map(project => [project!.id, project!])).values())
   const visibleTasks = tasks.filter(task => {
     if (projectFilter !== 'todos' && task.project?.id !== projectFilter) return false
@@ -145,6 +110,7 @@ export default function ClientDeliverables({ fixedClientId, onlyApproved = false
     return true
   })
   const deliverableRows = visibleTasks.flatMap(task => (task.links || []).map((link, index) => ({ task, link, version: `V${index + 1}` })))
+  const clientComments = visibleTasks.flatMap(task => (task.comments || []).filter(comment => comment.user?.role === 'client').map(comment => ({ ...comment, task }))).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
   return (
     <div className="space-y-5">
@@ -197,7 +163,9 @@ export default function ClientDeliverables({ fixedClientId, onlyApproved = false
               {projectOptions.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
             </select>
             {([['todos', 'Todos'], ['pendientes', 'Pendientes'], ['revision', 'En revisión'], ['aprobados', 'Aprobados']] as const).map(([value, label]) => (
-              <button key={value} type="button" onClick={() => setStatusFilter(value)} className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${statusFilter === value ? 'bg-blue-600 text-white' : 'border border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>{label}</button>
+              <button key={value} type="button" onClick={() => setStatusFilter(value)} className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition ${value === 'todos' ? (statusFilter === value ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-200 bg-white text-gray-600') : value === 'pendientes' ? (statusFilter === value ? 'border-orange-300 bg-orange-100 text-orange-700' : 'border-orange-100 bg-orange-50 text-orange-600') : value === 'revision' ? (statusFilter === value ? 'border-purple-300 bg-purple-100 text-purple-700' : 'border-purple-100 bg-purple-50 text-purple-600') : (statusFilter === value ? 'border-green-300 bg-green-100 text-green-700' : 'border-green-100 bg-green-50 text-green-600')}`}>
+                {value !== 'todos' && <span className={`h-1.5 w-1.5 rounded-full ${value === 'pendientes' ? 'bg-orange-500' : value === 'revision' ? 'bg-purple-500' : 'bg-green-500'}`} />}{label}
+              </button>
             ))}
           </div>
           <div className="flex gap-5 items-start">
@@ -231,60 +199,20 @@ export default function ClientDeliverables({ fixedClientId, onlyApproved = false
             )}
           </div>
 
-          {/* ── Checklist lateral ── */}
-          <div className="w-60 shrink-0 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-            <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
-              <p className="text-sm font-bold text-gray-700">📋 {onlyApproved ? 'Mis notas' : 'Seguimiento del cliente'}</p>
-              {checkItems.length > 0 && (
-                <span className="text-xs text-gray-400">{checkDone}/{checkItems.length}</span>
-              )}
+          {/* Comentarios reales escritos por clientes en las tareas */}
+          <aside className="w-72 shrink-0 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+            <div className="border-b border-gray-100 bg-gray-50 px-4 py-3">
+              <div className="flex items-center justify-between"><p className="text-sm font-bold text-gray-800">Seguimiento del cliente</p><span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-bold text-orange-700">{clientComments.length}</span></div>
+              <p className="mt-1 text-xs text-gray-400">Comentarios en entregables</p>
             </div>
-
-            {checkItems.length > 0 && (
-              <div className="px-4 pt-3">
-                <div className="w-full bg-gray-100 rounded-full h-1.5">
-                  <div className="bg-green-500 h-1.5 rounded-full transition-all"
-                    style={{ width: `${(checkDone / checkItems.length) * 100}%` }} />
-                </div>
-              </div>
-            )}
-
-            <div className="px-4 py-3 space-y-2 max-h-72 overflow-y-auto">
-              {checkItems.length === 0 && (
-                <p className="text-xs text-gray-400 text-center py-4">
-                  {onlyApproved ? 'Agrega tus notas aquí' : 'Agrega items para seguimiento'}
-                </p>
-              )}
-              {checkItems.map(item => (
-                <div key={item.id} className="flex items-start gap-2 group">
-                  <button onClick={() => toggleCheck(item.id)} className="mt-0.5 shrink-0 text-gray-300 hover:text-green-500 transition">
-                    {item.done ? <CheckSquare size={15} className="text-green-500" /> : <Square size={15} />}
-                  </button>
-                  <span className={`text-xs flex-1 leading-snug ${item.done ? 'line-through text-gray-400' : 'text-gray-700'}`}>
-                    {item.text}
-                  </span>
-                  <button
-                    onClick={() => setCheckItems(prev => prev.filter(i => i.id !== item.id))}
-                    className="text-gray-300 hover:text-red-400 opacity-0 group-hover:opacity-100 transition text-xs shrink-0"
-                  >✕</button>
-                </div>
+            <div className="max-h-[520px] space-y-3 overflow-y-auto p-3">
+              {clientComments.length === 0 ? <div className="py-10 text-center"><CheckSquare size={25} className="mx-auto mb-2 text-green-400" /><p className="text-sm font-semibold text-gray-600">Sin comentarios del cliente</p><p className="mt-1 text-xs text-gray-400">Cuando el cliente comente una tarea, aparecerá aquí.</p></div> : clientComments.map(comment => (
+                <button key={comment.id} type="button" onClick={() => window.dispatchEvent(new CustomEvent('open-task', { detail: { taskId: comment.task.id } }))} className="w-full rounded-xl border border-gray-200 p-3 text-left transition hover:border-blue-300 hover:shadow-sm">
+                  <div className="flex items-start gap-2"><span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-orange-500" /><div className="min-w-0 flex-1"><p className="truncate text-xs font-bold text-gray-800">{comment.task.title}</p><p className="mt-1 text-[11px] text-gray-400">{comment.user?.full_name || 'Cliente'} · {new Date(comment.created_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}</p><p className="mt-2 line-clamp-3 text-xs leading-relaxed text-gray-600">{comment.content}</p><span className="mt-3 inline-flex rounded-lg border border-blue-200 px-2.5 py-1 text-[11px] font-semibold text-blue-600">Ver en entregable</span></div></div>
+                </button>
               ))}
             </div>
-
-            <div className="px-4 pb-4 border-t border-gray-100 pt-3">
-              <div className="flex gap-2">
-                <input
-                  value={newCheckText}
-                  onChange={e => setNewCheckText(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && addCheckItem()}
-                  placeholder="Agregar nota..."
-                  className="flex-1 text-xs border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <button onClick={addCheckItem} disabled={!newCheckText.trim()}
-                  className="text-xs bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 transition disabled:opacity-40">+</button>
-              </div>
-            </div>
-          </div>
+          </aside>
 
           </div>
         </div>
