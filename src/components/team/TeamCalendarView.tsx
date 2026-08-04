@@ -1,218 +1,154 @@
-import { useState } from 'react'
-import { AlertTriangle, CalendarPlus, ChevronLeft, ChevronRight } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { AlertTriangle, CalendarDays, ChevronLeft, ChevronRight, Clock3, GripVertical } from 'lucide-react'
+import { supabase } from '../../lib/supabase'
 import type { Task } from '../../types'
 
 interface Props {
   tasks: Task[]
   onSelectTask: (task: Task) => void
+  onTasksChange?: () => void | Promise<void>
 }
 
-const STATUS_COLOR: Record<string, string> = {
-  pendiente:   'bg-gray-400',
-  en_progreso: 'bg-blue-500',
-  completada:  'bg-green-500',
-  bloqueada:   'bg-red-500',
+const DAY_MS = 86400000
+const HOURS = Array.from({ length: 11 }, (_, index) => index + 8)
+const CLIENT_COLORS = [
+  { card: 'bg-purple-50 border-purple-300 text-purple-950', dot: 'bg-purple-500' },
+  { card: 'bg-green-50 border-green-300 text-green-950', dot: 'bg-green-500' },
+  { card: 'bg-blue-50 border-blue-300 text-blue-950', dot: 'bg-blue-500' },
+  { card: 'bg-amber-50 border-amber-300 text-amber-950', dot: 'bg-amber-500' },
+  { card: 'bg-orange-50 border-orange-300 text-orange-950', dot: 'bg-orange-500' },
+]
+
+function dateKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
 
-const STATUS_LABEL: Record<string, string> = {
-  pendiente:   'Pendiente',
-  en_progreso: 'En progreso',
-  completada:  'Completada',
-  bloqueada:   'Bloqueada',
+function mondayOf(date: Date) {
+  const result = new Date(date)
+  const day = result.getDay()
+  result.setDate(result.getDate() + (day === 0 ? -6 : 1 - day))
+  result.setHours(0, 0, 0, 0)
+  return result
 }
 
-export default function TeamCalendarView({ tasks, onSelectTask }: Props) {
-  const today = new Date()
-  const [current, setCurrent] = useState({ year: today.getFullYear(), month: today.getMonth() })
-  const [selectedDay, setSelectedDay] = useState<number | null>(null)
+export default function TeamCalendarView({ tasks, onSelectTask, onTasksChange }: Props) {
+  const [anchor, setAnchor] = useState(() => mondayOf(new Date()))
+  const [mode, setMode] = useState<'semana' | 'mes'>('semana')
+  const [savingTask, setSavingTask] = useState<string | null>(null)
+  const [dropDay, setDropDay] = useState<string | null>(null)
 
-  const firstDay = new Date(current.year, current.month, 1)
-  const daysInMonth = new Date(current.year, current.month + 1, 0).getDate()
-  const startWeekday = firstDay.getDay() // 0=Sun
+  const activeTasks = tasks.filter(task => task.status !== 'completada')
+  const undatedTasks = activeTasks.filter(task => !task.commitment_date)
+  const clientNames = useMemo(
+    () => Array.from(new Set(tasks.map(task => task.project?.client?.name || task.project?.name || 'Trabajo interno'))),
+    [tasks],
+  )
 
-  const monthName = firstDay.toLocaleDateString('es-MX', { month: 'long', year: 'numeric' })
-
-  function prevMonth() {
-    setCurrent(c => {
-      const m = c.month === 0 ? 11 : c.month - 1
-      const y = c.month === 0 ? c.year - 1 : c.year
-      return { year: y, month: m }
-    })
-    setSelectedDay(null)
-  }
-  function nextMonth() {
-    setCurrent(c => {
-      const m = c.month === 11 ? 0 : c.month + 1
-      const y = c.month === 11 ? c.year + 1 : c.year
-      return { year: y, month: m }
-    })
-    setSelectedDay(null)
+  const colorFor = (task: Task) => {
+    const name = task.project?.client?.name || task.project?.name || 'Trabajo interno'
+    return CLIENT_COLORS[Math.max(0, clientNames.indexOf(name)) % CLIENT_COLORS.length]
   }
 
-  function tasksForDay(day: number) {
-    const cellDate = new Date(current.year, current.month, day)
-    cellDate.setHours(0, 0, 0, 0)
-    return tasks.filter(t => {
-      const start = t.start_date ? new Date(t.start_date + 'T00:00:00') : null
-      const end = t.completion_date
-        ? new Date(t.completion_date + 'T00:00:00')
-        : t.commitment_date
-        ? new Date(t.commitment_date + 'T00:00:00')
-        : null
-      if (start && end) return cellDate >= start && cellDate <= end
-      if (start) return cellDate.getTime() === start.getTime()
-      if (end) return cellDate.getTime() === end.getTime()
-      return false
-    })
+  const weekDays = Array.from({ length: 5 }, (_, index) => new Date(anchor.getTime() + index * DAY_MS))
+  const datedTasks = activeTasks.filter(task => task.commitment_date)
+
+  async function assignDate(taskId: string, date: Date) {
+    setDropDay(null)
+    setSavingTask(taskId)
+    const { error } = await supabase.from('tasks').update({ commitment_date: dateKey(date) }).eq('id', taskId)
+    setSavingTask(null)
+    if (!error) await onTasksChange?.()
   }
 
-  function isToday(day: number) {
-    return today.getFullYear() === current.year && today.getMonth() === current.month && today.getDate() === day
+  function move(direction: number) {
+    const next = new Date(anchor)
+    next.setDate(next.getDate() + direction * (mode === 'semana' ? 7 : 28))
+    setAnchor(mondayOf(next))
   }
 
-  const selectedTasks = selectedDay ? tasksForDay(selectedDay) : []
-  const undatedTasks = tasks.filter(t => t.status !== 'completada' && !t.start_date && !t.commitment_date)
-
-  // Build grid: blanks + days
-  const cells: (number | null)[] = [
-    ...Array(startWeekday).fill(null),
-    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
-  ]
-  // Fill to complete last row
-  while (cells.length % 7 !== 0) cells.push(null)
+  const rangeLabel = `${weekDays[0].toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })} – ${weekDays[4].toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' })}`
 
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <button onClick={prevMonth} className="p-2 rounded-lg hover:bg-gray-100 transition">
-          <ChevronLeft size={18} className="text-gray-600" />
-        </button>
-        <h3 className="text-base font-bold text-gray-800 capitalize">{monthName}</h3>
-        <button onClick={nextMonth} className="p-2 rounded-lg hover:bg-gray-100 transition">
-          <ChevronRight size={18} className="text-gray-600" />
-        </button>
-      </div>
-
-      {undatedTasks.length > 0 && (
-        <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          <AlertTriangle size={17} className="shrink-0" />
-          <strong>{undatedTasks.length} tareas no aparecen en el calendario</strong>
-          <span className="text-amber-700">porque no tienen fecha de compromiso.</span>
-        </div>
-      )}
-
-      {undatedTasks.length > 0 && (
-        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-          <div className="mb-3 flex items-center justify-between">
-            <div className="flex items-center gap-2"><CalendarPlus size={16} className="text-blue-600" /><p className="text-sm font-bold text-gray-800">Sin fecha</p></div>
-            <span className="text-xs text-gray-400">Abre una tarea para asignarle fecha</span>
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+        <div className="flex items-center gap-3">
+          <CalendarDays className="text-blue-700" size={28} />
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">Mi calendario</h2>
+            <p className="text-xs text-slate-400">{rangeLabel}</p>
           </div>
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {undatedTasks.slice(0, 8).map(task => (
-              <button key={task.id} type="button" onClick={() => onSelectTask(task)} className="min-w-[210px] rounded-lg border border-gray-200 p-3 text-left transition hover:border-blue-300 hover:bg-blue-50">
-                <p className="truncate text-xs font-semibold text-gray-800">{task.title}</p>
-                <p className="mt-1 truncate text-[11px] text-gray-400">{task.project?.client?.name || task.project?.name || 'Trabajo interno'}</p>
-              </button>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+            {(['semana', 'mes'] as const).map(value => (
+              <button key={value} onClick={() => setMode(value)} className={`rounded-md px-5 py-2 text-xs font-semibold capitalize transition ${mode === value ? 'bg-blue-800 text-white shadow-sm' : 'text-slate-600 hover:bg-white'}`}>{value}</button>
             ))}
           </div>
+          <button onClick={() => setAnchor(mondayOf(new Date()))} className="rounded-lg border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Hoy</button>
+          <button onClick={() => move(-1)} className="rounded-lg border border-slate-200 p-2 hover:bg-slate-50"><ChevronLeft size={18} /></button>
+          <button onClick={() => move(1)} className="rounded-lg border border-slate-200 p-2 hover:bg-slate-50"><ChevronRight size={18} /></button>
+        </div>
+      </header>
+
+      {undatedTasks.length > 0 && (
+        <div className="mx-5 mt-4 flex items-center justify-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-900">
+          <AlertTriangle size={17} className="text-amber-500" />
+          <strong>{undatedTasks.length} tareas no aparecen porque no tienen fecha de compromiso</strong>
         </div>
       )}
 
-      {/* Calendar grid */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-        {/* Weekday headers */}
-        <div className="grid grid-cols-7 border-b border-gray-200">
-          {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map(d => (
-            <div key={d} className="py-2 text-center text-xs font-semibold text-gray-500">{d}</div>
-          ))}
-        </div>
-
-        {/* Day cells */}
-        <div className="grid grid-cols-7">
-          {cells.map((day, idx) => {
-            if (!day) return <div key={`empty-${idx}`} className="min-h-[80px] border-b border-r border-gray-100 bg-gray-50/50" />
-
-            const dayTasks = tasksForDay(day)
-            const isSelected = selectedDay === day
-            const isOverdue = dayTasks.some(t => t.status !== 'completada')
-              && new Date(current.year, current.month, day) < today
-              && !isToday(day)
-
-            return (
-              <div
-                key={day}
-                onClick={() => setSelectedDay(isSelected ? null : day)}
-                className={`min-h-[80px] border-b border-r border-gray-100 p-1.5 cursor-pointer transition
-                  ${isSelected ? 'bg-blue-50 ring-2 ring-inset ring-blue-400' : 'hover:bg-gray-50'}
-                  ${isToday(day) ? 'bg-blue-50/60' : ''}
-                `}
-              >
-                <span className={`text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full mb-1
-                  ${isToday(day) ? 'bg-blue-600 text-white' : isOverdue && dayTasks.length > 0 ? 'text-red-500' : 'text-gray-600'}
-                `}>
-                  {day}
-                </span>
-                <div className="space-y-0.5">
-                  {dayTasks.slice(0, 2).map(t => (
-                    <button type="button" key={t.id}
-                      onClick={event => { event.stopPropagation(); onSelectTask(t) }}
-                      className={`text-[10px] leading-tight px-1 py-0.5 rounded text-white truncate ${STATUS_COLOR[t.status] || 'bg-gray-400'}`}
-                      title={t.title}
-                    >
-                      {t.title}
-                    </button>
-                  ))}
-                  {dayTasks.length > 2 && (
-                    <div className="text-[10px] text-gray-400 pl-1">+{dayTasks.length - 2} más</div>
-                  )}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* Leyenda */}
-      <div className="flex items-center gap-4 text-xs text-gray-500">
-        {Object.entries(STATUS_COLOR).map(([key, color]) => (
-          <span key={key} className="flex items-center gap-1">
-            <span className={`w-2.5 h-2.5 rounded-full ${color}`} />
-            {STATUS_LABEL[key]}
-          </span>
-        ))}
-      </div>
-
-      {/* Detalle del día seleccionado */}
-      {selectedDay && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
-            <p className="text-sm font-bold text-gray-800">
-              {new Date(current.year, current.month, selectedDay).toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}
-            </p>
+      <div className="grid min-h-[620px] grid-cols-1 p-5 lg:grid-cols-[210px_minmax(760px,1fr)]">
+        <aside className="border border-slate-200 bg-slate-50/50 lg:rounded-l-xl">
+          <div className="flex h-12 items-center justify-between border-b border-slate-200 px-3">
+            <span className="text-sm font-bold text-slate-800">Sin fecha</span>
+            <GripVertical size={17} className="text-slate-400" />
           </div>
-          {selectedTasks.length === 0 ? (
-            <p className="px-4 py-6 text-sm text-gray-400 text-center">Sin tareas este día</p>
-          ) : (
-            <div className="divide-y divide-gray-100">
-              {selectedTasks.map(t => (
-                <div key={t.id} onClick={() => onSelectTask(t)}
-                  className="px-4 py-3 hover:bg-gray-50 cursor-pointer transition flex items-center gap-3">
-                  <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${STATUS_COLOR[t.status]}`} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-800 truncate">{t.title}</p>
-                    <p className="text-xs text-gray-400">{t.project?.client?.name || '—'} · {t.project?.name || '—'}</p>
-                  </div>
-                  <span className="text-xs text-gray-400 shrink-0">
-                    {t.commitment_date?.startsWith(`${current.year}-${String(current.month + 1).padStart(2,'0')}-${String(selectedDay).padStart(2,'0')}`)
-                      ? '📅 Entrega' : '▶ Inicio'}
-                  </span>
-                </div>
-              ))}
+          <div className="space-y-3 p-2.5">
+            {undatedTasks.slice(0, 10).map(task => {
+              const color = colorFor(task)
+              return (
+                <button key={task.id} draggable disabled={savingTask === task.id} onDragStart={event => event.dataTransfer.setData('text/task-id', task.id)} onClick={() => onSelectTask(task)} className={`w-full rounded-lg border-l-4 bg-white p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow ${color.card}`}>
+                  <span className="block truncate text-xs font-bold">{task.title}</span>
+                  <span className="mt-2 flex items-center gap-1.5 truncate text-[11px] text-slate-500"><span className={`h-2 w-2 rounded-full ${color.dot}`} />{task.project?.client?.name || task.project?.name || 'Trabajo interno'}</span>
+                  <span className="mt-1 flex items-center gap-1 text-[11px] text-slate-500"><Clock3 size={11} /> Arrastra a un día</span>
+                </button>
+              )
+            })}
+          </div>
+        </aside>
+
+        <div className="overflow-x-auto rounded-r-xl border border-l-0 border-slate-200">
+          <div className="min-w-[760px]">
+            <div className="grid grid-cols-[48px_repeat(5,minmax(140px,1fr))] border-b border-slate-200 bg-white">
+              <div />
+              {weekDays.map(day => {
+                const dayTasks = datedTasks.filter(task => task.commitment_date?.slice(0, 10) === dateKey(day))
+                return <div key={dateKey(day)} className="border-l border-slate-200 px-2 py-2 text-center"><p className="text-sm font-bold text-slate-800 capitalize">{day.toLocaleDateString('es-MX', { weekday: 'short' })}</p><p className="text-xs text-slate-500">{day.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}</p><p className="mt-2 rounded bg-blue-50 py-1 text-[11px] font-medium text-blue-900">{dayTasks.length} tareas · {dayTasks.length} h</p></div>
+              })}
             </div>
-          )}
+            <div className="relative grid grid-cols-[48px_repeat(5,minmax(140px,1fr))]" style={{ height: HOURS.length * 54 }}>
+              <div className="relative bg-white">
+                {HOURS.map((hour, index) => <span key={hour} className="absolute right-2 text-[11px] text-slate-400" style={{ top: index * 54 - 7 }}>{String(hour).padStart(2, '0')}:00</span>)}
+              </div>
+              {weekDays.map((day, dayIndex) => {
+                const key = dateKey(day)
+                const dayTasks = datedTasks.filter(task => task.commitment_date?.slice(0, 10) === key)
+                return (
+                  <div key={key} onDragOver={event => { event.preventDefault(); setDropDay(key) }} onDragLeave={() => setDropDay(null)} onDrop={event => { event.preventDefault(); void assignDate(event.dataTransfer.getData('text/task-id'), day) }} className={`relative border-l border-slate-200 transition ${dropDay === key ? 'bg-blue-50 ring-2 ring-inset ring-blue-300' : 'bg-white'}`}>
+                    {HOURS.map((hour, index) => <div key={hour} className="absolute left-0 right-0 border-t border-slate-100" style={{ top: index * 54 }} />)}
+                    {dayTasks.map((task, index) => {
+                      const color = colorFor(task)
+                      const top = (1 + ((index * 2 + dayIndex) % 9)) * 54 + 5
+                      return <button key={task.id} onClick={() => onSelectTask(task)} className={`absolute left-2 right-2 z-10 rounded-md border p-2 text-left shadow-sm transition hover:z-20 hover:shadow-md ${color.card}`} style={{ top, minHeight: 48 }}><span className="block truncate text-[11px] font-bold">{task.title}</span><span className="mt-1 flex items-center gap-1 truncate text-[10px] opacity-75"><span className={`h-1.5 w-1.5 rounded-full ${color.dot}`} />{task.project?.client?.name || task.project?.name}</span></button>
+                    })}
+                    {dayTasks.length === 0 && dropDay === key && <div className="absolute inset-x-3 top-20 rounded-lg border-2 border-dashed border-blue-300 bg-white/80 p-4 text-center text-xs font-semibold text-blue-700">Soltar para asignar fecha</div>}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
         </div>
-      )}
-    </div>
+      </div>
+    </section>
   )
 }

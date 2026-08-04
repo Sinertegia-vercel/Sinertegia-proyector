@@ -359,7 +359,7 @@ export default function TeamDashboard({ embedded = false }: Props) {
     <>
       {/* Vista: Mi Calendario */}
       {teamView === 'calendar' && (
-        <TeamCalendarView tasks={tasks} onSelectTask={setSelectedTask} />
+        <TeamCalendarView tasks={tasks} onSelectTask={setSelectedTask} onTasksChange={fetchTasks} />
       )}
 
       {/* Vista: Hoja de Ruta */}
