@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { CalendarDays, LockKeyhole, Phone, UserRound } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../lib/supabase'
+import BirthdayDatePicker from './BirthdayDatePicker'
 
 export const REQUIRED_PROFILE_START = new Date(2026, 7, 5, 0, 0, 0)
 
@@ -54,7 +55,7 @@ export default function RequiredTeamProfileModal({ onComplete }: { onComplete: (
         <RequiredField label="Nombres" icon={<UserRound size={15} />}><input autoFocus value={form.firstNames} onChange={e => setForm({ ...form, firstNames: e.target.value })} placeholder="Ej. Leslie Nayeli" /></RequiredField>
         <RequiredField label="Apellidos" icon={<UserRound size={15} />}><input value={form.lastNames} onChange={e => setForm({ ...form, lastNames: e.target.value })} placeholder="Ej. Hernández López" /></RequiredField>
         <RequiredField label="Teléfono celular" icon={<Phone size={15} />}><div className="flex"><span className="flex items-center rounded-l-xl border border-r-0 border-slate-300 bg-slate-50 px-3 text-sm font-bold text-slate-700">🇲🇽 +52</span><input inputMode="numeric" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })} placeholder="10 dígitos" className="rounded-l-none!" /></div></RequiredField>
-        <RequiredField label="Fecha de nacimiento" icon={<CalendarDays size={15} />}><input type="date" value={form.birthDate} max={new Date().toISOString().slice(0, 10)} onChange={e => setForm({ ...form, birthDate: e.target.value })} /></RequiredField>
+        <RequiredField label="Fecha de nacimiento" icon={<CalendarDays size={15} />}><BirthdayDatePicker required value={form.birthDate} onChange={birthDate => setForm({ ...form, birthDate })} /></RequiredField>
       </div><p className="mt-4 text-xs text-slate-500">El prefijo +52 corresponde a México. Tu fecha completa es privada; al equipo solamente se le mostrará que es tu cumpleaños.</p>{error && <p className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-600">{error}</p>}<button onClick={save} disabled={saving} className="mt-6 w-full rounded-xl bg-blue-600 px-5 py-3.5 font-bold text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700 disabled:opacity-60">{saving ? 'Guardando datos...' : 'Guardar y entrar a mis tareas'}</button></div>
     </section>
   </div>
