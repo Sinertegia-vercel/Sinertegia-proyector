@@ -111,6 +111,9 @@ body {
 .ui-dark [class*="hover:bg-slate-100"]:hover { background-color: #263348 !important; }
 .ui-dark [class*="hover:bg-gray-50"]:hover,
 .ui-dark [class*="hover:bg-gray-100"]:hover { background-color: #29364b !important; }
+.ui-dark [class*="hover:bg-white"]:hover { background-color: #29364b !important; }
+.ui-dark button:hover .text-gray-800,
+.ui-dark button:hover .text-gray-700 { color: #f8fafc !important; }
 .ui-dark table thead { background-color: #1d273a !important; }
 .ui-dark table tbody tr { border-color: #354258 !important; }
 .ui-dark [role="dialog"] { color: #e2e8f0; }
