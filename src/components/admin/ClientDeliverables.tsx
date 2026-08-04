@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ExternalLink, ChevronDown, Link2, CheckSquare, Square, Search, Copy } from 'lucide-react'
+import { ExternalLink, ChevronDown, Link2, CheckSquare, Square, Search, Copy, FileText, Eye } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import type { Client } from '../../types'
 
@@ -9,6 +9,9 @@ interface TaskRow {
   status: string
   review_status: string | null
   department: string
+  updated_at: string
+  project?: { id: string; name: string }
+  assignee?: { full_name: string }
   links: { id: string; label: string; url: string }[]
 }
 
@@ -49,6 +52,7 @@ export default function ClientDeliverables({ fixedClientId, onlyApproved = false
   const [loading, setLoading] = useState(false)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'todos' | 'pendientes' | 'revision' | 'aprobados'>('todos')
+  const [projectFilter, setProjectFilter] = useState('todos')
 
   // Solo cargar lista de clientes si NO hay fixedClientId
   useEffect(() => {
@@ -78,7 +82,7 @@ export default function ClientDeliverables({ fixedClientId, onlyApproved = false
 
     let query = supabase
       .from('tasks')
-      .select('id, title, status, review_status, department, links:task_links(id, label, url)')
+      .select('id, title, status, review_status, department, updated_at, project:projects(id, name), assignee:users!assigned_to(full_name), links:task_links(id, label, url)')
       .in('project_id', projectIds)
       .order('department')
       .order('created_at')
@@ -106,16 +110,23 @@ export default function ClientDeliverables({ fixedClientId, onlyApproved = false
   const done = tasks.filter(t => t.status === 'completada').length
   const total = tasks.length
   const checkDone = checkItems.filter(i => i.done).length
+  const projectOptions = Array.from(new Map(tasks.map(task => task.project).filter(Boolean).map(project => [project!.id, project!])).values())
   const visibleTasks = tasks.filter(task => {
+    if (projectFilter !== 'todos' && task.project?.id !== projectFilter) return false
     if (search && !task.title.toLowerCase().includes(search.toLowerCase())) return false
     if (statusFilter === 'pendientes') return !task.review_status || task.review_status === 'cambios_solicitados'
     if (statusFilter === 'revision') return task.review_status === 'pendiente_revision' || task.review_status === 'pendiente_trafficker' || task.review_status === 'en_revision'
     if (statusFilter === 'aprobados') return task.review_status === 'aprobada' || task.status === 'completada'
     return true
   })
+  const deliverableRows = visibleTasks.flatMap(task => (task.links || []).map((link, index) => ({ task, link, version: `V${index + 1}` })))
 
   return (
     <div className="space-y-5">
+      <div>
+        <h2 className="text-xl font-bold text-gray-900">Entregables</h2>
+        <div className="mt-1 flex items-center gap-2 text-xs text-gray-400"><span>Cliente</span><span>→</span><span>Proyecto</span><span>→</span><span className="font-semibold text-blue-600">Entregables</span></div>
+      </div>
 
       {/* Selector de cliente — solo si no hay fixedClientId */}
       {!fixedClientId && (
@@ -156,111 +167,41 @@ export default function ClientDeliverables({ fixedClientId, onlyApproved = false
               <Search size={14} className="text-gray-400" />
               <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar entregables..." className="w-full bg-transparent text-sm outline-none" />
             </div>
+            <select value={projectFilter} onChange={e => setProjectFilter(e.target.value)} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 outline-none focus:ring-2 focus:ring-blue-500">
+              <option value="todos">Todos los proyectos</option>
+              {projectOptions.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
+            </select>
             {([['todos', 'Todos'], ['pendientes', 'Pendientes'], ['revision', 'En revisión'], ['aprobados', 'Aprobados']] as const).map(([value, label]) => (
               <button key={value} type="button" onClick={() => setStatusFilter(value)} className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${statusFilter === value ? 'bg-blue-600 text-white' : 'border border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>{label}</button>
             ))}
           </div>
           <div className="flex gap-5 items-start">
 
-          {/* ── Lista de tareas ── */}
-          <div className="flex-1 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-
-            {/* Barra de progreso */}
-            {total > 0 && (
-              <div className="px-5 pt-4 pb-3 border-b border-gray-100">
-                <div className="flex justify-between text-xs text-gray-500 mb-1.5">
-                  <span>{onlyApproved ? 'Entregables autorizados' : 'Progreso del proyecto'}</span>
-                  {!onlyApproved && (
-                    <span className="font-semibold">{Math.round((done / total) * 100)}%</span>
-                  )}
-                  {onlyApproved && (
-                    <span className="font-semibold">{total} disponible{total !== 1 ? 's' : ''}</span>
-                  )}
-                </div>
-                {!onlyApproved && (
-                  <div className="w-full bg-gray-100 rounded-full h-2">
-                    <div
-                      className="bg-green-500 h-2 rounded-full transition-all duration-700"
-                      style={{ width: `${total > 0 ? (done / total) * 100 : 0}%` }}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-
-            {total === 0 ? (
-              <div className="text-center py-14 text-gray-400">
-                <CheckSquare size={28} className="mx-auto mb-2 opacity-20" />
-                <p className="text-sm">
-                  {onlyApproved
-                    ? 'Aún no hay entregables autorizados para ti'
-                    : 'No hay tareas para este cliente'}
-                </p>
-                {onlyApproved && (
-                  <p className="text-xs mt-1 text-gray-400">Los entregables aparecerán aquí cuando el equipo los complete y sean autorizados</p>
-                )}
-              </div>
+          {/* Biblioteca de entregables: una fila por enlace o archivo */}
+          <div className="min-w-0 flex-1 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+            {deliverableRows.length === 0 ? (
+              <div className="py-16 text-center text-gray-400"><FileText size={30} className="mx-auto mb-2 opacity-30" /><p className="text-sm font-semibold">No hay entregables con estos filtros</p><p className="mt-1 text-xs">Los archivos y enlaces aparecerán cuando se adjunten a una tarea.</p></div>
             ) : (
-              <div className="divide-y divide-gray-100">
-                {visibleTasks.map(task => {
-                  const isCompleted = task.status === 'completada'
-                  const hasLinks = task.links && task.links.length > 0
-
-                  return (
-                    <div
-                      key={task.id}
-                      className={`px-5 py-3.5 flex items-start gap-3 transition ${isCompleted ? 'bg-green-50/40' : 'hover:bg-gray-50'}`}
-                    >
-                      {/* Checkbox de estado */}
-                      <div className="shrink-0 mt-0.5">
-                        {isCompleted
-                          ? <CheckSquare size={18} className="text-green-500" />
-                          : <Square size={18} className="text-gray-300" />
-                        }
-                      </div>
-
-                      {/* Contenido */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className={`text-sm font-medium ${isCompleted ? 'line-through text-gray-400' : 'text-gray-800'}`}>
-                            {task.title}
-                          </span>
-                          {/* Departamento solo para admin/equipo */}
-                          {!onlyApproved && (
-                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${DEPT_COLORS[task.department] || 'bg-gray-100 text-gray-600'}`}>
-                              {DEPT_LABELS[task.department] || task.department}
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Links */}
-                        {hasLinks && (
-                          <div className="flex flex-wrap gap-2 mt-1.5">
-                            {task.links.map(link => (
-                              <span key={link.id} className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 text-xs font-medium text-blue-600">
-                                <a href={link.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 px-2.5 py-0.5 hover:underline"><ExternalLink size={10} />{link.label || 'Abrir entregable'}</a>
-                                <button type="button" onClick={() => navigator.clipboard.writeText(link.url)} title="Copiar enlace" className="border-l border-blue-200 px-2 py-1 hover:text-blue-800"><Copy size={10} /></button>
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Badge de estado */}
-                      <div className="shrink-0">
-                        {isCompleted ? (
-                          <span className="text-xs font-semibold text-green-600 bg-green-100 px-2.5 py-1 rounded-full">✓ Lista</span>
-                        ) : task.status === 'en_progreso' ? (
-                          <span className="text-xs font-semibold text-blue-600 bg-blue-100 px-2.5 py-1 rounded-full">En progreso</span>
-                        ) : task.status === 'bloqueada' ? (
-                          <span className="text-xs font-semibold text-red-600 bg-red-100 px-2.5 py-1 rounded-full">Bloqueada</span>
-                        ) : (
-                          <span className="text-xs font-semibold text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full">Pendiente</span>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[820px] text-sm">
+                  <thead className="border-b border-gray-200 bg-gray-50 text-left text-xs font-semibold text-gray-500"><tr><th className="px-4 py-3">Entregable</th><th className="px-4 py-3">Proyecto</th><th className="px-4 py-3">Versión</th><th className="px-4 py-3">Responsable</th><th className="px-4 py-3">Actualizado</th><th className="px-4 py-3">Estado</th><th className="px-4 py-3 text-right">Acciones</th></tr></thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {deliverableRows.map(({ task, link, version }) => {
+                      const approved = task.review_status === 'aprobada' || task.status === 'completada'
+                      const changes = task.review_status === 'cambios_solicitados'
+                      const reviewing = task.review_status === 'pendiente_revision' || task.review_status === 'pendiente_trafficker' || task.review_status === 'en_revision'
+                      return <tr key={link.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-3"><div className="flex items-center gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600"><FileText size={18} /></span><div className="min-w-0"><p className="max-w-[220px] truncate font-semibold text-gray-800">{link.label || task.title}</p><p className="max-w-[220px] truncate text-xs text-gray-400">{task.title}</p></div></div></td>
+                        <td className="px-4 py-3 text-xs text-gray-600">{task.project?.name || 'Sin proyecto'}</td>
+                        <td className="px-4 py-3"><span className="rounded-md bg-gray-100 px-2 py-1 text-xs font-bold text-gray-600">{version}</span></td>
+                        <td className="px-4 py-3 text-xs text-gray-600">{task.assignee?.full_name || 'Sin registrar'}</td>
+                        <td className="px-4 py-3 text-xs text-gray-500">{task.updated_at ? new Date(task.updated_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Sin registrar'}</td>
+                        <td className="px-4 py-3">{approved ? <span className="rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700">Final aprobado</span> : changes ? <span className="rounded-full bg-orange-100 px-2.5 py-1 text-xs font-semibold text-orange-700">Cambios solicitados</span> : reviewing ? <span className="rounded-full bg-purple-100 px-2.5 py-1 text-xs font-semibold text-purple-700">En revisión</span> : <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600">Pendiente</span>}</td>
+                        <td className="px-4 py-3"><div className="flex justify-end gap-2"><a href={link.url} target="_blank" rel="noreferrer" title="Vista previa" className="rounded-lg border border-gray-200 p-2 text-gray-500 hover:border-blue-300 hover:text-blue-600"><Eye size={14} /></a><button type="button" onClick={() => navigator.clipboard.writeText(link.url)} title="Copiar enlace" className="rounded-lg border border-gray-200 p-2 text-gray-500 hover:border-blue-300 hover:text-blue-600"><Copy size={14} /></button></div></td>
+                      </tr>
+                    })}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
