@@ -1,11 +1,12 @@
 import { useState, useRef } from 'react'
-import { LogOut, Camera, Clock, Building2, Home, X, KeyRound } from 'lucide-react'
+import { LogOut, Camera, Clock, Building2, Home, X, KeyRound, UserRound } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useWorkSession } from '../../contexts/WorkSessionContext'
 import { supabase } from '../../lib/supabase'
 import NotificationBell from './NotificationBell'
 import UserAvatar from './UserAvatar'
 import GlobalSearch from './GlobalSearch'
+import UserProfile from './UserProfile'
 
 export default function TopBarActions() {
   const { user, signOut, refreshUser } = useAuth()
@@ -20,6 +21,7 @@ export default function TopBarActions() {
   const [passwordMsg, setPasswordMsg] = useState('')
   const [changingPassword, setChangingPassword] = useState(false)
   const [showSessionSummary, setShowSessionSummary] = useState(false)
+  const [showProfile, setShowProfile] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const isTeam = user?.role === 'team' || user?.role === 'admin'
@@ -149,6 +151,13 @@ export default function TopBarActions() {
                   )}
                 </div>
                 <button
+                  onClick={() => { setMenuOpen(false); setShowProfile(true) }}
+                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 transition"
+                >
+                  <UserRound size={15} className="text-blue-600" />
+                  Mi perfil
+                </button>
+                <button
                   onClick={() => fileInputRef.current?.click()}
                   className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition"
                 >
@@ -176,6 +185,14 @@ export default function TopBarActions() {
 
         <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
       </div>
+
+      {showProfile && (
+        <UserProfile
+          onClose={() => setShowProfile(false)}
+          onChangePhoto={() => fileInputRef.current?.click()}
+          onChangePassword={() => { setShowProfile(false); setShowChangePassword(true) }}
+        />
+      )}
 
       {/* Modal cambiar contraseña */}
       {showSessionSummary && currentSession && (
