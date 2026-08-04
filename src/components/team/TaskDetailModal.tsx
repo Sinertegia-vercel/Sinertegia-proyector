@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { X, ExternalLink, Send, CheckCircle, RotateCcw, ShieldCheck, ThumbsUp, Plus, Trash2, MessageSquare, Pencil, Upload, FileCode, Image as ImageIcon, File as FileIcon, ListChecks, Timer, Play, Square, Link2, AlertTriangle } from 'lucide-react'
+import { X, ExternalLink, Send, CheckCircle, RotateCcw, ShieldCheck, ThumbsUp, Plus, Trash2, MessageSquare, Pencil, Upload, FileCode, Image as ImageIcon, File as FileIcon, ListChecks, Timer, Play, Square, Link2, AlertTriangle, ChevronDown, SlidersHorizontal } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import type { Task, User, Comment, Subtask, TimeEntry } from '../../types'
@@ -37,6 +37,9 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone,
   const [editCommentValue, setEditCommentValue] = useState('')
   const [uploadingFile, setUploadingFile] = useState(false)
   const [uploadError, setUploadError] = useState('')
+  const [advancedOpen, setAdvancedOpen] = useState(false)
+  const [commentsOpen, setCommentsOpen] = useState(false)
+  const [submitAttempted, setSubmitAttempted] = useState(false)
 
   // Subtareas
   const [subtasks, setSubtasks] = useState<Subtask[]>([])
@@ -233,9 +236,11 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone,
   // ─── helpers ─────────────────────────────────────────────────────────────
   async function addLink(e: React.FormEvent) {
     e.preventDefault()
-    if (!newLabel.trim() || !newUrl.trim()) return
+    if (!newUrl.trim()) return
+    let automaticLabel = 'Entregable'
+    try { automaticLabel = new URL(newUrl.trim()).hostname.replace(/^www\./, '') || automaticLabel } catch { /* type=url valida antes */ }
     const { data } = await supabase.from('task_links')
-      .insert({ task_id: task.id, label: newLabel.trim(), url: newUrl.trim() })
+      .insert({ task_id: task.id, label: newLabel.trim() || automaticLabel, url: newUrl.trim() })
       .select().single()
     if (data) setLinks(prev => [...prev, data])
     setNewLabel(''); setNewUrl('')
@@ -454,8 +459,6 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone,
             <p className="text-xs text-gray-400 mt-1">{task.project?.client?.name} — {task.project?.name}</p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${stepColor}`}>{stepLabel}</span>
-
             {/* Selector de estatus operativo — visible si la tarea no está completada */}
             {currentStatus !== 'completada' && (isTeam || isAdmin) && (() => {
               const opt = STATUS_OPTIONS.find(o => o.value === currentStatus) || STATUS_OPTIONS[0]
@@ -513,29 +516,10 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone,
             </div>
           )}
 
-          {/* ── Indicador de pasos ── */}
-          <div className="flex items-center gap-2">
-            {[
-              { n: 1, label: 'Equipo completa' },
-              { n: 2, label: 'Revisor aprueba' },
-              { n: 3, label: 'Trafficker autoriza' },
-            ].map(({ n, label }, i) => (
-              <div key={n} className="flex items-center gap-2 flex-1">
-                <div className="flex flex-col items-center flex-1">
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all ${
-                    step >= n
-                      ? 'bg-blue-600 border-blue-600 text-white'
-                      : step === 4
-                      ? 'bg-green-500 border-green-500 text-white'
-                      : 'bg-white border-gray-300 text-gray-400'
-                  }`}>
-                    {step > n || step === 4 ? <CheckCircle size={14} /> : n}
-                  </div>
-                  <span className="text-[10px] text-gray-400 mt-1 text-center leading-tight">{label}</span>
-                </div>
-                {i < 2 && <div className={`h-0.5 w-6 shrink-0 mb-4 ${step > n ? 'bg-blue-600' : 'bg-gray-200'}`} />}
-              </div>
-            ))}
+          {/* Flujo compacto */}
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+            <p className="text-[11px] font-medium text-gray-500">Preparando entrega <span className="mx-1 text-gray-300">→</span> Revisión <span className="mx-1 text-gray-300">→</span> Autorización</p>
+            <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${stepColor}`}>{stepLabel}</span>
           </div>
 
           {/* ── Fecha compromiso ── */}
@@ -567,6 +551,16 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone,
               <span>Compromiso de entrega: <strong className="text-gray-700">{new Date(commitDate + 'T00:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' })}</strong></span>
             </div>
           )}
+
+          <button type="button" onClick={() => setAdvancedOpen(open => !open)}
+            className="flex w-full items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-left transition hover:border-blue-200 hover:bg-blue-50/50">
+            <SlidersHorizontal size={15} className="text-blue-600" />
+            <span className="flex-1"><b className="block text-xs text-gray-700">Opciones adicionales</b><small className="text-[11px] text-gray-400">Dependencias, subtareas y tiempo trabajado</small></span>
+            <ChevronDown size={16} className={`text-gray-400 transition-transform ${advancedOpen ? 'rotate-180' : ''}`} />
+          </button>
+
+          {advancedOpen && (
+            <div className="space-y-5 rounded-xl border border-gray-200 bg-gray-50/40 p-4">
 
           {/* ── Dependencia con otra tarea ── */}
           {(() => {
@@ -673,11 +667,13 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone,
               )}
             </div>
           </div>
+            </div>
+          )}
 
           {/* ── Links / Entregables ── */}
           <div>
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Entregables</p>
-            {links.length === 0 && (
+            {submitAttempted && links.length === 0 && (
               <p className="text-xs text-red-500 mb-2 font-medium">📎 Es obligatorio añadir al menos un link o archivo del entregable</p>
             )}
             <div className="space-y-1.5 mb-3">
@@ -705,7 +701,7 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone,
               <div className="space-y-2">
                 <form onSubmit={addLink} className="flex gap-2">
                   <input value={newLabel} onChange={e => setNewLabel(e.target.value)}
-                    placeholder="Nombre del link" required
+                    placeholder="Nombre (opcional)"
                     className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" />
                   <input value={newUrl} onChange={e => setNewUrl(e.target.value)}
                     placeholder="https://..." type="url" required
@@ -752,10 +748,8 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone,
           ═══════════════════════════════════════════════════════ */}
           {step === 1 && isTeam && (
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
-              <p className="text-sm font-bold text-blue-800">Paso 1 — ¿Listo el entregable?</p>
-              <p className="text-xs text-blue-600">Agrega el link de entrega arriba y elige quién lo revisa.</p>
               <div>
-                <label className="block text-xs font-semibold text-blue-700 mb-1">¿Quién lo revisa?</label>
+                <label className="block text-xs font-semibold text-blue-700 mb-1">Enviar para revisión a</label>
                 <select value={reviewerId} onChange={e => setReviewerId(e.target.value)}
                   className="w-full border border-blue-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
                   <option value="">Trafficker / Líder (por defecto)</option>
@@ -764,11 +758,13 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone,
                   ))}
                 </select>
               </div>
-              <button type="button" onClick={submitForReview} disabled={busy || links.length === 0}
-                title={links.length === 0 ? 'Añade al menos un entregable primero' : undefined}
+              <button type="button" onClick={() => {
+                setSubmitAttempted(true)
+                if (links.length > 0) void submitForReview()
+              }} disabled={busy}
                 className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold py-2.5 rounded-lg transition disabled:opacity-50">
                 <Send size={14} />
-                {busy ? 'Enviando...' : links.length === 0 ? 'Añade un entregable para continuar' : 'Solicitar revisión'}
+                {busy ? 'Enviando...' : 'Enviar a revisión'}
               </button>
             </div>
           )}
@@ -904,9 +900,14 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone,
 
           {/* ── Comentarios ── */}
           <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-              <MessageSquare size={13} /> Comentarios
-            </p>
+            <button type="button" onClick={() => setCommentsOpen(open => !open)}
+              className="flex w-full items-center gap-2 rounded-xl border border-gray-200 px-4 py-3 text-left transition hover:bg-gray-50">
+              <MessageSquare size={14} className="text-gray-500" />
+              <span className="flex-1 text-xs font-semibold uppercase tracking-wide text-gray-600">Comentarios {comments.length > 0 ? `(${comments.length})` : ''}</span>
+              <ChevronDown size={16} className={`text-gray-400 transition-transform ${commentsOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {commentsOpen && (
+              <div className="mt-3">
             <div className="space-y-2 mb-3 max-h-48 overflow-y-auto">
               {comments.length === 0 && (
                 <p className="text-xs text-gray-400">Aún no hay comentarios, escribe el primero</p>
@@ -968,14 +969,8 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone,
                 <Send size={14} />
               </button>
             </form>
-          </div>
-
-          {/* Botón cerrar */}
-          <div className="pt-2 border-t border-gray-100">
-            <button type="button" onClick={onClose}
-              className="w-full py-2 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded-lg transition">
-              Cerrar
-            </button>
+              </div>
+            )}
           </div>
 
         </div>
