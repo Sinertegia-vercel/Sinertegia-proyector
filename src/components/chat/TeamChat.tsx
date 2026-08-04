@@ -1,9 +1,10 @@
 import { useEffect, useState, useRef } from 'react'
-import { Users, Music, MoreVertical, Trash2, Search } from 'lucide-react'
+import { Users, Music, MoreVertical, Trash2, Search, Reply, Smile, Pin, ListPlus, Link2, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import type { ChatMessage, User } from '../../types'
+import type { ChatMessage, Project, Task, User } from '../../types'
 import MentionInput from './MentionInput'
+import CreateTaskModal from '../admin/CreateTaskModal'
 
 function renderWithMentions(content: string, userNames: string[]) {
   if (!content || !userNames.length) return <span>{content}</span>
@@ -62,6 +63,14 @@ export default function TeamChat() {
   const [loading, setLoading] = useState(true)
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [replyTo, setReplyTo] = useState<ChatMessage | null>(null)
+  const [reactionMessageId, setReactionMessageId] = useState<string | null>(null)
+  const [convertMessage, setConvertMessage] = useState<ChatMessage | null>(null)
+  const [linkMessage, setLinkMessage] = useState<ChatMessage | null>(null)
+  const [projects, setProjects] = useState<Project[]>([])
+  const [teamTasks, setTeamTasks] = useState<Task[]>([])
+  const [onlineIds, setOnlineIds] = useState<Set<string>>(new Set())
+  const [chatError, setChatError] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => { initRoom() }, [])
@@ -76,15 +85,27 @@ export default function TeamChat() {
   }, [roomId])
 
   useEffect(() => {
+    if (!roomId || !user) return
+    const presence = supabase.channel(`team-presence-${roomId}`, { config: { presence: { key: user.id } } })
+      .on('presence', { event: 'sync' }, () => setOnlineIds(new Set(Object.keys(presence.presenceState()))))
+      .subscribe(async status => { if (status === 'SUBSCRIBED') await presence.track({ user_id: user.id, online_at: new Date().toISOString() }) })
+    return () => { supabase.removeChannel(presence) }
+  }, [roomId, user?.id])
+
+  useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
   async function initRoom() {
-    const [id, { data: users }] = await Promise.all([
+    const [id, { data: users }, { data: projectRows }, { data: taskRows }] = await Promise.all([
       getOrCreateTeamRoom(),
       supabase.from('users').select('*').in('role', ['admin', 'team']),
+      supabase.from('projects').select('*, client:clients(*)').eq('status', 'activo'),
+      supabase.from('tasks').select('*, project:projects(*, client:clients(*))').neq('status', 'completada').order('updated_at', { ascending: false }).limit(100),
     ])
     setChatUsers(users || [])
+    setProjects(projectRows || [])
+    setTeamTasks((taskRows as Task[]) || [])
     if (id) { setRoomId(id); await fetchMessages(id) }
     setLoading(false)
   }
@@ -128,8 +149,10 @@ export default function TeamChat() {
       room_id: roomId,
       sender_id: user.id,
       content: content || '',
+      ...(replyTo ? { reply_to_id: replyTo.id } : {}),
       ...(file_url ? { file_url, file_type, file_name } : {}),
     })
+    setReplyTo(null)
 
     const others = chatUsers.filter(u => u.id !== user.id)
     if (others.length > 0) {
@@ -166,20 +189,60 @@ export default function TeamChat() {
     setMessages(prev => prev.filter(m => m.id !== msg.id))
   }
 
+  async function toggleReaction(msg: ChatMessage, emoji: string) {
+    if (!user) return
+    const reactions = { ...(msg.reactions || {}) }
+    const users = reactions[emoji] || []
+    reactions[emoji] = users.includes(user.id) ? users.filter(id => id !== user.id) : [...users, user.id]
+    if (reactions[emoji].length === 0) delete reactions[emoji]
+    const { error } = await supabase.from('chat_messages').update({ reactions }).eq('id', msg.id)
+    if (error) setChatError('Primero hay que activar la actualización del chat en Supabase.')
+    else setMessages(prev => prev.map(item => item.id === msg.id ? { ...item, reactions } : item))
+    setReactionMessageId(null)
+  }
+
+  async function togglePin(msg: ChatMessage) {
+    if (!roomId) return
+    setOpenMenuId(null)
+    if (!msg.is_pinned) await supabase.from('chat_messages').update({ is_pinned: false }).eq('room_id', roomId)
+    const { error } = await supabase.from('chat_messages').update({ is_pinned: !msg.is_pinned }).eq('id', msg.id)
+    if (error) setChatError('Primero hay que activar la actualización del chat en Supabase.')
+    else await fetchMessages(roomId)
+  }
+
+  async function linkToTask(taskId: string) {
+    if (!linkMessage) return
+    const { error } = await supabase.from('chat_messages').update({ task_id: taskId }).eq('id', linkMessage.id)
+    if (!error && roomId) await fetchMessages(roomId)
+    setLinkMessage(null)
+  }
+
+  async function markConverted() {
+    if (!convertMessage) return
+    await supabase.from('chat_messages').update({ converted_to_task: true }).eq('id', convertMessage.id)
+    if (roomId) await fetchMessages(roomId)
+    setConvertMessage(null)
+  }
+
   if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Cargando chat...</div>
 
   const visibleMessages = messages.filter(m => !(m.deleted_for || []).includes(user?.id || '') && (!search.trim() || (m.content || '').toLowerCase().includes(search.toLowerCase())))
+  const pinnedMessage = messages.find(message => message.is_pinned)
 
   return (
     <div className="flex flex-col h-[600px] bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-      <div className="px-4 py-3 border-b border-gray-100 bg-gradient-to-r from-blue-700 to-blue-900 text-white flex items-center gap-2">
-        <Users size={16} />
+      <div className="px-4 py-3 border-b border-gray-100 bg-white text-gray-800 flex items-center gap-2">
+        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-white"><Users size={17} /></span>
         <div>
-          <h3 className="font-semibold text-sm">Chat Interno del Equipo</h3>
-          <p className="text-xs text-blue-200">Solo visible para el equipo</p>
+          <h3 className="font-bold text-base">Chat del equipo</h3>
+          <p className="text-xs text-gray-400">Solo visible para el equipo</p>
         </div>
-        <div className="ml-auto flex items-center gap-2 text-xs text-blue-100"><span className="h-2 w-2 rounded-full bg-green-400" />{chatUsers.length} participantes</div>
+        <div className="ml-3 hidden -space-x-2 sm:flex">{chatUsers.slice(0, 4).map(member => <span key={member.id} title={member.full_name} className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-gray-200 text-[9px] font-bold text-gray-600">{member.full_name.charAt(0)}</span>)}{chatUsers.length > 4 && <span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-blue-50 text-[9px] font-bold text-blue-600">+{chatUsers.length - 4}</span>}</div>
+        <div className="ml-auto flex items-center gap-2 text-xs text-gray-500"><span className="h-2 w-2 rounded-full bg-green-500" />{onlineIds.size || 1} conectados</div>
       </div>
+
+      {pinnedMessage && <button type="button" onClick={() => document.getElementById(`team-message-${pinnedMessage.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })} className="flex items-center gap-2 border-b border-blue-100 bg-blue-50 px-4 py-2 text-left text-xs text-blue-800"><Pin size={13} className="fill-blue-600 text-blue-600" /><strong>Mensaje fijado:</strong><span className="truncate">{pinnedMessage.content || pinnedMessage.file_name}</span></button>}
+      {chatError && <div className="flex items-center justify-between bg-amber-50 px-4 py-2 text-xs text-amber-700"><span>{chatError}</span><button onClick={() => setChatError('')}><X size={13} /></button></div>}
 
       <div className="border-b border-gray-100 bg-white px-4 py-2.5">
         <div className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2"><Search size={14} className="text-gray-400" /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar en el chat" className="w-full bg-transparent text-sm outline-none" /></div>
@@ -196,12 +259,13 @@ export default function TeamChat() {
           const isMe = msg.sender_id === user?.id
           const senderName = (msg.sender as any)?.full_name || 'Usuario'
           const initial = senderName.charAt(0).toUpperCase()
+          const repliedMessage = msg.reply_to_id ? messages.find(item => item.id === msg.reply_to_id) : null
           const dateLabel = new Date(msg.created_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'long' })
           const previousDate = index > 0 ? new Date(visibleMessages[index - 1].created_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'long' }) : ''
           return (
             <div key={msg.id}>
             {dateLabel !== previousDate && <div className="my-3 flex items-center gap-3"><span className="h-px flex-1 bg-gray-200" /><span className="rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-gray-400 shadow-sm">{dateLabel}</span><span className="h-px flex-1 bg-gray-200" /></div>}
-            <div className={`flex gap-2 group ${isMe ? 'flex-row-reverse' : ''}`}>
+            <div id={`team-message-${msg.id}`} className={`flex gap-2 group rounded-lg p-1 transition ${msg.is_pinned ? 'bg-blue-50 ring-1 ring-blue-100' : ''} ${isMe ? 'flex-row-reverse' : ''}`}>
               <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${isMe ? 'bg-blue-600 text-white' : 'bg-gray-300 text-gray-700'}`}>
                 {initial}
               </div>
@@ -213,6 +277,7 @@ export default function TeamChat() {
                   </div>
                 ) : (
                   <>
+                    {repliedMessage && <div className={`mb-1 max-w-full rounded-lg border-l-2 px-3 py-1.5 text-xs ${isMe ? 'border-blue-200 bg-blue-700 text-blue-100' : 'border-blue-500 bg-gray-100 text-gray-500'}`}><p className="font-semibold">Respuesta a {(repliedMessage.sender as any)?.full_name || 'mensaje'}</p><p className="truncate opacity-80">{repliedMessage.content || repliedMessage.file_name}</p></div>}
                     {msg.content && (
                       <div className={`px-3 py-2 rounded-xl text-sm ${isMe ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white text-gray-800 rounded-tl-none border border-gray-200'}`}>
                         {renderWithMentions(msg.content, chatUsers.map(u => u.full_name))}
@@ -221,8 +286,11 @@ export default function TeamChat() {
                     {msg.file_url && msg.file_type && msg.file_name && (
                       <FilePreview url={msg.file_url} type={msg.file_type} name={msg.file_name} isMe={isMe} />
                     )}
+                    {msg.task_id && <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('open-task', { detail: { taskId: msg.task_id } }))} className="mt-1 inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-600"><Link2 size={9} /> Ver tarea vinculada</button>}
+                    {msg.converted_to_task && !msg.task_id && <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[10px] font-semibold text-green-600"><ListPlus size={9} /> Convertido en tarea</span>}
                   </>
                 )}
+                {Object.entries(msg.reactions || {}).length > 0 && <div className="mt-1 flex flex-wrap gap-1">{Object.entries(msg.reactions || {}).map(([emoji, ids]) => <button key={emoji} type="button" onClick={() => toggleReaction(msg, emoji)} className={`rounded-full border px-2 py-0.5 text-[11px] ${ids.includes(user?.id || '') ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-white'}`}>{emoji} {ids.length}</button>)}</div>}
                 <div className="flex items-center gap-1.5 mt-1 mx-1">
                   <span className="text-xs text-gray-300">
                     {new Date(msg.created_at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
@@ -238,6 +306,11 @@ export default function TeamChat() {
                         <>
                           <div className="fixed inset-0 z-10" onClick={() => setOpenMenuId(null)} />
                           <div className={`absolute z-20 top-5 ${isMe ? 'right-0' : 'left-0'} bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[160px]`}>
+                            <button type="button" onClick={() => { setReplyTo(msg); setOpenMenuId(null) }} className="w-full flex items-center gap-2 text-left px-3 py-2 text-xs text-gray-600 hover:bg-gray-50"><Reply size={12} /> Responder</button>
+                            <button type="button" onClick={() => { setReactionMessageId(msg.id); setOpenMenuId(null) }} className="w-full flex items-center gap-2 text-left px-3 py-2 text-xs text-gray-600 hover:bg-gray-50"><Smile size={12} /> Reaccionar</button>
+                            <button type="button" onClick={() => togglePin(msg)} className="w-full flex items-center gap-2 text-left px-3 py-2 text-xs text-gray-600 hover:bg-gray-50"><Pin size={12} /> {msg.is_pinned ? 'Desfijar mensaje' : 'Fijar mensaje'}</button>
+                            <button type="button" onClick={() => { setConvertMessage(msg); setOpenMenuId(null) }} className="w-full flex items-center gap-2 text-left px-3 py-2 text-xs text-gray-600 hover:bg-gray-50"><ListPlus size={12} /> Convertir en tarea</button>
+                            <button type="button" onClick={() => { setLinkMessage(msg); setOpenMenuId(null) }} className="w-full flex items-center gap-2 text-left px-3 py-2 text-xs text-gray-600 hover:bg-gray-50"><Link2 size={12} /> Vincular con una tarea</button>
                             <button type="button" onClick={() => deleteForMe(msg)}
                               className="w-full flex items-center gap-2 text-left px-3 py-2 text-xs text-gray-600 hover:bg-gray-50">
                               <Trash2 size={12} /> Borrar para mí
@@ -263,6 +336,7 @@ export default function TeamChat() {
       </div>
 
       <div className="border-t border-gray-100 p-3 bg-white">
+        {replyTo && <div className="mb-2 flex items-center gap-2 rounded-lg border-l-2 border-blue-500 bg-blue-50 px-3 py-2 text-xs"><Reply size={13} className="text-blue-600" /><div className="min-w-0 flex-1"><p className="font-semibold text-blue-700">Respondiendo a {(replyTo.sender as any)?.full_name || 'mensaje'}</p><p className="truncate text-gray-500">{replyTo.content || replyTo.file_name}</p></div><button type="button" onClick={() => setReplyTo(null)} className="text-gray-400"><X size={14} /></button></div>}
         <MentionInput
           value={newMessage}
           onChange={setNewMessage}
@@ -274,6 +348,12 @@ export default function TeamChat() {
           placeholder="Escribe un mensaje... (@ para mencionar)"
         />
       </div>
+
+      {reactionMessageId && (() => { const target = messages.find(message => message.id === reactionMessageId); return target ? <><div className="fixed inset-0 z-40" onClick={() => setReactionMessageId(null)} /><div className="fixed left-1/2 top-1/2 z-50 flex -translate-x-1/2 -translate-y-1/2 gap-2 rounded-2xl border border-gray-200 bg-white p-3 shadow-2xl">{['👍', '❤️', '🎉', '✅', '👏', '😂'].map(emoji => <button key={emoji} type="button" onClick={() => toggleReaction(target, emoji)} className="rounded-xl p-2 text-xl hover:bg-gray-100">{emoji}</button>)}</div></> : null })()}
+
+      {convertMessage && <CreateTaskModal projects={projects} teamMembers={chatUsers} prefillTitle={convertMessage.content || convertMessage.file_name || 'Tarea desde el chat'} onClose={() => setConvertMessage(null)} onCreated={markConverted} />}
+
+      {linkMessage && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"><div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl"><div className="flex items-center justify-between border-b border-gray-100 px-5 py-4"><div><h3 className="font-bold text-gray-900">Vincular con una tarea</h3><p className="mt-0.5 text-xs text-gray-400">El mensaje quedará conectado a la tarea elegida.</p></div><button type="button" onClick={() => setLinkMessage(null)} className="text-gray-400"><X size={18} /></button></div><div className="max-h-80 divide-y divide-gray-100 overflow-y-auto">{teamTasks.map(task => <button key={task.id} type="button" onClick={() => linkToTask(task.id)} className="w-full px-5 py-3 text-left hover:bg-blue-50"><p className="truncate text-sm font-semibold text-gray-800">{task.title}</p><p className="mt-0.5 truncate text-xs text-gray-400">{task.project?.client?.name || task.project?.name || 'Trabajo interno'}</p></button>)}{teamTasks.length === 0 && <p className="p-8 text-center text-sm text-gray-400">No hay tareas activas.</p>}</div></div></div>}
     </div>
   )
 }

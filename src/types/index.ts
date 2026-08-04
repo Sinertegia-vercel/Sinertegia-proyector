@@ -21,6 +21,9 @@ export interface ChatMessage {
   file_name?: string
   deleted_for_everyone?: boolean
   deleted_for?: string[]
+  reply_to_id?: string
+  is_pinned?: boolean
+  reactions?: Record<string, string[]>
   sender?: User
 }
 
