@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ExternalLink, ChevronDown, Link2, CheckSquare, Square } from 'lucide-react'
+import { ExternalLink, ChevronDown, Link2, CheckSquare, Square, Search, Copy } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import type { Client } from '../../types'
 
@@ -47,6 +47,8 @@ export default function ClientDeliverables({ fixedClientId, onlyApproved = false
   const [checkItems, setCheckItems] = useState<CheckItem[]>([])
   const [newCheckText, setNewCheckText] = useState('')
   const [loading, setLoading] = useState(false)
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'todos' | 'pendientes' | 'revision' | 'aprobados'>('todos')
 
   // Solo cargar lista de clientes si NO hay fixedClientId
   useEffect(() => {
@@ -104,6 +106,13 @@ export default function ClientDeliverables({ fixedClientId, onlyApproved = false
   const done = tasks.filter(t => t.status === 'completada').length
   const total = tasks.length
   const checkDone = checkItems.filter(i => i.done).length
+  const visibleTasks = tasks.filter(task => {
+    if (search && !task.title.toLowerCase().includes(search.toLowerCase())) return false
+    if (statusFilter === 'pendientes') return !task.review_status || task.review_status === 'cambios_solicitados'
+    if (statusFilter === 'revision') return task.review_status === 'pendiente_revision' || task.review_status === 'pendiente_trafficker' || task.review_status === 'en_revision'
+    if (statusFilter === 'aprobados') return task.review_status === 'aprobada' || task.status === 'completada'
+    return true
+  })
 
   return (
     <div className="space-y-5">
@@ -141,7 +150,17 @@ export default function ClientDeliverables({ fixedClientId, onlyApproved = false
       )}
 
       {selectedClientId && !loading && (
-        <div className="flex gap-5 items-start">
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
+            <div className="flex min-w-[220px] flex-1 items-center gap-2 rounded-lg border border-gray-200 px-3 py-2">
+              <Search size={14} className="text-gray-400" />
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar entregables..." className="w-full bg-transparent text-sm outline-none" />
+            </div>
+            {([['todos', 'Todos'], ['pendientes', 'Pendientes'], ['revision', 'En revisión'], ['aprobados', 'Aprobados']] as const).map(([value, label]) => (
+              <button key={value} type="button" onClick={() => setStatusFilter(value)} className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${statusFilter === value ? 'bg-blue-600 text-white' : 'border border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>{label}</button>
+            ))}
+          </div>
+          <div className="flex gap-5 items-start">
 
           {/* ── Lista de tareas ── */}
           <div className="flex-1 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
@@ -183,7 +202,7 @@ export default function ClientDeliverables({ fixedClientId, onlyApproved = false
               </div>
             ) : (
               <div className="divide-y divide-gray-100">
-                {tasks.map(task => {
+                {visibleTasks.map(task => {
                   const isCompleted = task.status === 'completada'
                   const hasLinks = task.links && task.links.length > 0
 
@@ -218,16 +237,10 @@ export default function ClientDeliverables({ fixedClientId, onlyApproved = false
                         {hasLinks && (
                           <div className="flex flex-wrap gap-2 mt-1.5">
                             {task.links.map(link => (
-                              <a
-                                key={link.id}
-                                href={link.url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-1 text-xs text-blue-600 bg-blue-50 border border-blue-200 rounded-full px-2.5 py-0.5 hover:bg-blue-100 transition font-medium"
-                              >
-                                <ExternalLink size={10} />
-                                {link.label}
-                              </a>
+                              <span key={link.id} className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 text-xs font-medium text-blue-600">
+                                <a href={link.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 px-2.5 py-0.5 hover:underline"><ExternalLink size={10} />{link.label || 'Abrir entregable'}</a>
+                                <button type="button" onClick={() => navigator.clipboard.writeText(link.url)} title="Copiar enlace" className="border-l border-blue-200 px-2 py-1 hover:text-blue-800"><Copy size={10} /></button>
+                              </span>
                             ))}
                           </div>
                         )}
@@ -255,7 +268,7 @@ export default function ClientDeliverables({ fixedClientId, onlyApproved = false
           {/* ── Checklist lateral ── */}
           <div className="w-60 shrink-0 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
-              <p className="text-sm font-bold text-gray-700">📋 {onlyApproved ? 'Mis notas' : 'Pendientes'}</p>
+              <p className="text-sm font-bold text-gray-700">📋 {onlyApproved ? 'Mis notas' : 'Seguimiento del cliente'}</p>
               {checkItems.length > 0 && (
                 <span className="text-xs text-gray-400">{checkDone}/{checkItems.length}</span>
               )}
@@ -307,6 +320,7 @@ export default function ClientDeliverables({ fixedClientId, onlyApproved = false
             </div>
           </div>
 
+          </div>
         </div>
       )}
     </div>

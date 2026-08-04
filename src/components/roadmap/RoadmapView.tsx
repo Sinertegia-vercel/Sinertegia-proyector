@@ -5,6 +5,7 @@ import { DEPT_LABELS, DEPT_COLORS, DEPT_ORDER } from '../../data/projectTemplate
 interface Props {
   tasks: Task[]
   title?: string
+  onSelectTask?: (task: Task) => void
 }
 
 // Color de barra según estado
@@ -20,11 +21,12 @@ const ROW_HEIGHT = 52
 const HEADER_HEIGHT = 48
 const LEFT_WIDTH = 260
 
-export default function RoadmapView({ tasks, title }: Props) {
+export default function RoadmapView({ tasks, title, onSelectTask }: Props) {
   const [clientFilter, setClientFilter] = useState<string>('todos')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [statusFilter, setStatusFilter] = useState<'pendiente' | 'en_progreso' | 'completada' | 'bloqueada' | 'cambio_1' | 'cambio_2' | null>(null)
+  const [showCompleted, setShowCompleted] = useState(false)
 
   // Lista de clientes únicos
   const clients = useMemo(() => {
@@ -35,6 +37,7 @@ export default function RoadmapView({ tasks, title }: Props) {
 
   const filteredTasks = useMemo(() => {
     return tasks.filter(t => {
+      if (!showCompleted && t.status === 'completada') return false
       if (clientFilter !== 'todos' && t.project?.client?.name !== clientFilter) return false
       if (statusFilter) {
         const changeCount = (t as any).change_count ?? 0
@@ -51,7 +54,8 @@ export default function RoadmapView({ tasks, title }: Props) {
       }
       return true
     })
-  }, [tasks, clientFilter, dateFrom, dateTo, statusFilter])
+  }, [tasks, clientFilter, dateFrom, dateTo, statusFilter, showCompleted])
+  const undatedTasks = filteredTasks.filter(t => !t.start_date && !t.commitment_date)
   const { startDate, weeks } = useMemo(() => {
     const allDates: Date[] = []
     filteredTasks.forEach(t => {
@@ -165,6 +169,10 @@ export default function RoadmapView({ tasks, title }: Props) {
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+          <label className="flex items-center gap-1.5 text-xs text-gray-500">
+            <input type="checkbox" checked={showCompleted} onChange={e => setShowCompleted(e.target.checked)} className="accent-blue-600" />
+            Mostrar completadas
+          </label>
           {/* Filtro por cliente */}
           <select
             value={clientFilter}
@@ -196,6 +204,18 @@ export default function RoadmapView({ tasks, title }: Props) {
         </div>
       </div>
 
+      {undatedTasks.length > 0 && (
+        <div className="flex items-center gap-3 border-b border-amber-100 bg-amber-50 px-4 py-3">
+          <span className="text-xs font-bold text-amber-800">Sin fecha ({undatedTasks.length})</span>
+          <div className="flex flex-1 gap-2 overflow-x-auto">
+            {undatedTasks.slice(0, 6).map(task => (
+              <button key={task.id} type="button" onClick={() => onSelectTask?.(task)} className="max-w-[210px] truncate rounded-lg border border-amber-200 bg-white px-3 py-1.5 text-xs text-gray-700 hover:border-blue-300">{task.title}</button>
+            ))}
+          </div>
+          <span className="hidden text-xs text-amber-700 lg:block">Asigna fechas para visualizar las tareas restantes</span>
+        </div>
+      )}
+
       {/* Grid principal */}
       <div className="flex overflow-auto" style={{ maxHeight: '72vh' }}>
 
@@ -215,7 +235,7 @@ export default function RoadmapView({ tasks, title }: Props) {
                 const clientName = task.project?.client?.name
                 const assigneeName = (task.assignee as any)?.full_name
                 return (
-                  <div key={task.id} className="flex flex-col justify-center px-3 border-b border-gray-100 hover:bg-blue-50 transition" style={{ height: ROW_HEIGHT }}>
+                  <button type="button" key={task.id} onClick={() => onSelectTask?.(task)} className="flex w-full flex-col justify-center px-3 text-left border-b border-gray-100 hover:bg-blue-50 transition" style={{ height: ROW_HEIGHT }}>
                     <span className={`text-xs font-medium truncate leading-tight ${task.status === 'completada' ? 'line-through text-gray-400' : 'text-gray-800'}`} title={task.title}>
                       {task.status === 'completada' ? '✓ ' : ''}{task.title}
                     </span>
@@ -228,7 +248,7 @@ export default function RoadmapView({ tasks, title }: Props) {
                         <span className="text-xs text-gray-400 truncate">{assigneeName.split(' ')[0]}</span>
                       )}
                     </div>
-                  </div>
+                  </button>
                 )
               })}
             </div>

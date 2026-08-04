@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { Users, Music, MoreVertical, Trash2 } from 'lucide-react'
+import { Users, Music, MoreVertical, Trash2, Search } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import type { ChatMessage, User } from '../../types'
@@ -61,6 +61,7 @@ export default function TeamChat() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(true)
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => { initRoom() }, [])
@@ -167,7 +168,7 @@ export default function TeamChat() {
 
   if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Cargando chat...</div>
 
-  const visibleMessages = messages.filter(m => !(m.deleted_for || []).includes(user?.id || ''))
+  const visibleMessages = messages.filter(m => !(m.deleted_for || []).includes(user?.id || '') && (!search.trim() || (m.content || '').toLowerCase().includes(search.toLowerCase())))
 
   return (
     <div className="flex flex-col h-[600px] bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
@@ -177,6 +178,11 @@ export default function TeamChat() {
           <h3 className="font-semibold text-sm">Chat Interno del Equipo</h3>
           <p className="text-xs text-blue-200">Solo visible para el equipo</p>
         </div>
+        <div className="ml-auto flex items-center gap-2 text-xs text-blue-100"><span className="h-2 w-2 rounded-full bg-green-400" />{chatUsers.length} participantes</div>
+      </div>
+
+      <div className="border-b border-gray-100 bg-white px-4 py-2.5">
+        <div className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2"><Search size={14} className="text-gray-400" /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar en el chat" className="w-full bg-transparent text-sm outline-none" /></div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
@@ -186,12 +192,16 @@ export default function TeamChat() {
             <p className="text-sm">No hay mensajes aún. ¡Sé el primero!</p>
           </div>
         )}
-        {visibleMessages.map(msg => {
+        {visibleMessages.map((msg, index) => {
           const isMe = msg.sender_id === user?.id
           const senderName = (msg.sender as any)?.full_name || 'Usuario'
           const initial = senderName.charAt(0).toUpperCase()
+          const dateLabel = new Date(msg.created_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'long' })
+          const previousDate = index > 0 ? new Date(visibleMessages[index - 1].created_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'long' }) : ''
           return (
-            <div key={msg.id} className={`flex gap-2 group ${isMe ? 'flex-row-reverse' : ''}`}>
+            <div key={msg.id}>
+            {dateLabel !== previousDate && <div className="my-3 flex items-center gap-3"><span className="h-px flex-1 bg-gray-200" /><span className="rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-gray-400 shadow-sm">{dateLabel}</span><span className="h-px flex-1 bg-gray-200" /></div>}
+            <div className={`flex gap-2 group ${isMe ? 'flex-row-reverse' : ''}`}>
               <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${isMe ? 'bg-blue-600 text-white' : 'bg-gray-300 text-gray-700'}`}>
                 {initial}
               </div>
@@ -245,6 +255,7 @@ export default function TeamChat() {
                   )}
                 </div>
               </div>
+            </div>
             </div>
           )
         })}

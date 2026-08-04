@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { MessageCircle } from 'lucide-react'
+import { MessageCircle, Search } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import type { Client, Project, User } from '../../types'
@@ -18,6 +18,7 @@ export default function ClientChatsHub({ initialClients }: Props) {
   const [teamMembers, setTeamMembers] = useState<User[]>([])
   const [convertTask, setConvertTask] = useState<{ content: string; messageId: string } | null>(null)
   const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
 
   useEffect(() => {
     fetchData()
@@ -85,15 +86,18 @@ export default function ClientChatsHub({ initialClients }: Props) {
     )
   }
 
+  const filteredClients = clients.filter(client => `${client.name} ${client.company || ''}`.toLowerCase().includes(search.toLowerCase()))
+
   return (
     <div className="flex gap-4 h-[600px]">
       {/* Lista de clientes */}
       <div className="w-56 shrink-0 bg-white border border-gray-200 rounded-xl overflow-hidden flex flex-col">
-        <div className="px-3 py-3 border-b border-gray-100 bg-gray-50">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Clientes</p>
+        <div className="px-3 py-3 border-b border-gray-100 bg-gray-50 space-y-2">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Clientes asignados</p>
+          <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-2.5 py-2"><Search size={13} className="text-gray-400" /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar cliente" className="w-full bg-transparent text-xs outline-none" /></div>
         </div>
         <div className="overflow-y-auto flex-1">
-          {clients.map(client => (
+          {filteredClients.map(client => (
             <button
               key={client.id}
               onClick={() => setSelectedClient(client)}

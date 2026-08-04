@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { AlertTriangle, CalendarPlus, ChevronLeft, ChevronRight } from 'lucide-react'
 import type { Task } from '../../types'
 
 interface Props {
@@ -71,6 +71,7 @@ export default function TeamCalendarView({ tasks, onSelectTask }: Props) {
   }
 
   const selectedTasks = selectedDay ? tasksForDay(selectedDay) : []
+  const undatedTasks = tasks.filter(t => t.status !== 'completada' && !t.start_date && !t.commitment_date)
 
   // Build grid: blanks + days
   const cells: (number | null)[] = [
@@ -92,6 +93,31 @@ export default function TeamCalendarView({ tasks, onSelectTask }: Props) {
           <ChevronRight size={18} className="text-gray-600" />
         </button>
       </div>
+
+      {undatedTasks.length > 0 && (
+        <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <AlertTriangle size={17} className="shrink-0" />
+          <strong>{undatedTasks.length} tareas no aparecen en el calendario</strong>
+          <span className="text-amber-700">porque no tienen fecha de compromiso.</span>
+        </div>
+      )}
+
+      {undatedTasks.length > 0 && (
+        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+          <div className="mb-3 flex items-center justify-between">
+            <div className="flex items-center gap-2"><CalendarPlus size={16} className="text-blue-600" /><p className="text-sm font-bold text-gray-800">Sin fecha</p></div>
+            <span className="text-xs text-gray-400">Abre una tarea para asignarle fecha</span>
+          </div>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {undatedTasks.slice(0, 8).map(task => (
+              <button key={task.id} type="button" onClick={() => onSelectTask(task)} className="min-w-[210px] rounded-lg border border-gray-200 p-3 text-left transition hover:border-blue-300 hover:bg-blue-50">
+                <p className="truncate text-xs font-semibold text-gray-800">{task.title}</p>
+                <p className="mt-1 truncate text-[11px] text-gray-400">{task.project?.client?.name || task.project?.name || 'Trabajo interno'}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Calendar grid */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
@@ -129,12 +155,13 @@ export default function TeamCalendarView({ tasks, onSelectTask }: Props) {
                 </span>
                 <div className="space-y-0.5">
                   {dayTasks.slice(0, 2).map(t => (
-                    <div key={t.id}
+                    <button type="button" key={t.id}
+                      onClick={event => { event.stopPropagation(); onSelectTask(t) }}
                       className={`text-[10px] leading-tight px-1 py-0.5 rounded text-white truncate ${STATUS_COLOR[t.status] || 'bg-gray-400'}`}
                       title={t.title}
                     >
                       {t.title}
-                    </div>
+                    </button>
                   ))}
                   {dayTasks.length > 2 && (
                     <div className="text-[10px] text-gray-400 pl-1">+{dayTasks.length - 2} más</div>

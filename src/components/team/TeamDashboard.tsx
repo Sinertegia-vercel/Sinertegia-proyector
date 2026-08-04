@@ -165,10 +165,16 @@ export default function TeamDashboard({ embedded = false }: Props) {
 
   const byStatus = filter === 'todas' ? tasks.filter(t => t.status !== 'completada') : tasks.filter(t => t.status === filter)
   const byClient = clientFilter === 'todos' ? byStatus : byStatus.filter(t => t.project?.client?.name === clientFilter)
-  const filtered = priorityFilter === 'todos' ? byClient : byClient.filter(t => t.priority === priorityFilter)
+  const isOverdue = (t: Task) => t.commitment_date && t.status !== 'completada' && new Date(t.commitment_date) < new Date()
+  const filtered = (priorityFilter === 'todos' ? byClient : byClient.filter(t => t.priority === priorityFilter)).slice().sort((a, b) => {
+    const overdueDiff = Number(isOverdue(b)) - Number(isOverdue(a))
+    if (overdueDiff) return overdueDiff
+    const dateA = a.commitment_date ? new Date(a.commitment_date).getTime() : Number.MAX_SAFE_INTEGER
+    const dateB = b.commitment_date ? new Date(b.commitment_date).getTime() : Number.MAX_SAFE_INTEGER
+    return dateA - dateB
+  })
   const clientOptions = Array.from(new Set(tasks.map(t => t.project?.client?.name).filter((n): n is string => !!n))).sort()
   const priorityOptions = (['critica', 'alta', 'media', 'baja'] as Priority[]).filter(p => tasks.some(t => t.priority === p))
-  const isOverdue = (t: Task) => t.commitment_date && t.status !== 'completada' && new Date(t.commitment_date) < new Date()
   const visibleNavItems = TEAM_NAV_ITEMS.filter(item => !hiddenSections.has(item.id))
 
   const stats = {
@@ -246,6 +252,25 @@ export default function TeamDashboard({ embedded = false }: Props) {
   const formatShortDate = (value?: string) => value
     ? new Date(value.slice(0, 10) + 'T00:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })
     : 'Sin fecha'
+
+  const nextActionFor = (task: Task) => {
+    if (task.review_status === 'cambios_solicitados' || task.client_approval === 'cambios_solicitados') return { label: 'Corregir cambios', tone: 'orange' }
+    if (!task.commitment_date) return { label: 'Agregar fecha', tone: 'amber' }
+    if (task.status === 'pendiente') return { label: 'Empezar', tone: 'blue' }
+    if (!task.links?.length) return { label: 'Adjuntar entregable', tone: 'purple' }
+    if (!task.review_status) return { label: 'Enviar a revisión', tone: 'green' }
+    return { label: 'Abrir tarea', tone: 'gray' }
+  }
+
+  async function handleNextAction(task: Task, event: React.MouseEvent) {
+    event.stopPropagation()
+    if (nextActionFor(task).label === 'Empezar') {
+      await supabase.from('tasks').update({ status: 'en_progreso', start_date: todayKey }).eq('id', task.id)
+      await fetchTasks()
+      return
+    }
+    setSelectedTask(task)
+  }
 
   if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Cargando tareas...</div>
 
@@ -338,7 +363,7 @@ export default function TeamDashboard({ embedded = false }: Props) {
       )}
 
       {/* Vista: Hoja de Ruta */}
-      {teamView === 'roadmap' && <RoadmapView tasks={tasks} title="Mis tareas en el tiempo" />}
+      {teamView === 'roadmap' && <RoadmapView tasks={tasks} title="Mis tareas en el tiempo" onSelectTask={setSelectedTask} />}
 
       {/* Vista: Chat del Equipo */}
       {teamView === 'chat_team' && <TeamChat />}
@@ -387,6 +412,7 @@ export default function TeamDashboard({ embedded = false }: Props) {
                   <ChevronDown size={13} />
                 </button>
               </th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">Próxima acción</th>
               <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap" title="Fecha de compromiso de entrega">Fecha de entrega</th>
               <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">Entregables</th>
               <th className="text-left px-4 py-3 font-semibold text-gray-600 whitespace-nowrap">Comentarios</th>
@@ -394,7 +420,7 @@ export default function TeamDashboard({ embedded = false }: Props) {
           </thead>
           <tbody className="divide-y divide-gray-100">
             {filtered.length === 0 && (
-              <tr><td colSpan={7} className="text-center py-8 text-gray-400">No hay tareas en esta categoría</td></tr>
+              <tr><td colSpan={8} className="text-center py-8 text-gray-400">No hay tareas en esta categoría</td></tr>
             )}
             {filtered.map(task => (
               <tr
@@ -416,6 +442,13 @@ export default function TeamDashboard({ embedded = false }: Props) {
                 <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{task.project?.client?.name || '—'}</td>
                 <td className="px-4 py-3 whitespace-nowrap"><StatusBadge status={task.status} /></td>
                 <td className="px-4 py-3 whitespace-nowrap"><PriorityBadge priority={task.priority} /></td>
+                <td className="px-4 py-3 whitespace-nowrap">
+                  {(() => {
+                    const action = nextActionFor(task)
+                    const tone = action.tone === 'blue' ? 'bg-blue-600 text-white hover:bg-blue-700' : action.tone === 'orange' ? 'bg-orange-50 text-orange-700 border-orange-200' : action.tone === 'amber' ? 'bg-amber-50 text-amber-700 border-amber-200' : action.tone === 'purple' ? 'bg-purple-50 text-purple-700 border-purple-200' : action.tone === 'green' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-gray-50 text-gray-600 border-gray-200'
+                    return <button type="button" onClick={event => handleNextAction(task, event)} className={`rounded-lg border border-transparent px-2.5 py-1 text-xs font-semibold transition ${tone}`}>{action.label}</button>
+                  })()}
+                </td>
                 <td className="px-4 py-3 whitespace-nowrap">
                   <span className={`flex items-center gap-1 text-xs ${isOverdue(task) ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
                     <CalendarDays size={12} className="shrink-0" />
@@ -627,8 +660,10 @@ export default function TeamDashboard({ embedded = false }: Props) {
 
           {!sidebarCollapsed && (
             <div className="v2-tip">
-              <div className="v2-tip-head"><Lightbulb size={13} /> Consejo rápido</div>
-              <p>Organiza tus tareas con prioridades y fechas de entrega para mejorar tu productividad.</p>
+              <div className="v2-tip-head"><Lightbulb size={13} /> Resumen de hoy</div>
+              <p>{todayTasks.length} tarea{todayTasks.length === 1 ? '' : 's'} para hoy</p>
+              <p>{upcoming.length} entrega{upcoming.length === 1 ? '' : 's'} próxima{upcoming.length === 1 ? '' : 's'}</p>
+              <p>{inProgressTasks.length} en progreso</p>
             </div>
           )}
         </aside>
@@ -641,7 +676,7 @@ export default function TeamDashboard({ embedded = false }: Props) {
               onClick={() => setShowCreateTask(true)}
               className="v2-btn v2-btn-primary"
             >
-              <Plus size={16} /> Nueva tarea
+              <Plus size={16} /> Solicitar tarea
             </button>
             <TopBarActions />
           </header>

@@ -19,6 +19,7 @@ export default function TopBarActions() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [passwordMsg, setPasswordMsg] = useState('')
   const [changingPassword, setChangingPassword] = useState(false)
+  const [showSessionSummary, setShowSessionSummary] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const isTeam = user?.role === 'team' || user?.role === 'admin'
@@ -99,7 +100,7 @@ export default function TopBarActions() {
       <div className="flex items-center gap-3">
         {/* Timer del equipo */}
         {isTeam && currentSession && (
-          <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold ${
+          <button type="button" onClick={() => setShowSessionSummary(true)} title="Ver resumen de jornada" className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition hover:brightness-95 ${
             isInOvertime
               ? 'bg-orange-100 text-orange-700'
               : 'bg-green-100 text-green-700'
@@ -111,7 +112,7 @@ export default function TopBarActions() {
               : <Home size={12} className="ml-0.5" />
             }
             {isInOvertime && <span className="text-orange-500 font-bold">·HE</span>}
-          </div>
+          </button>
         )}
 
         <GlobalSearch />
@@ -177,6 +178,17 @@ export default function TopBarActions() {
       </div>
 
       {/* Modal cambiar contraseña */}
+      {showSessionSummary && currentSession && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="mb-5 flex items-start justify-between"><div><p className="text-xs font-bold uppercase tracking-wide text-blue-600">Jornada de hoy</p><h3 className="mt-1 text-xl font-bold text-gray-900">Resumen de sesión</h3></div><button type="button" onClick={() => setShowSessionSummary(false)} className="rounded-lg p-1 text-gray-400 hover:bg-gray-100"><X size={18} /></button></div>
+            <div className="rounded-xl bg-gray-50 p-5 text-center"><p className="text-4xl font-bold text-gray-900">{timerLabel}</p><p className="mt-1 text-xs text-gray-500">tiempo trabajado hoy</p></div>
+            <div className="mt-4 grid grid-cols-2 gap-3 text-sm"><div className="rounded-xl border border-gray-200 p-3"><p className="text-xs text-gray-400">Modalidad</p><p className="mt-1 flex items-center gap-1.5 font-semibold text-gray-700">{currentSession.location === 'oficina' ? <><Building2 size={14} /> Oficina</> : <><Home size={14} /> Home Office</>}</p></div><div className="rounded-xl border border-gray-200 p-3"><p className="text-xs text-gray-400">Estado</p><p className={`mt-1 font-semibold ${isInOvertime ? 'text-orange-600' : 'text-green-600'}`}>{isInOvertime ? 'Tiempo extra' : 'Horario regular'}</p></div></div>
+            <button type="button" onClick={() => setShowSessionSummary(false)} className="mt-5 w-full rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700">Cerrar</button>
+          </div>
+        </div>
+      )}
+
       {showChangePassword && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
