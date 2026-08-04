@@ -114,6 +114,32 @@
 .ui-compact .v2app .v2-nav-item{padding-top:7px;padding-bottom:7px}
 .ui-compact .v2app .v2-topbar{padding-top:9px;padding-bottom:9px}
 .ui-compact .v2app .v2-table-wrap th,.ui-compact .v2app .v2-table-wrap td{padding-top:8px!important;padding-bottom:8px!important}
+.ui-compact .v2app .v2-surface,.ui-compact .v2app .v2-card,.ui-compact .v2app .v2-stat-card{padding-top:11px;padding-bottom:11px}
+.ui-compact .v2app .v2-page-head{margin-bottom:15px}
+
+/* Tema oscuro: usa las mismas variables del sistema para cubrir todas las vistas V2. */
+.ui-dark .v2app{
+  --ink:#F8FAFC;
+  --ink-soft:#E2E8F0;
+  --muted:#A8B2C3;
+  --faint:#7D899D;
+  --bg:#0F172A;
+  --surface:#172033;
+  --line:rgba(226,232,240,.10);
+  --line-strong:rgba(226,232,240,.18);
+  --brand-tint:#20345F;
+  --emerald-tint:#123B35;
+  --amber-tint:#403217;
+  --rose-tint:#48212B;
+  color-scheme:dark;
+}
+.ui-dark .v2app .v2-topbar{background:rgba(23,32,51,.84)}
+.ui-dark .v2app .v2-btn-ghost,.ui-dark .v2app .v2-tabs{background:var(--surface);color:var(--ink-soft)}
+.ui-dark .v2app .v2-exec-summary{background:radial-gradient(circle at 90% 0,rgba(78,123,255,.15),transparent 34%),linear-gradient(145deg,#172033,#151D2E)}
+.ui-dark .v2app .v2-exec-metrics button{background:rgba(30,41,59,.9)}
+.ui-dark .v2app .v2-table-wrap thead{background:#1D273A}
+.ui-dark .v2app .v2-track{background:#2C374B}
+.ui-dark .v2app .v2-pill.completed{background:#334155;color:#CBD5E1}
 
 /* Main + topbar */
 .v2app .v2-main{display:flex;flex-direction:column;min-width:0}

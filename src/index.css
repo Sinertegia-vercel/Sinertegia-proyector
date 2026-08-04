@@ -15,3 +15,14 @@ body {
 #root {
   min-height: 100vh;
 }
+
+.ui-large-text { font-size: 17px; }
+.ui-dark body, .ui-dark #root { background: #0f172a; color: #e2e8f0; }
+.ui-dark .bg-white { background-color: #172033 !important; }
+.ui-dark .bg-slate-50 { background-color: #1e293b !important; }
+.ui-dark .bg-\[\#f5f6fb\] { background-color: #0f172a !important; }
+.ui-dark .text-slate-900, .ui-dark .text-slate-800 { color: #f8fafc !important; }
+.ui-dark .text-slate-700, .ui-dark .text-slate-600 { color: #cbd5e1 !important; }
+.ui-dark .text-slate-500, .ui-dark .text-slate-400 { color: #94a3b8 !important; }
+.ui-dark .border-slate-200, .ui-dark .border-slate-300 { border-color: #334155 !important; }
+.ui-dark input, .ui-dark select, .ui-dark textarea { background-color: #111827 !important; color: #f8fafc !important; }
