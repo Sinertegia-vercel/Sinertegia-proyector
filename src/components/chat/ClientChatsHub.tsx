@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import type { Client, Project, User } from '../../types'
 import ClientChatRoom from './ClientChatRoom'
 import CreateTaskModal from '../admin/CreateTaskModal'
+import UserAvatar from '../shared/UserAvatar'
 
 interface Props {
   initialClients?: Client[]
@@ -68,6 +69,13 @@ export default function ClientChatsHub({ initialClients }: Props) {
       }
     }
 
+    const clientUserIds = clientList.map(client => client.user_id).filter(Boolean) as string[]
+    if (clientUserIds.length > 0) {
+      const { data: clientUsers } = await supabase.from('users').select('id, avatar_url').in('id', clientUserIds)
+      const avatars = new Map((clientUsers || []).map(item => [item.id, item.avatar_url]))
+      clientList = clientList.map(client => ({ ...client, avatar_url: client.user_id ? avatars.get(client.user_id) : undefined }))
+    }
+
     setClients(clientList)
     if (clientList.length > 0) setSelectedClient(clientList[0])
     setLoading(false)
@@ -104,9 +112,7 @@ export default function ClientChatsHub({ initialClients }: Props) {
               className={`w-full text-left px-3 py-3 border-b border-gray-50 transition ${selectedClient?.id === client.id ? 'bg-blue-50 border-l-2 border-l-blue-600' : 'hover:bg-gray-50'}`}
             >
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-red-500 flex items-center justify-center text-white text-xs font-bold shrink-0">
-                  {client.name.charAt(0).toUpperCase()}
-                </div>
+                <UserAvatar name={client.name} avatarUrl={client.avatar_url} size={32} />
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-gray-800 truncate">{client.name}</p>
                   <p className="text-xs text-gray-400 truncate">{client.company}</p>

@@ -64,6 +64,7 @@ export interface Client {
   notes?: string
   user_id?: string
   cover_image?: string
+  avatar_url?: string
   created_at: string
 }
 

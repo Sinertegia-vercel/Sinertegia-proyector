@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import type { ChatMessage, Client, User } from '../../types'
 import MentionInput from './MentionInput'
+import UserAvatar from '../shared/UserAvatar'
 
 function renderWithMentions(content: string, userNames: string[]) {
   if (!userNames.length) return <span>{content}</span>
@@ -196,9 +197,11 @@ export default function ClientChatRoom({ client, onConvertToTask }: Props) {
   return (
     <div className="flex flex-col h-full bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-gray-100 bg-gradient-to-r from-blue-700 to-red-600 text-white">
-        <h3 className="font-semibold text-sm">{client.name}</h3>
+      <div className="flex items-center gap-3 border-b border-gray-100 bg-gradient-to-r from-blue-700 to-red-600 px-4 py-3 text-white">
+        <UserAvatar name={client.name} avatarUrl={client.avatar_url} size={34} />
+        <div><h3 className="font-semibold text-sm">{client.name}</h3>
         <p className="text-xs text-white/70">{client.company} · Chat con el equipo</p>
+        </div>
       </div>
 
       {/* Messages */}

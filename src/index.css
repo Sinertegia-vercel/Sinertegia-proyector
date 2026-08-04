@@ -114,3 +114,16 @@ body {
 .ui-dark table thead { background-color: #1d273a !important; }
 .ui-dark table tbody tr { border-color: #354258 !important; }
 .ui-dark [role="dialog"] { color: #e2e8f0; }
+
+/* Cronograma y estados: contraste específico para tema oscuro. */
+.ui-dark .bg-purple-200 { background-color: #513477 !important; }
+.ui-dark .bg-green-200 { background-color: #195844 !important; }
+.ui-dark .bg-blue-200 { background-color: #244c7c !important; }
+.ui-dark .bg-orange-200 { background-color: #6a421f !important; }
+.ui-dark .bg-amber-200 { background-color: #644c19 !important; }
+.roadmap-grid { background-image: linear-gradient(to right, rgba(148,163,184,.28) 1px, transparent 1px); }
+.roadmap-task-bar { transition: min-width .16s ease, filter .16s ease, box-shadow .16s ease; }
+.roadmap-task-bar:hover { min-width: 220px !important; filter: brightness(1.08); box-shadow: 0 10px 24px rgba(0,0,0,.2); }
+.roadmap-task-bar-expanded { min-width: 110px; }
+.ui-dark .roadmap-grid { background-image: linear-gradient(to right, rgba(148,163,184,.20) 1px, transparent 1px); }
+.ui-dark .roadmap-task-bar { color: #f8fafc !important; border-color: rgba(255,255,255,.28) !important; }

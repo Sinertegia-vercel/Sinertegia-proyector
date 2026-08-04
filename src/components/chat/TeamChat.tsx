@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import type { ChatMessage, Project, Task, User } from '../../types'
 import MentionInput from './MentionInput'
 import CreateTaskModal from '../admin/CreateTaskModal'
+import UserAvatar from '../shared/UserAvatar'
 
 function renderWithMentions(content: string, userNames: string[]) {
   if (!content || !userNames.length) return <span>{content}</span>
@@ -246,7 +247,7 @@ export default function TeamChat() {
           <h3 className="font-bold text-base">Chat del equipo</h3>
           <p className="text-xs text-gray-400">Solo visible para el equipo</p>
         </div>
-        <div className="ml-3 hidden -space-x-2 sm:flex">{chatUsers.slice(0, 4).map(member => <span key={member.id} title={member.full_name} className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-gray-200 text-[9px] font-bold text-gray-600">{member.full_name.charAt(0)}</span>)}{chatUsers.length > 4 && <span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-blue-50 text-[9px] font-bold text-blue-600">+{chatUsers.length - 4}</span>}</div>
+        <div className="ml-3 hidden -space-x-2 sm:flex">{chatUsers.slice(0, 4).map(member => <span key={member.id} title={member.full_name} className="rounded-full border-2 border-white"><UserAvatar name={member.full_name} avatarUrl={member.avatar_url} size={26} isOnline={onlineIds.has(member.id)} /></span>)}{chatUsers.length > 4 && <span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-blue-50 text-[9px] font-bold text-blue-600">+{chatUsers.length - 4}</span>}</div>
         <div className="ml-auto flex items-center gap-2 text-xs text-gray-500"><span className="h-2 w-2 rounded-full bg-green-500" />{onlineIds.size || 1} conectados</div>
       </div>
 
