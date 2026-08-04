@@ -18,6 +18,8 @@ export default function TopBarActions() {
   const [showChangePassword, setShowChangePassword] = useState(false)
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [emailCode, setEmailCode] = useState('')
+  const [sendingCode, setSendingCode] = useState(false)
   const [passwordMsg, setPasswordMsg] = useState('')
   const [changingPassword, setChangingPassword] = useState(false)
   const [showSessionSummary, setShowSessionSummary] = useState(false)
@@ -30,7 +32,7 @@ export default function TopBarActions() {
 
   useEffect(() => {
     const changePhoto = () => fileInputRef.current?.click()
-    const changePassword = () => setShowChangePassword(true)
+    const changePassword = () => { void openSecurePasswordChange() }
     const requestLogout = () => { void handleLogout() }
     window.addEventListener('change-profile-photo', changePhoto)
     window.addEventListener('change-profile-password', changePassword)
@@ -79,8 +81,12 @@ export default function TopBarActions() {
   }
 
   async function handleChangePassword() {
-    if (!newPassword || newPassword.length < 6) {
-      setPasswordMsg('La contraseña debe tener al menos 6 caracteres.')
+    if (emailCode.length < 6) {
+      setPasswordMsg('Escribe el código que enviamos a tu correo.')
+      return
+    }
+    if (!newPassword || newPassword.length < 8) {
+      setPasswordMsg('La contraseña debe tener al menos 8 caracteres.')
       return
     }
     if (newPassword !== confirmPassword) {
@@ -89,15 +95,30 @@ export default function TopBarActions() {
     }
     setChangingPassword(true)
     setPasswordMsg('')
-    const { error } = await supabase.auth.updateUser({ password: newPassword })
+    const { error } = await supabase.auth.updateUser({ password: newPassword, nonce: emailCode })
     if (error) {
       setPasswordMsg('Error: ' + error.message)
     } else {
       setPasswordMsg('✅ Contraseña actualizada correctamente.')
       setNewPassword('')
       setConfirmPassword('')
+      setEmailCode('')
     }
     setChangingPassword(false)
+  }
+
+  async function sendReauthenticationCode() {
+    setSendingCode(true); setPasswordMsg('')
+    const { error } = await supabase.auth.reauthenticate()
+    setPasswordMsg(error ? `Error: ${error.message}` : `Código enviado a ${user?.email || 'tu correo registrado'}.`)
+    setSendingCode(false)
+  }
+
+  async function openSecurePasswordChange() {
+    setMenuOpen(false)
+    setShowChangePassword(true)
+    setEmailCode(''); setNewPassword(''); setConfirmPassword(''); setPasswordMsg('')
+    await sendReauthenticationCode()
   }
 
   return (
@@ -178,7 +199,7 @@ export default function TopBarActions() {
                   Cambiar foto de perfil
                 </button>
                 <button
-                  onClick={() => { setMenuOpen(false); setShowChangePassword(true) }}
+                  onClick={() => { void openSecurePasswordChange() }}
                   className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition"
                 >
                   <KeyRound size={15} className="text-purple-500" />
@@ -219,11 +240,24 @@ export default function TopBarActions() {
           <div className="my-auto max-h-[calc(100vh-2rem)] w-full max-w-sm overflow-y-auto rounded-2xl bg-white shadow-2xl">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
               <h3 className="font-bold text-gray-900 flex items-center gap-2"><KeyRound size={16} className="text-purple-500" /> Cambiar contraseña</h3>
-              <button onClick={() => { setShowChangePassword(false); setPasswordMsg(''); setNewPassword(''); setConfirmPassword('') }} className="text-gray-400 hover:text-gray-600">
+              <button onClick={() => { setShowChangePassword(false); setPasswordMsg(''); setEmailCode(''); setNewPassword(''); setConfirmPassword('') }} className="text-gray-400 hover:text-gray-600">
                 <X size={18} />
               </button>
             </div>
             <div className="p-6 space-y-3">
+              <div className="rounded-xl border border-blue-100 bg-blue-50 p-3">
+                <p className="text-xs font-semibold text-blue-800">Confirma que eres tú</p>
+                <p className="mt-1 text-xs text-blue-600">Enviamos un código al correo registrado: {user?.email}</p>
+              </div>
+              <input
+                inputMode="numeric"
+                maxLength={8}
+                placeholder="Código del correo"
+                value={emailCode}
+                onChange={e => setEmailCode(e.target.value.replace(/\D/g, ''))}
+                className="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-center font-mono text-lg tracking-[.25em] focus:outline-none focus:ring-2 focus:ring-blue-400"
+              />
+              <button type="button" onClick={sendReauthenticationCode} disabled={sendingCode} className="w-full text-xs font-semibold text-blue-600 hover:text-blue-800 disabled:opacity-50">{sendingCode ? 'Enviando...' : 'Reenviar código'}</button>
               <input
                 type="password"
                 placeholder="Nueva contraseña"

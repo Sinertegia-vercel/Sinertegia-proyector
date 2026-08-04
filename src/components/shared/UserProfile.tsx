@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Activity, BarChart3, BriefcaseBusiness, CalendarDays, Camera, CheckCircle2, Clock3, KeyRound, Save, ShieldCheck, Smartphone, UserRound, X } from 'lucide-react'
+import { Activity, BarChart3, BriefcaseBusiness, CalendarDays, Camera, CheckCircle2, Clock3, KeyRound, MailCheck, Save, ShieldCheck, UserRound, X } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useWorkSession } from '../../contexts/WorkSessionContext'
 import { supabase } from '../../lib/supabase'
@@ -21,6 +21,7 @@ export default function UserProfile({ onClose, onChangePhoto, onChangePassword, 
 
   useEffect(() => {
     if (!user) return
+    void supabase.auth.mfa.listFactors().then(({ data }) => Promise.all((data?.totp || []).filter(item => item.status !== 'verified').map(item => supabase.auth.mfa.unenroll({ factorId: item.id }))))
     supabase.from('tasks').select('status, review_status, commitment_date, completion_date').eq('assigned_to', user.id).then(({ data }) => {
       const rows = data || []; const completed = rows.filter(t => t.status === 'completada')
       const onTime = completed.length ? Math.round(completed.filter(t => !t.commitment_date || (t.completion_date && t.completion_date <= t.commitment_date)).length / completed.length * 100) : 0
@@ -58,7 +59,7 @@ export default function UserProfile({ onClose, onChangePhoto, onChangePassword, 
 
       {tab === 'datos' && <div className="grid gap-5 lg:grid-cols-[1.7fr_1fr]"><Card><h3 className="flex items-center gap-2 font-bold text-slate-900"><UserRound size={18} />Datos personales</h3><div className="grid gap-x-4 sm:grid-cols-2"><Field label="Nombre completo"><input value={form.full_name} onChange={e => setForm({ ...form, full_name: e.target.value })} /></Field><Field label="Correo electrónico"><input value={user?.email || ''} readOnly className="bg-slate-50 text-slate-500" /></Field><Field label="Teléfono"><input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="Añadir teléfono" /></Field><Field label="Fecha de nacimiento"><input type="date" value={form.birth_date} onChange={e => setForm({ ...form, birth_date: e.target.value })} /></Field><Field label="Zona horaria"><select value={form.timezone} onChange={e => setForm({ ...form, timezone: e.target.value })}><option value="America/Mexico_City">Ciudad de México (GMT-6)</option><option value="America/Cancun">Cancún (GMT-5)</option><option value="America/Tijuana">Tijuana (GMT-8)</option></select></Field><Field label="Dirección"><input value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} placeholder="Añadir dirección" /></Field></div><SaveButton saving={saving} onClick={saveProfile} />{message && <p className={`mt-3 text-xs font-semibold ${message.includes('correctamente') ? 'text-green-600' : 'text-red-600'}`}>{message}</p>}</Card><WorkInfo user={user} /></div>}
       {tab === 'laboral' && <div className="grid gap-5 lg:grid-cols-2"><WorkInfo user={user} /><Card><h3 className="flex items-center gap-2 font-bold"><Clock3 size={18} />Horario asignado</h3><p className="mt-5 text-sm text-slate-600">Tu jornada habitual es de <strong>{start}:00 a {end}:00</strong>.</p><p className="mt-2 text-xs text-slate-400">Puesto, departamento y horario solamente pueden modificarlos los administradores.</p></Card></div>}
-      {tab === 'seguridad' && <Card className="max-w-2xl"><h3 className="flex items-center gap-2 font-bold"><ShieldCheck size={18} />Seguridad de la cuenta</h3><div className="mt-5 flex flex-col gap-3 rounded-xl border border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-semibold">Contraseña</p><p className="text-xs text-slate-400">Actualízala periódicamente.</p></div><button onClick={onChangePassword} className="flex w-full items-center justify-center gap-2 rounded-xl border border-purple-200 px-4 py-2 text-sm font-semibold text-purple-700 sm:w-auto"><KeyRound size={15} />Cambiar contraseña</button></div><TwoFactorSecurity /><div className="mt-3 rounded-xl border border-slate-200 p-4"><p className="text-sm font-semibold">Último inicio de sesión</p><p className="mt-1 text-xs text-slate-500">{lastSignIn}</p></div></Card>}
+      {tab === 'seguridad' && <Card className="max-w-2xl"><h3 className="flex items-center gap-2 font-bold"><ShieldCheck size={18} />Seguridad de la cuenta</h3><div className="mt-5 flex flex-col gap-3 rounded-xl border border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-semibold">Contraseña</p><p className="text-xs text-slate-400">Para cambiarla debes confirmar un código enviado por correo.</p></div><button onClick={onChangePassword} className="flex w-full items-center justify-center gap-2 rounded-xl border border-purple-200 px-4 py-2 text-sm font-semibold text-purple-700 sm:w-auto"><KeyRound size={15} />Cambiar contraseña</button></div><div className="mt-3 rounded-xl border border-green-200 bg-green-50/60 p-4"><p className="flex items-center gap-2 text-sm font-semibold text-green-800"><MailCheck size={17} />Confirmación por correo</p><p className="mt-1 text-xs text-green-700">Los códigos de seguridad se enviarán a <strong>{user?.email}</strong>.</p></div><div className="mt-3 rounded-xl border border-slate-200 p-4"><p className="text-sm font-semibold">Último inicio de sesión</p><p className="mt-1 text-xs text-slate-500">{lastSignIn}</p></div></Card>}
       {tab === 'preferencias' && <Card className="max-w-2xl"><h3 className="font-bold">Apariencia</h3><p className="mt-2 text-sm text-slate-500">Elige cuánto espacio ocupan los elementos de tu panel.</p><Toggle label="Vista compacta" checked={form.compact_mode} onChange={v => setForm({ ...form, compact_mode: v })} /><p className="mt-3 text-xs text-slate-400">Al activarla, las tarjetas, menús y tablas muestran más información en pantalla.</p><SaveButton saving={saving} onClick={saveProfile} /></Card>}
 
       <div className="grid gap-5 lg:grid-cols-[1.1fr_1fr]"><Card><h3 className="flex items-center gap-2 font-bold"><BarChart3 size={18} />Resumen de desempeño</h3><div className="mt-5 grid grid-cols-3 divide-x divide-slate-200 text-center"><Metric icon={<CheckCircle2 />} value={stats.completed} label="Completadas" tone="text-green-600" /><Metric icon={<Clock3 />} value={stats.review} label="En revisión" tone="text-amber-500" /><Metric icon={<Activity />} value={`${stats.onTime}%`} label="A tiempo" tone="text-blue-600" /></div></Card><Card><h3 className="flex items-center gap-2 font-bold"><Activity size={18} />Actividad reciente</h3><div className="mt-4 rounded-xl bg-slate-50 p-4"><p className="text-sm font-semibold">Último inicio de sesión</p><p className="mt-1 text-xs text-slate-500">{lastSignIn}</p></div></Card></div>
@@ -74,54 +75,3 @@ function SaveButton({ saving, onClick }: { saving: boolean; onClick: () => void 
 function Metric({ icon, value, label, tone }: { icon: React.ReactNode; value: string | number; label: string; tone: string }) { return <div className="px-3"><span className={`mx-auto flex w-fit ${tone}`}>{icon}</span><p className="mt-1 text-2xl font-bold">{value}</p><p className="text-xs text-slate-500">{label}</p></div> }
 function WorkInfo({ user }: { user: ReturnType<typeof useAuth>['user'] }) { return <Card><h3 className="flex items-center gap-2 font-bold"><BriefcaseBusiness size={18} />Información laboral</h3><dl className="mt-5 divide-y divide-slate-200 text-sm"><Row label="Puesto" value={DEPTS[user?.department || ''] || user?.role || 'Sin asignar'} /><Row label="Departamento" value={DEPTS[user?.department || ''] || 'Sin asignar'} /><Row label="Horario" value={`L–V · ${user?.work_start ?? 9}:00–${user?.work_end ?? 18}:00`} /><Row label="Modalidad" value="Según registro diario" /><Row label="Rol de acceso" value={user?.role || '—'} /></dl><p className="mt-5 text-xs text-slate-400">Estos datos los administra la empresa.</p></Card> }
 function Row({ label, value }: { label: string; value: string }) { return <div className="grid grid-cols-2 gap-3 py-3"><dt className="text-slate-500">{label}</dt><dd className="font-medium capitalize">{value}</dd></div> }
-
-function TwoFactorSecurity() {
-  const [factor, setFactor] = useState<any>(null)
-  const [enrollment, setEnrollment] = useState<any>(null)
-  const [code, setCode] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [status, setStatus] = useState('')
-
-  async function loadFactors() {
-    const { data, error } = await supabase.auth.mfa.listFactors()
-    if (error) { setStatus(error.message); return }
-    setFactor(data?.totp?.find(item => item.status === 'verified') || null)
-  }
-
-  useEffect(() => { void loadFactors() }, [])
-
-  async function startEnrollment() {
-    setBusy(true); setStatus('')
-    const { data: factors } = await supabase.auth.mfa.listFactors()
-    await Promise.all((factors?.totp || []).filter(item => item.status !== 'verified').map(item => supabase.auth.mfa.unenroll({ factorId: item.id })))
-    const { data, error } = await supabase.auth.mfa.enroll({ factorType: 'totp', friendlyName: 'Sinertegia' })
-    if (error) setStatus(error.message)
-    else setEnrollment(data)
-    setBusy(false)
-  }
-
-  async function verifyEnrollment() {
-    if (!enrollment?.id || code.length !== 6) return
-    setBusy(true); setStatus('')
-    const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId: enrollment.id, code })
-    if (error) setStatus(error.message)
-    else { setEnrollment(null); setCode(''); setStatus('Verificación en dos pasos activada.'); await loadFactors() }
-    setBusy(false)
-  }
-
-  async function disableMfa() {
-    if (!factor || !window.confirm('¿Desactivar la verificación en dos pasos?')) return
-    setBusy(true); setStatus('')
-    const { error } = await supabase.auth.mfa.unenroll({ factorId: factor.id })
-    if (error) setStatus(error.message)
-    else { setFactor(null); setStatus('Verificación en dos pasos desactivada.') }
-    setBusy(false)
-  }
-
-  return <div className="mt-3 rounded-xl border border-slate-200 p-4">
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="flex items-center gap-2 text-sm font-semibold"><Smartphone size={16} className="text-blue-600" />Verificación en dos pasos</p><p className="mt-1 text-xs text-slate-400">Protege tu cuenta con una aplicación autenticadora.</p></div>{factor ? <button onClick={disableMfa} disabled={busy} className="w-full rounded-xl border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 sm:w-auto">Desactivar</button> : !enrollment && <button onClick={startEnrollment} disabled={busy} className="w-full rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60 sm:w-auto">{busy ? 'Preparando...' : 'Activar'}</button>}</div>
-    {factor && <p className="mt-3 inline-flex rounded-lg bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700">Activa y verificada</p>}
-    {enrollment?.totp && <div className="mt-4 rounded-xl bg-slate-50 p-4"><p className="text-sm font-semibold text-slate-800">1. Escanea este código QR</p><img src={enrollment.totp.qr_code} alt="Código QR para activar verificación en dos pasos" className="mx-auto my-4 h-44 w-44 rounded-lg bg-white p-2" /><p className="text-sm font-semibold text-slate-800">2. Escribe el código de 6 dígitos</p><div className="mt-2 flex flex-col gap-2 sm:flex-row"><input inputMode="numeric" maxLength={6} value={code} onChange={event => setCode(event.target.value.replace(/\D/g, ''))} placeholder="000000" className="min-w-0 flex-1 rounded-xl border border-slate-300 px-4 py-2.5 text-center font-mono text-lg tracking-[.3em]" /><button onClick={verifyEnrollment} disabled={busy || code.length !== 6} className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50">Verificar</button></div><p className="mt-3 break-all text-[10px] text-slate-400">Clave manual: {enrollment.totp.secret}</p></div>}
-    {status && <p className={`mt-3 text-xs font-semibold ${status.includes('activada') || status.includes('desactivada') ? 'text-green-600' : 'text-red-600'}`}>{status}</p>}
-  </div>
-}
