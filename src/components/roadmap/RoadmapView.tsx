@@ -1,8 +1,14 @@
-import { useMemo, useState } from 'react'
-import { CalendarPlus, ChevronDown, Map, Maximize2, Minimize2, MoveHorizontal } from 'lucide-react'
-import type { Task } from '../../types'
+import { useState } from 'react'
+import { CalendarPlus, ChevronDown, FileDown, Map, Maximize2, Minimize2, MoveHorizontal } from 'lucide-react'
+import type { Project, Task } from '../../types'
 
-interface Props { tasks: Task[]; title?: string; onSelectTask?: (task: Task) => void }
+interface Props {
+  tasks: Task[]
+  title?: string
+  onSelectTask?: (task: Task) => void
+  reportProjects?: Project[]
+  onGenerateReport?: (project: Project) => void
+}
 
 const DAY = 86400000
 const COLORS = [
@@ -16,15 +22,18 @@ const COLORS = [
 function monday(date: Date) { const d = new Date(date); const day = d.getDay(); d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day)); d.setHours(0, 0, 0, 0); return d }
 function key(date: Date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` }
 
-export default function RoadmapView({ tasks, title, onSelectTask }: Props) {
+export default function RoadmapView({ tasks, title, onSelectTask, reportProjects = [], onGenerateReport }: Props) {
   const [view, setView] = useState<'semana' | 'mes'>('semana')
   const [showCompleted, setShowCompleted] = useState(false)
   const [anchor, setAnchor] = useState(() => monday(new Date()))
   const [detailed, setDetailed] = useState(false)
-  const visible = tasks.filter(task => showCompleted || task.status !== 'completada')
+  const [selectedProjectId, setSelectedProjectId] = useState('todos')
+  const selectedProject = reportProjects.find(project => project.id === selectedProjectId)
+  const scopedTasks = selectedProjectId === 'todos' ? tasks : tasks.filter(task => task.project_id === selectedProjectId)
+  const visible = scopedTasks.filter(task => showCompleted || task.status !== 'completada')
   const undated = visible.filter(task => !task.start_date && !task.commitment_date)
   const dated = visible.filter(task => task.start_date || task.commitment_date)
-  const clients = useMemo(() => Array.from(new Set(dated.map(task => task.project?.client?.name || task.project?.name || 'Trabajo interno'))), [dated])
+  const clients = Array.from(new Set(dated.map(task => task.project?.client?.name || task.project?.name || 'Trabajo interno')))
   const daysCount = detailed ? (view === 'semana' ? 14 : 42) : (view === 'semana' ? 35 : 84)
   const timelineStart = new Date(anchor.getTime() - 7 * DAY)
   const days = Array.from({ length: daysCount }, (_, index) => new Date(timelineStart.getTime() + index * DAY))
@@ -50,6 +59,35 @@ export default function RoadmapView({ tasks, title, onSelectTask }: Props) {
           <label className="ml-2 flex cursor-pointer items-center gap-2 text-xs font-medium text-slate-600">Mostrar completadas<button type="button" onClick={() => setShowCompleted(value => !value)} className={`relative h-6 w-11 rounded-full transition ${showCompleted ? 'bg-blue-600' : 'bg-slate-300'}`}><span className={`absolute top-1 h-4 w-4 rounded-full bg-white transition ${showCompleted ? 'left-6' : 'left-1'}`} /></button></label>
         </div>
       </header>
+
+      {reportProjects.length > 0 && onGenerateReport && (
+        <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 bg-blue-50/60 px-5 py-3">
+          <div>
+            <p className="text-xs font-bold text-slate-800">Reporte de avance por cliente</p>
+            <p className="text-[11px] text-slate-500">Selecciona el proyecto para revisar sus tareas y generar su PDF.</p>
+          </div>
+          <select
+            value={selectedProjectId}
+            onChange={event => setSelectedProjectId(event.target.value)}
+            className="min-w-[280px] rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 outline-none focus:border-blue-500"
+          >
+            <option value="todos">Todos los clientes y proyectos</option>
+            {reportProjects.map(project => (
+              <option key={project.id} value={project.id}>
+                {project.client?.name || 'Cliente'} — {project.name}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            disabled={!selectedProject}
+            onClick={() => selectedProject && onGenerateReport(selectedProject)}
+            className="ml-auto flex items-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+          >
+            <FileDown size={15} /> Ver reporte y generar PDF
+          </button>
+        </div>
+      )}
 
       <div className="grid min-h-[620px] grid-cols-1 p-4 lg:grid-cols-[190px_minmax(900px,1fr)]">
         <aside className="border border-slate-200 bg-slate-50/50 lg:rounded-l-xl">

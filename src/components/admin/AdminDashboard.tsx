@@ -509,7 +509,14 @@ export default function AdminDashboard() {
             {view === 'mytasks' && <TeamDashboard embedded />}
 
             {/* Vista hoja de ruta */}
-            {view === 'roadmap' && <RoadmapView tasks={tasks} title="Todas las tareas del equipo" />}
+            {view === 'roadmap' && (
+              <RoadmapView
+                tasks={tasks}
+                title="Todas las tareas del equipo"
+                reportProjects={projects}
+                onGenerateReport={setReportProject}
+              />
+            )}
 
             {/* Vista solicitudes de clientes */}
             {view === 'requests' && <TaskRequestsPanel />}
