@@ -90,10 +90,25 @@ export default function AdminDashboard() {
   const [unreadTeamChat, setUnreadTeamChat] = useState(0)
   const [unreadClientChat, setUnreadClientChat] = useState(0)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [adminPermissions, setAdminPermissions] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     fetchAll()
   }, [])
+
+  useEffect(() => {
+    if (!user || user.is_super_admin) return
+    supabase.from('role_permissions').select('section_key, allowed').eq('role', 'admin').then(({ data }) => {
+      const next: Record<string, boolean> = {}
+      ;(data || []).forEach(row => { next[row.section_key] = row.allowed })
+      setAdminPermissions(next)
+      setView(current => {
+        if (current !== 'permisos' && next[current] !== false) return current
+        const fallback = ADMIN_NAV_ITEMS.find(item => item.id !== 'permisos' && next[item.id] !== false)
+        return (fallback?.id || 'overview') as View
+      })
+    })
+  }, [user])
 
   useEffect(() => {
     function handleOpenProject(e: Event) {
@@ -125,12 +140,12 @@ export default function AdminDashboard() {
   useEffect(() => {
     function handleOpenChat(e: Event) {
       const room = (e as CustomEvent).detail?.room
-      if (room === 'team') setView('chat_team')
-      else if (room === 'client') setView('chat_clients')
+      if (room === 'team' && (user?.is_super_admin || adminPermissions.chat_team !== false)) setView('chat_team')
+      else if (room === 'client' && (user?.is_super_admin || adminPermissions.chat_clients !== false)) setView('chat_clients')
     }
     window.addEventListener('open-chat', handleOpenChat)
     return () => window.removeEventListener('open-chat', handleOpenChat)
-  }, [])
+  }, [adminPermissions, user])
 
   // ── badges de chat en tiempo real ────────────────────────────────────────
   useEffect(() => {
@@ -224,8 +239,11 @@ export default function AdminDashboard() {
       return urgency(b.id) - urgency(a.id)
     })
 
+  const permittedAdminItems = user?.is_super_admin
+    ? ADMIN_NAV_ITEMS
+    : ADMIN_NAV_ITEMS.filter(item => item.id !== 'permisos' && adminPermissions[item.id] !== false)
   const navItems = [
-    ...ADMIN_NAV_ITEMS.map(item => ({
+    ...permittedAdminItems.map(item => ({
       ...item,
       badge: item.id === 'chat_team' ? unreadTeamChat : item.id === 'chat_clients' ? unreadClientChat : 0,
     })),
@@ -239,6 +257,7 @@ export default function AdminDashboard() {
   ]
 
   function selectView(id: string) {
+    if (!navItems.some(item => item.id === id) && id !== 'profile') return
     setView(id as View)
     if (id === 'chat_team') setUnreadTeamChat(0)
     if (id === 'chat_clients') setUnreadClientChat(0)
@@ -278,8 +297,8 @@ export default function AdminDashboard() {
 
           {!sidebarCollapsed && <div className="v2-day-summary">
             <div className="v2-day-summary-title"><Activity size={14} /> Resumen de hoy</div>
-            <button type="button" onClick={() => setView('mytasks')}><span className="v2-day-summary-dot red"><ClipboardList size={12} /></span><strong>{todayTaskCount}</strong> tareas para hoy</button>
-            <button type="button" onClick={() => setView('entregables')}><span className="v2-day-summary-dot amber"><Link2 size={12} /></span><strong>{pendingDeliveryCount}</strong> entregas pendientes</button>
+            <button type="button" onClick={() => selectView('mytasks')}><span className="v2-day-summary-dot red"><ClipboardList size={12} /></span><strong>{todayTaskCount}</strong> tareas para hoy</button>
+            <button type="button" onClick={() => selectView('entregables')}><span className="v2-day-summary-dot amber"><Link2 size={12} /></span><strong>{pendingDeliveryCount}</strong> entregas pendientes</button>
             <div className="v2-day-summary-row"><span className="v2-day-summary-dot green"><Clock3 size={12} /></span>Sesión: <strong>{sessionLabel}</strong></div>
           </div>}
 
@@ -513,7 +532,7 @@ export default function AdminDashboard() {
             )}
 
             {/* Vista: Permisos por rol */}
-            {view === 'permisos' && <RolePermissionsManager />}
+            {view === 'permisos' && user?.is_super_admin && <RolePermissionsManager />}
 
             {/* Vista: Licencia (solo súper admin) */}
             {view === 'licencia' && user?.is_super_admin && <LicenseManager />}

@@ -18,10 +18,25 @@ import { supabase } from '../../lib/supabase'
 
 interface PermissionRow {
   id: string
-  role: 'team' | 'client'
+  role: 'admin' | 'team' | 'client'
   section_key: string
   allowed: boolean
 }
+
+const ADMIN_SECTIONS = [
+  { key: 'overview', label: 'Proyectos', description: 'Consultar y administrar los proyectos de la empresa.', icon: FolderKanban },
+  { key: 'team', label: 'Carga del equipo', description: 'Revisar disponibilidad y distribuir trabajo.', icon: Users },
+  { key: 'calendar', label: 'Calendario general', description: 'Consultar fechas y compromisos de todo el equipo.', icon: CalendarDays },
+  { key: 'performance', label: 'Rendimiento', description: 'Acceder a métricas y resultados del equipo.', icon: CheckCircle2 },
+  { key: 'mytasks', label: 'Mis tareas', description: 'Consultar y trabajar en sus propias tareas.', icon: ClipboardList },
+  { key: 'roadmap', label: 'Hoja de ruta', description: 'Consultar la planeación general en el tiempo.', icon: Map },
+  { key: 'clientes', label: 'Clientes', description: 'Asignar equipos y administrar clientes.', icon: ShieldCheck },
+  { key: 'requests', label: 'Solicitudes', description: 'Revisar solicitudes enviadas por clientes.', icon: KeyRound },
+  { key: 'chat_team', label: 'Chat del equipo', description: 'Participar en conversaciones internas.', icon: MessagesSquare },
+  { key: 'chat_clients', label: 'Chat con clientes', description: 'Conversar con los clientes de la empresa.', icon: MessageCircle },
+  { key: 'entregables', label: 'Entregables', description: 'Revisar y administrar los entregables.', icon: Link2 },
+  { key: 'spelling', label: 'Ortografía', description: 'Utilizar el revisor de contenido y páginas.', icon: CheckCircle2 },
+]
 
 const TEAM_SECTIONS = [
   { key: 'tasks', label: 'Mis tareas', description: 'Consultar y trabajar en las tareas asignadas.', icon: ClipboardList },
@@ -42,7 +57,7 @@ const CLIENT_SECTIONS = [
   { key: 'entregables', label: 'Entregables', description: 'Revisar archivos, enlaces y versiones finales.', icon: Link2 },
 ]
 
-type Role = 'team' | 'client'
+type Role = 'admin' | 'team' | 'client'
 
 export default function RolePermissionsManager() {
   const [rows, setRows] = useState<PermissionRow[]>([])
@@ -123,6 +138,7 @@ export default function RolePermissionsManager() {
   if (loading) return <div className="flex items-center justify-center gap-2 py-16 text-sm text-gray-400"><LoaderCircle size={18} className="animate-spin" /> Cargando permisos...</div>
 
   const roles = [
+    { role: 'admin' as const, title: 'Administradores', subtitle: 'Accesos operativos delegados por el superadmin', sections: ADMIN_SECTIONS, icon: KeyRound, accent: 'indigo' },
     { role: 'team' as const, title: 'Equipo', subtitle: 'Accesos para colaboradores internos', sections: TEAM_SECTIONS, icon: Users, accent: 'blue' },
     { role: 'client' as const, title: 'Clientes', subtitle: 'Accesos disponibles en el portal del cliente', sections: CLIENT_SECTIONS, icon: ShieldCheck, accent: 'purple' },
   ]
@@ -149,20 +165,25 @@ export default function RolePermissionsManager() {
           const bulkKey = `${role}:all`
           const isBulkSaving = savingKey === bulkKey
           const blue = accent === 'blue'
+          const indigo = accent === 'indigo'
+          const activeColor = indigo ? 'bg-indigo-600' : blue ? 'bg-blue-600' : 'bg-purple-600'
+          const softColor = indigo ? 'bg-indigo-50 text-indigo-600' : blue ? 'bg-blue-50 text-blue-600' : 'bg-purple-50 text-purple-600'
+          const headerColor = indigo ? 'border-indigo-100 bg-indigo-50/70' : blue ? 'border-blue-100 bg-blue-50/70' : 'border-purple-100 bg-purple-50/70'
+          const countColor = indigo ? 'text-indigo-700' : blue ? 'text-blue-700' : 'text-purple-700'
 
           return (
             <section key={role} className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-              <div className={`border-b px-5 py-5 ${blue ? 'border-blue-100 bg-blue-50/70' : 'border-purple-100 bg-purple-50/70'}`}>
+              <div className={`border-b px-5 py-5 ${headerColor}`}>
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex min-w-0 items-center gap-3">
-                    <div className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${blue ? 'bg-blue-600 text-white' : 'bg-purple-600 text-white'}`}><RoleIcon size={21} /></div>
+                    <div className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl text-white ${activeColor}`}><RoleIcon size={21} /></div>
                     <div className="min-w-0">
                       <h2 className="font-bold text-gray-900">{title}</h2>
                       <p className="truncate text-xs text-gray-500">{subtitle}</p>
                     </div>
                   </div>
                   <div className="shrink-0 text-right">
-                    <strong className={`text-lg ${blue ? 'text-blue-700' : 'text-purple-700'}`}>{enabledCount}/{sections.length}</strong>
+                    <strong className={`text-lg ${countColor}`}>{enabledCount}/{sections.length}</strong>
                     <p className="text-[11px] text-gray-400">activos</p>
                   </div>
                 </div>
@@ -170,7 +191,7 @@ export default function RolePermissionsManager() {
                 <div className="mt-4 flex items-center justify-between rounded-xl border border-white/80 bg-white/80 px-3 py-2.5">
                   <div><p className="text-sm font-semibold text-gray-700">Permitir todas las secciones</p><p className="text-[11px] text-gray-400">Control general para este rol</p></div>
                   <button type="button" onClick={() => toggleAll(role, sections.map(section => section.key))} disabled={savingKey !== null}
-                    className={`relative h-6 w-11 rounded-full transition ${allAllowed ? (blue ? 'bg-blue-600' : 'bg-purple-600') : 'bg-gray-300'} disabled:opacity-60`} aria-pressed={allAllowed}>
+                    className={`relative h-6 w-11 rounded-full transition ${allAllowed ? activeColor : 'bg-gray-300'} disabled:opacity-60`} aria-pressed={allAllowed}>
                     <span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow transition-all ${allAllowed ? 'left-6' : 'left-1'}`} />
                     {isBulkSaving && <LoaderCircle size={12} className="absolute left-[14px] top-[6px] animate-spin text-white" />}
                   </button>
@@ -187,13 +208,13 @@ export default function RolePermissionsManager() {
 
                   return (
                     <div key={section.key} className="flex items-center gap-3 px-5 py-3.5 transition hover:bg-gray-50/80">
-                      <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${allowed ? (blue ? 'bg-blue-50 text-blue-600' : 'bg-purple-50 text-purple-600') : 'bg-gray-100 text-gray-400'}`}><Icon size={17} /></div>
+                      <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${allowed ? softColor : 'bg-gray-100 text-gray-400'}`}><Icon size={17} /></div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2"><p className="text-sm font-semibold text-gray-800">{section.label}</p>{saved && <span className="flex items-center gap-1 text-[10px] font-semibold text-green-600"><Check size={11} /> Guardado</span>}</div>
                         <p className="truncate text-xs text-gray-400">{section.description}</p>
                       </div>
                       <button type="button" onClick={() => toggle(role, section.key)} disabled={savingKey !== null}
-                        className={`relative h-6 w-11 shrink-0 rounded-full transition ${allowed ? (blue ? 'bg-blue-600' : 'bg-purple-600') : 'bg-gray-300'} disabled:opacity-60`} aria-label={`${allowed ? 'Ocultar' : 'Mostrar'} ${section.label}`} aria-pressed={allowed}>
+                        className={`relative h-6 w-11 shrink-0 rounded-full transition ${allowed ? activeColor : 'bg-gray-300'} disabled:opacity-60`} aria-label={`${allowed ? 'Ocultar' : 'Mostrar'} ${section.label}`} aria-pressed={allowed}>
                         <span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow transition-all ${allowed ? 'left-6' : 'left-1'}`} />
                         {saving && <LoaderCircle size={12} className="absolute left-[14px] top-[6px] animate-spin text-white" />}
                       </button>
