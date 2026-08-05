@@ -21,6 +21,7 @@ export default function RequestTaskModal({ client, project, onClose, onSent }: P
   const [teamMembers, setTeamMembers] = useState<User[]>([])
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
+  const [submitError, setSubmitError] = useState('')
 
   useEffect(() => {
     supabase
@@ -38,8 +39,9 @@ export default function RequestTaskModal({ client, project, onClose, onSent }: P
     e.preventDefault()
     if (!title.trim() || !department || !user) return
     setSending(true)
+    setSubmitError('')
 
-    await supabase.from('task_requests').insert({
+    const { error: requestError } = await supabase.from('task_requests').insert({
       client_id: client.id,
       requester_id: user.id,
       project_id: project?.id || null,
@@ -50,6 +52,13 @@ export default function RequestTaskModal({ client, project, onClose, onSent }: P
       status: 'pendiente',
     })
 
+    if (requestError) {
+      console.error('No se pudo enviar la solicitud:', requestError)
+      setSubmitError('No pudimos guardar tu solicitud. Intenta nuevamente o avisa al equipo.')
+      setSending(false)
+      return
+    }
+
     // Notificar a todos los líderes
     const { data: leaders } = await supabase
       .from('users')
@@ -58,7 +67,7 @@ export default function RequestTaskModal({ client, project, onClose, onSent }: P
 
     if (leaders && leaders.length > 0) {
       await supabase.from('notifications').insert(
-        leaders.map((l: any) => ({
+        leaders.map(l => ({
           user_id: l.id,
           title: '📋 Nueva solicitud de tarea',
           message: `${client.name} solicita: "${title.trim()}" — Área: ${DEPT_LABELS[department] || department}`,
@@ -75,7 +84,7 @@ export default function RequestTaskModal({ client, project, onClose, onSent }: P
 
     if (admins && admins.length > 0) {
       await supabase.from('notifications').insert(
-        admins.map((a: any) => ({
+        admins.map(a => ({
           user_id: a.id,
           title: '📋 Nueva solicitud de tarea',
           message: `${client.name} solicita: "${title.trim()}" — Área: ${DEPT_LABELS[department] || department}`,
@@ -111,6 +120,7 @@ export default function RequestTaskModal({ client, project, onClose, onSent }: P
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            {submitError && <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{submitError}</div>}
             {/* Título */}
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-1">¿Qué necesitas? *</label>
