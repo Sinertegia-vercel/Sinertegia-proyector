@@ -93,6 +93,18 @@ export default function AdminDashboard() {
     fetchAll()
   }, [])
 
+  useEffect(() => {
+    function handleOpenProject(e: Event) {
+      const projectId = (e as CustomEvent).detail?.projectId
+      const project = projects.find(item => item.id === projectId)
+      if (!project) return
+      setSelectedProject(project)
+      setView('project')
+    }
+    window.addEventListener('open-project', handleOpenProject)
+    return () => window.removeEventListener('open-project', handleOpenProject)
+  }, [projects])
+
   // ── open-task desde campanita ────────────────────────────────────────────
   useEffect(() => {
     async function handleOpenTask(e: Event) {
@@ -190,9 +202,19 @@ export default function AdminDashboard() {
   const healthPct = activeProjects.length ? Math.round((healthyProjects.length / activeProjects.length) * 100) : 100
   const attentionTotal = pendingTraffickerReview.length + overdueTasks.length + clientChangesRequested.length
 
-  const filteredProjects = statusFilter === 'todos'
+  const filteredProjects = (statusFilter === 'todos'
     ? projects
-    : projects.filter(p => p.status === statusFilter)
+    : projects.filter(p => p.status === statusFilter))
+    .sort((a, b) => {
+      const urgency = (projectId: string) => {
+        const projectTasks = tasks.filter(task => task.project_id === projectId && task.status !== 'completada')
+        const overdue = projectTasks.filter(task => task.commitment_date && new Date(task.commitment_date) < new Date()).length
+        const review = projectTasks.filter(task => task.review_status === 'pendiente_revision').length
+        const changes = projectTasks.filter(task => task.client_approval === 'cambios_solicitados').length
+        return overdue * 100 + review * 80 + changes * 70 + projectTasks.length
+      }
+      return urgency(b.id) - urgency(a.id)
+    })
 
   const navItems = [
     ...ADMIN_NAV_ITEMS.map(item => ({
@@ -334,7 +356,7 @@ export default function AdminDashboard() {
                         )}
                         {overdueTasks.length > 0 && (
                           <button type="button" className="overdue"
-                            onClick={() => { setSelectedProject(overdueTasks[0].project || null); setView('project') }}>
+                            onClick={() => setReviewFocusTask(overdueTasks[0])}>
                             <span className="v2-attention-icon"><Clock3 /></span>
                             <span><b>Fuera de fecha</b><small>{overdueTasks[0].title}</small></span>
                             <strong className="mono">{overdueTasks.length}</strong><ArrowRight />
@@ -342,7 +364,7 @@ export default function AdminDashboard() {
                         )}
                         {clientChangesRequested.length > 0 && (
                           <button type="button" className="changes"
-                            onClick={() => { setSelectedProject(clientChangesRequested[0].project || null); setView('project') }}>
+                            onClick={() => setReviewFocusTask(clientChangesRequested[0])}>
                             <span className="v2-attention-icon"><RotateCcw /></span>
                             <span><b>Cambios de clientes</b><small>{clientChangesRequested[0].title}</small></span>
                             <strong className="mono">{clientChangesRequested.length}</strong><ArrowRight />

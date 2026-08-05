@@ -77,6 +77,17 @@ export default function GlobalSearch() {
     setLoading(false)
   }
 
+  function selectResult(result: Result) {
+    if (result.type === 'task') {
+      window.dispatchEvent(new CustomEvent('open-task', { detail: { taskId: result.id } }))
+    } else if (result.type === 'project') {
+      window.dispatchEvent(new CustomEvent('open-project', { detail: { projectId: result.id } }))
+    } else {
+      window.dispatchEvent(new CustomEvent('open-client', { detail: { clientId: result.id } }))
+    }
+    setOpen(false)
+  }
+
   const typeIcon = { task: ClipboardList, project: FolderKanban, client: Users }
   const typeLabel = { task: 'Tarea', project: 'Proyecto', client: 'Cliente' }
   const typeColor = { task: 'text-blue-500', project: 'text-purple-500', client: 'text-green-500' }
@@ -124,8 +135,8 @@ export default function GlobalSearch() {
               {results.map(r => {
                 const Icon = typeIcon[r.type]
                 return (
-                  <div key={r.id}
-                    className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 cursor-pointer border-b border-gray-50 transition">
+                  <button type="button" key={`${r.type}-${r.id}`} onClick={() => selectResult(r)}
+                    className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 cursor-pointer border-b border-gray-50 transition">
                     <Icon size={16} className={`${typeColor[r.type]} shrink-0`} />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-800 truncate">{r.title}</p>
@@ -134,7 +145,7 @@ export default function GlobalSearch() {
                     <span className={`text-xs font-semibold ${typeColor[r.type]} shrink-0`}>
                       {typeLabel[r.type]}
                     </span>
-                  </div>
+                  </button>
                 )
               })}
             </div>
