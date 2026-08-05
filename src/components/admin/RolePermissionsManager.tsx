@@ -35,7 +35,6 @@ const ADMIN_SECTIONS = [
   { key: 'chat_team', label: 'Chat del equipo', description: 'Participar en conversaciones internas.', icon: MessagesSquare },
   { key: 'chat_clients', label: 'Chat con clientes', description: 'Conversar con los clientes de la empresa.', icon: MessageCircle },
   { key: 'entregables', label: 'Entregables', description: 'Revisar y administrar los entregables.', icon: Link2 },
-  { key: 'spelling', label: 'Ortografía', description: 'Utilizar el revisor de contenido y páginas.', icon: CheckCircle2 },
 ]
 
 const TEAM_SECTIONS = [

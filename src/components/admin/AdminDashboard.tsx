@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Users, FolderKanban, TrendingUp, Calendar, ClipboardList, MessageSquare, MessageCircle, Map, Inbox, UserCheck, SpellCheck, Link2, ShieldCheck, KeyRound, Plus, Search, CheckCircle2, ArrowRight, Activity, Clock3, RotateCcw, Sparkles, UserRound, LogOut, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { Users, FolderKanban, TrendingUp, Calendar, ClipboardList, MessageSquare, MessageCircle, Map, Inbox, UserCheck, Link2, ShieldCheck, KeyRound, Plus, Search, CheckCircle2, ArrowRight, Activity, Clock3, RotateCcw, Sparkles, UserRound, LogOut, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import type { Task, Project, User, Client } from '../../types'
 import Logo from '../shared/Logo'
@@ -17,7 +17,6 @@ import RoadmapView from '../roadmap/RoadmapView'
 import TaskRequestsPanel from './TaskRequestsPanel'
 import ClientAssignmentManager from './ClientAssignmentManager'
 import ClientReportModal from './ClientReportModal'
-import SpellingChecker from './SpellingChecker'
 import ClientDeliverables from './ClientDeliverables'
 import RolePermissionsManager from './RolePermissionsManager'
 import LicenseManager from './LicenseManager'
@@ -28,7 +27,7 @@ import TaskDetailModal from '../team/TaskDetailModal'
 import UserProfile from '../shared/UserProfile'
 import '../../styles/DashboardV2.css'
 
-type View = 'overview' | 'project' | 'team' | 'calendar' | 'performance' | 'mytasks' | 'roadmap' | 'requests' | 'chat_team' | 'chat_clients' | 'clientes' | 'spelling' | 'entregables' | 'create' | 'create_project' | 'permisos' | 'licencia' | 'profile'
+type View = 'overview' | 'project' | 'team' | 'calendar' | 'performance' | 'mytasks' | 'roadmap' | 'requests' | 'chat_team' | 'chat_clients' | 'clientes' | 'entregables' | 'create' | 'create_project' | 'permisos' | 'licencia' | 'profile'
 type StatusFilter = 'activo' | 'pausado' | 'completado' | 'todos'
 
 const STATUS_FILTER_LABELS: { value: StatusFilter; label: string }[] = [
@@ -50,7 +49,6 @@ const ADMIN_NAV_ITEMS = [
   { id: 'chat_team', label: 'Chat Equipo', icon: MessageSquare },
   { id: 'chat_clients', label: 'Chat Clientes', icon: MessageCircle },
   { id: 'entregables', label: 'Entregables', icon: Link2 },
-  { id: 'spelling', label: 'Ortografía', icon: SpellCheck },
   { id: 'permisos', label: 'Permisos', icon: KeyRound },
 ]
 
@@ -253,7 +251,7 @@ export default function AdminDashboard() {
     { label: 'Operación', ids: ['overview', 'team', 'calendar', 'performance'] },
     { label: 'Trabajo', ids: ['mytasks', 'roadmap', 'requests'] },
     { label: 'Comunicación', ids: ['chat_team', 'chat_clients', 'entregables'] },
-    { label: 'Administración', ids: ['clientes', 'spelling', 'permisos', 'licencia'] },
+    { label: 'Administración', ids: ['clientes', 'permisos', 'licencia'] },
   ]
 
   function selectView(id: string) {
@@ -524,7 +522,6 @@ export default function AdminDashboard() {
 
             {view === 'entregables' && <ClientDeliverables />}
 
-            {view === 'spelling' && <SpellingChecker />}
 
             {/* Vista: Asignación de clientes */}
             {view === 'clientes' && (

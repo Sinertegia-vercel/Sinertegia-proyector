@@ -18,9 +18,11 @@ insert into public.role_permissions (role, section_key, allowed) values
   ('admin', 'requests', true),
   ('admin', 'chat_team', true),
   ('admin', 'chat_clients', true),
-  ('admin', 'entregables', true),
-  ('admin', 'spelling', true)
+  ('admin', 'entregables', true)
 on conflict (role, section_key) do nothing;
+
+delete from public.role_permissions
+where role = 'admin' and section_key = 'spelling';
 
 drop policy if exists "Cualquier usuario autenticado puede modificar permisos" on public.role_permissions;
 drop policy if exists "Solo superadmin puede modificar permisos" on public.role_permissions;
