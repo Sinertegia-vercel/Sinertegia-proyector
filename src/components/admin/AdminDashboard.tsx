@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Users, FolderKanban, TrendingUp, Calendar, ClipboardList, MessageSquare, MessageCircle, Map, Inbox, UserCheck, SpellCheck, Link2, ShieldCheck, KeyRound, Plus, Search, CheckCircle2, ArrowRight, Activity, Clock3, RotateCcw, Sparkles } from 'lucide-react'
+import { Users, FolderKanban, TrendingUp, Calendar, ClipboardList, MessageSquare, MessageCircle, Map, Inbox, UserCheck, SpellCheck, Link2, ShieldCheck, KeyRound, Plus, Search, CheckCircle2, ArrowRight, Activity, Clock3, RotateCcw, Sparkles, UserRound, LogOut, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import type { Task, Project, User, Client } from '../../types'
 import Logo from '../shared/Logo'
@@ -24,9 +24,10 @@ import LicenseManager from './LicenseManager'
 import { usePresence } from '../../hooks/usePresence'
 import { useAuth } from '../../contexts/AuthContext'
 import TaskDetailModal from '../team/TaskDetailModal'
+import UserProfile from '../shared/UserProfile'
 import '../../styles/DashboardV2.css'
 
-type View = 'overview' | 'project' | 'team' | 'calendar' | 'performance' | 'mytasks' | 'roadmap' | 'requests' | 'chat_team' | 'chat_clients' | 'clientes' | 'spelling' | 'entregables' | 'create' | 'create_project' | 'permisos' | 'licencia'
+type View = 'overview' | 'project' | 'team' | 'calendar' | 'performance' | 'mytasks' | 'roadmap' | 'requests' | 'chat_team' | 'chat_clients' | 'clientes' | 'spelling' | 'entregables' | 'create' | 'create_project' | 'permisos' | 'licencia' | 'profile'
 type StatusFilter = 'activo' | 'pausado' | 'completado' | 'todos'
 
 const STATUS_FILTER_LABELS: { value: StatusFilter; label: string }[] = [
@@ -86,6 +87,7 @@ export default function AdminDashboard() {
   const [reviewFocusTask, setReviewFocusTask] = useState<Task | null>(null)
   const [unreadTeamChat, setUnreadTeamChat] = useState(0)
   const [unreadClientChat, setUnreadClientChat] = useState(0)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   useEffect(() => {
     fetchAll()
@@ -208,35 +210,39 @@ export default function AdminDashboard() {
 
   if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Cargando...</div>
 
-  const currentNavLabel = navItems.find(i => i.id === view)?.label || 'Panel de Control'
+  const currentNavLabel = view === 'profile' ? 'Mi perfil' : navItems.find(i => i.id === view)?.label || 'Panel de Control'
 
   return (
     <div className="v2app">
-      <div className="v2-shell">
+      <div className={`v2-shell ${sidebarCollapsed ? 'collapsed' : ''}`}>
         {/* ── Sidebar ── */}
         <aside className="v2-sidebar">
           <div className="v2-brand">
-            <div className="v2-brand-mark"><Logo size={26} /></div>
-            <div>
+            <button type="button" className="v2-brand-mark" title="Sinertegia Launch 57"><Logo size={26} /></button>
+            {!sidebarCollapsed && <div className="v2-brand-text">
               <div className="v2-brand-name">Sinertegia Launch 57</div>
               <div className="v2-brand-sub">Gestión de proyectos</div>
-            </div>
+            </div>}
           </div>
 
           {navItems.map(({ id, label, icon: Icon, badge }) => (
             <button key={id} type="button" onClick={() => selectView(id)}
               className={`v2-nav-item ${view === id ? 'active' : ''}`}>
               <Icon size={17} />
-              {label}
-              {!!badge && <span className="v2-badge">{badge > 9 ? '9+' : badge}</span>}
+              {!sidebarCollapsed && label}
+              {!sidebarCollapsed && !!badge && <span className="v2-badge">{badge > 9 ? '9+' : badge}</span>}
             </button>
           ))}
 
-          <div className="v2-tip">
+          {!sidebarCollapsed && <div className="v2-tip">
             <div className="v2-tip-head">💡 Consejo rápido</div>
             <p>Organiza tus tareas con prioridades y fechas de entrega para mejorar tu productividad.</p>
-          </div>
+          </div>}
+          <button type="button" onClick={() => setView('profile')} className={`v2-profile-link ${view === 'profile' ? 'active' : ''}`} title="Mi perfil"><UserRound size={17} />{!sidebarCollapsed && <span>Mi perfil</span>}</button>
+          <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('request-logout'))} className="v2-logout-link" title="Cerrar sesión"><LogOut size={17} />{!sidebarCollapsed && <span>Cerrar sesión</span>}</button>
         </aside>
+
+        <button type="button" onClick={() => setSidebarCollapsed(value => !value)} className="v2-sidebar-toggle" title={sidebarCollapsed ? 'Expandir menú' : 'Contraer menú'} aria-label={sidebarCollapsed ? 'Expandir menú' : 'Contraer menú'}>{sidebarCollapsed ? <PanelLeftOpen size={15} /> : <PanelLeftClose size={15} />}</button>
 
         {/* ── Main ── */}
         <div className="v2-main">
@@ -466,6 +472,8 @@ export default function AdminDashboard() {
 
             {/* Vista: Licencia (solo súper admin) */}
             {view === 'licencia' && user?.is_super_admin && <LicenseManager />}
+
+            {view === 'profile' && <UserProfile embedded onChangePhoto={() => window.dispatchEvent(new CustomEvent('change-profile-photo'))} onChangePassword={() => window.dispatchEvent(new CustomEvent('change-profile-password'))} />}
 
           </div>
         </div>
