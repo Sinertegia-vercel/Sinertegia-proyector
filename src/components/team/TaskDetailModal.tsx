@@ -37,6 +37,7 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone,
   const [editCommentValue, setEditCommentValue] = useState('')
   const [uploadingFile, setUploadingFile] = useState(false)
   const [uploadError, setUploadError] = useState('')
+  const [linksError, setLinksError] = useState('')
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [commentsOpen, setCommentsOpen] = useState(false)
   const [submitAttempted, setSubmitAttempted] = useState(false)
@@ -63,11 +64,28 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone,
   }, [])
 
   useEffect(() => {
+    fetchLinks()
     fetchComments()
     fetchSubtasks()
     fetchTimeEntries()
     if (task.project_id) fetchProjectTasks()
   }, [task.id])
+
+  async function fetchLinks() {
+    setLinksError('')
+    const { data, error } = await supabase
+      .from('task_links')
+      .select('id, label, url')
+      .eq('task_id', task.id)
+      .order('id', { ascending: true })
+
+    if (error) {
+      console.error('No se pudieron cargar los entregables de la tarea:', error)
+      setLinksError('No se pudieron cargar los entregables. Actualiza la página o avisa al administrador.')
+      return
+    }
+    setLinks(data || [])
+  }
 
   useEffect(() => {
     if (activeEntry) {
@@ -239,9 +257,15 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone,
     if (!newUrl.trim()) return
     let automaticLabel = 'Entregable'
     try { automaticLabel = new URL(newUrl.trim()).hostname.replace(/^www\./, '') || automaticLabel } catch { /* type=url valida antes */ }
-    const { data } = await supabase.from('task_links')
+    setLinksError('')
+    const { data, error } = await supabase.from('task_links')
       .insert({ task_id: task.id, label: newLabel.trim() || automaticLabel, url: newUrl.trim() })
       .select().single()
+    if (error) {
+      console.error('No se pudo guardar el entregable:', error)
+      setLinksError('No se pudo guardar el enlace. Intenta nuevamente.')
+      return
+    }
     if (data) setLinks(prev => [...prev, data])
     setNewLabel(''); setNewUrl('')
   }
@@ -269,9 +293,13 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone,
       return
     }
     const { data: { publicUrl } } = supabase.storage.from('chat-files').getPublicUrl(path)
-    const { data } = await supabase.from('task_links')
+    const { data, error: linkError } = await supabase.from('task_links')
       .insert({ task_id: task.id, label: file.name, url: publicUrl })
       .select().single()
+    if (linkError) {
+      console.error('No se pudo registrar el archivo como entregable:', linkError)
+      setUploadError('El archivo subió, pero no se pudo añadir a la tarea')
+    }
     if (data) setLinks(prev => [...prev, data])
     setUploadingFile(false)
   }
@@ -673,6 +701,14 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone,
           {/* ── Links / Entregables ── */}
           <div>
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Entregables</p>
+            {linksError && (
+              <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2">
+                <p className="text-xs font-medium text-red-600">{linksError}</p>
+                <button type="button" onClick={fetchLinks} className="shrink-0 text-xs font-bold text-red-700 underline">
+                  Reintentar
+                </button>
+              </div>
+            )}
             {submitAttempted && links.length === 0 && (
               <p className="text-xs text-red-500 mb-2 font-medium">📎 Es obligatorio añadir al menos un link o archivo del entregable</p>
             )}
