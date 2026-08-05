@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { Plus, CheckCircle, Music, MoreVertical, Trash2 } from 'lucide-react'
+import { BriefcaseBusiness, Plus, CheckCircle, Music, MoreVertical, Trash2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import type { ChatMessage, Client, User } from '../../types'
@@ -24,6 +24,7 @@ function renderWithMentions(content: string, userNames: string[]) {
 
 interface Props {
   client: Client
+  projectName?: string
   onConvertToTask?: (content: string, messageId: string) => void
 }
 
@@ -46,7 +47,7 @@ async function getOrCreateClientRoom(clientId: string, clientName: string): Prom
   return created?.id || null
 }
 
-export default function ClientChatRoom({ client, onConvertToTask }: Props) {
+export default function ClientChatRoom({ client, projectName, onConvertToTask }: Props) {
   const { user } = useAuth()
   const [roomId, setRoomId] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -195,17 +196,18 @@ export default function ClientChatRoom({ client, onConvertToTask }: Props) {
   const visibleMessages = messages.filter(m => !(m.deleted_for || []).includes(user?.id || ''))
 
   return (
-    <div className="flex flex-col h-full bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+    <div className="flex h-full flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
       {/* Header */}
-      <div className="flex items-center gap-3 border-b border-gray-100 bg-gradient-to-r from-blue-700 to-red-600 px-4 py-3 text-white">
+      <div className="flex items-center gap-3 border-b border-gray-100 bg-white px-4 py-3">
         <UserAvatar name={client.name} avatarUrl={client.avatar_url} size={34} />
-        <div><h3 className="font-semibold text-sm">{client.name}</h3>
-        <p className="text-xs text-white/70">{client.company} · Chat con el equipo</p>
+        <div className="min-w-0"><h3 className="truncate text-sm font-semibold text-gray-900">{client.name}</h3>
+        <p className="truncate text-xs text-gray-400">{client.company} · Chat con el equipo</p>
         </div>
+        {projectName && <span className="ml-auto flex max-w-[220px] items-center gap-1.5 truncate rounded-lg border border-blue-100 bg-blue-50 px-2.5 py-1.5 text-[11px] font-semibold text-blue-700"><BriefcaseBusiness size={12} className="shrink-0" /><span className="truncate">Proyecto: {projectName}</span></span>}
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
+      <div className="flex-1 space-y-3 overflow-y-auto bg-[#f8f9fc] p-4">
         {visibleMessages.length === 0 && (
           <div className="text-center text-gray-400 py-8">
             <p className="text-sm">No hay mensajes aún.</p>
