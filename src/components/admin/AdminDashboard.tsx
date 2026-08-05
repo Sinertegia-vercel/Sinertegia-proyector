@@ -500,7 +500,7 @@ export default function AdminDashboard() {
             {view === 'team' && <TeamCapacity teamMembers={teamMembers} tasks={tasks} onAssign={() => setView('create')} onUpdate={fetchAll} />}
 
             {/* Vista calendario */}
-            {view === 'calendar' && <TeamCalendar teamMembers={teamMembers} tasks={tasks} onlineIds={onlineIds} />}
+            {view === 'calendar' && <TeamCalendar teamMembers={teamMembers} tasks={tasks} onlineIds={onlineIds} onTasksChange={fetchAll} />}
 
             {/* Vista rendimiento */}
             {view === 'performance' && <TeamPerformance teamMembers={teamMembers} tasks={tasks} />}
