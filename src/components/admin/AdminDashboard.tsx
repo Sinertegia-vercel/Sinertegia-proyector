@@ -22,7 +22,6 @@ import RolePermissionsManager from './RolePermissionsManager'
 import LicenseManager from './LicenseManager'
 import { usePresence } from '../../hooks/usePresence'
 import { useAuth } from '../../contexts/AuthContext'
-import { useWorkSession } from '../../contexts/WorkSessionContext'
 import TaskDetailModal from '../team/TaskDetailModal'
 import UserProfile from '../shared/UserProfile'
 import '../../styles/DashboardV2.css'
@@ -72,7 +71,6 @@ function fillClassFor(pct: number): string {
 
 export default function AdminDashboard() {
   const { user } = useAuth()
-  const { elapsedMinutes } = useWorkSession()
   const [projects, setProjects] = useState<Project[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
   const [teamMembers, setTeamMembers] = useState<User[]>([])
@@ -216,12 +214,6 @@ export default function AdminDashboard() {
   const healthyProjects = activeProjects.filter(p => !atRiskProjectIds.has(p.id))
   const healthPct = activeProjects.length ? Math.round((healthyProjects.length / activeProjects.length) * 100) : 100
   const attentionTotal = pendingTraffickerReview.length + overdueTasks.length + clientChangesRequested.length
-  const todayKey = new Date().toISOString().slice(0, 10)
-  const todayTaskCount = tasks.filter(task => task.status !== 'completada' && task.commitment_date?.slice(0, 10) === todayKey).length
-  const pendingDeliveryCount = pendingTraffickerReview.length + clientChangesRequested.length
-  const sessionHours = Math.floor(elapsedMinutes / 60)
-  const sessionMinutes = elapsedMinutes % 60
-  const sessionLabel = sessionHours > 0 ? `${sessionHours} h ${sessionMinutes} min` : `${sessionMinutes} min`
 
   const filteredProjects = (statusFilter === 'todos'
     ? projects
@@ -292,13 +284,6 @@ export default function AdminDashboard() {
               ))}
             </div>
           })}
-
-          {!sidebarCollapsed && <div className="v2-day-summary">
-            <div className="v2-day-summary-title"><Activity size={14} /> Resumen de hoy</div>
-            <button type="button" onClick={() => selectView('mytasks')}><span className="v2-day-summary-dot red"><ClipboardList size={12} /></span><strong>{todayTaskCount}</strong> tareas para hoy</button>
-            <button type="button" onClick={() => selectView('entregables')}><span className="v2-day-summary-dot amber"><Link2 size={12} /></span><strong>{pendingDeliveryCount}</strong> entregas pendientes</button>
-            <div className="v2-day-summary-row"><span className="v2-day-summary-dot green"><Clock3 size={12} /></span>Sesión: <strong>{sessionLabel}</strong></div>
-          </div>}
 
           <button type="button" onClick={() => setView('profile')} className={`v2-profile-link ${view === 'profile' ? 'active' : ''}`} title="Mi perfil"><UserRound size={17} />{!sidebarCollapsed && <span>Mi perfil</span>}</button>
           <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('request-logout'))} className="v2-logout-link" title="Cerrar sesión"><LogOut size={17} />{!sidebarCollapsed && <span>Cerrar sesión</span>}</button>

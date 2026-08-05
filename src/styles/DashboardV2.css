@@ -78,21 +78,6 @@
 .v2app .v2-nav-group{display:flex;flex-direction:column;gap:2px;margin-top:3px;}
 .v2app .v2-nav-group-label{margin:6px 11px 2px;color:#68718f;font-size:8.5px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;}
 
-.v2app .v2-day-summary{
-  margin-top:auto;padding:12px 10px;border:1px solid rgba(255,255,255,.09);border-radius:13px;
-  background:linear-gradient(160deg,#1C2340,#171C33);display:flex;flex-direction:column;gap:5px;
-}
-.v2app .v2-day-summary-title{display:flex;align-items:center;gap:7px;margin-bottom:3px;color:#DDE2F7;font-size:11px;font-weight:700;}
-.v2app .v2-day-summary button,.v2app .v2-day-summary-row{
-  display:flex;align-items:center;gap:7px;width:100%;padding:5px 3px;border:0;background:transparent;color:#AEB4CC;
-  font-size:10.5px;text-align:left;border-radius:7px;
-}
-.v2app .v2-day-summary button{cursor:pointer;transition:background .15s,color .15s;}
-.v2app .v2-day-summary button:hover{background:rgba(255,255,255,.06);color:#fff;}
-.v2app .v2-day-summary strong{color:#F4F6FF;font-weight:750;}
-.v2app .v2-day-summary-dot{display:grid;place-items:center;width:22px;height:22px;flex:none;border-radius:7px;color:#fff;}
-.v2app .v2-day-summary-dot.blue{background:#2757EB}.v2app .v2-day-summary-dot.red{background:#E0304F}.v2app .v2-day-summary-dot.amber{background:#F59E0B}.v2app .v2-day-summary-dot.green{background:#12B886}
-
 .v2app .v2-tip{
   margin-top:auto;background:linear-gradient(160deg,#1C2340,#171C33);
   border:1px solid rgba(255,255,255,.06);
