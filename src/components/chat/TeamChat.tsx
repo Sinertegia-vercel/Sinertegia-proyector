@@ -1,4 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
+import type { MouseEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { Users, Music, MoreVertical, Trash2, Search, Reply, Smile, Pin, ListPlus, Link2, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -63,6 +65,7 @@ export default function TeamChat() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(true)
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 })
   const [search, setSearch] = useState('')
   const [messageFilter, setMessageFilter] = useState<'todos' | 'menciones' | 'archivos' | 'tareas' | 'fijados'>('todos')
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null)
@@ -191,6 +194,26 @@ export default function TeamChat() {
     setMessages(prev => prev.filter(m => m.id !== msg.id))
   }
 
+  function openMessageMenu(event: MouseEvent<HTMLButtonElement>, messageId: string, alignRight: boolean) {
+    if (openMenuId === messageId) {
+      setOpenMenuId(null)
+      return
+    }
+    const rect = event.currentTarget.getBoundingClientRect()
+    const menuWidth = 190
+    const menuHeight = alignRight ? 286 : 250
+    const gap = 6
+    const left = Math.min(
+      Math.max(8, alignRight ? rect.right - menuWidth : rect.left),
+      window.innerWidth - menuWidth - 8,
+    )
+    const top = window.innerHeight - rect.bottom >= menuHeight + gap
+      ? rect.bottom + gap
+      : Math.max(8, rect.top - menuHeight - gap)
+    setMenuPosition({ top, left })
+    setOpenMenuId(messageId)
+  }
+
   async function toggleReaction(msg: ChatMessage, emoji: string) {
     if (!user) return
     const reactions = { ...(msg.reactions || {}) }
@@ -259,7 +282,7 @@ export default function TeamChat() {
         <div className="mt-2 flex gap-2 overflow-x-auto pb-0.5">{([['todos', 'Todos'], ['menciones', 'Menciones'], ['archivos', 'Archivos'], ['tareas', 'Tareas'], ['fijados', 'Fijados']] as const).map(([value, label]) => <button key={value} type="button" onClick={() => setMessageFilter(value)} className={`whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold transition ${messageFilter === value ? 'bg-blue-600 text-white' : 'border border-gray-200 bg-white text-gray-500 hover:bg-gray-50'}`}>{label}</button>)}</div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50" onScroll={() => setOpenMenuId(null)}>
         {visibleMessages.length === 0 && (
           <div className="text-center text-gray-400 py-8">
             <Users size={28} className="mx-auto mb-2 opacity-30" />
@@ -309,14 +332,14 @@ export default function TeamChat() {
                   {!msg.deleted_for_everyone && (
                     <div className="relative">
                       <button type="button"
-                        onClick={() => setOpenMenuId(o => o === msg.id ? null : msg.id)}
-                        className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-gray-600 transition">
+                        onClick={event => openMessageMenu(event, msg.id, isMe)}
+                        className="text-gray-400 opacity-100 transition hover:text-gray-700 sm:opacity-0 sm:group-hover:opacity-100">
                         <MoreVertical size={13} />
                       </button>
-                      {openMenuId === msg.id && (
+                      {openMenuId === msg.id && createPortal(
                         <>
-                          <div className="fixed inset-0 z-10" onClick={() => setOpenMenuId(null)} />
-                          <div className={`absolute z-20 top-5 ${isMe ? 'right-0' : 'left-0'} bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[160px]`}>
+                          <button type="button" aria-label="Cerrar menú" className="fixed inset-0 z-[70] cursor-default" onClick={() => setOpenMenuId(null)} />
+                          <div className="fixed z-[80] w-[190px] overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-2xl" style={{ top: menuPosition.top, left: menuPosition.left }}>
                             <button type="button" onClick={() => { setReplyTo(msg); setOpenMenuId(null) }} className="w-full flex items-center gap-2 text-left px-3 py-2 text-xs text-gray-600 hover:bg-gray-50"><Reply size={12} /> Responder</button>
                             <button type="button" onClick={() => { setReactionMessageId(msg.id); setOpenMenuId(null) }} className="w-full flex items-center gap-2 text-left px-3 py-2 text-xs text-gray-600 hover:bg-gray-50"><Smile size={12} /> Reaccionar</button>
                             <button type="button" onClick={() => togglePin(msg)} className="w-full flex items-center gap-2 text-left px-3 py-2 text-xs text-gray-600 hover:bg-gray-50"><Pin size={12} /> {msg.is_pinned ? 'Desfijar mensaje' : 'Fijar mensaje'}</button>
@@ -333,7 +356,8 @@ export default function TeamChat() {
                               </button>
                             )}
                           </div>
-                        </>
+                        </>,
+                        document.body,
                       )}
                     </div>
                   )}
