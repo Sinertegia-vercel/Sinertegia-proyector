@@ -76,6 +76,21 @@
 .v2app .v2-nav-item.active::before{content:"";position:absolute;left:-16px;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:var(--brand);}
 .v2app .v2-nav-item .v2-badge{margin-left:auto;font-size:10px;background:var(--rose);color:#fff;font-weight:700;padding:1px 7px;border-radius:20px;flex:none;}
 
+.v2app .v2-day-summary{
+  margin-top:auto;padding:12px 10px;border:1px solid rgba(255,255,255,.09);border-radius:13px;
+  background:linear-gradient(160deg,#1C2340,#171C33);display:flex;flex-direction:column;gap:5px;
+}
+.v2app .v2-day-summary-title{display:flex;align-items:center;gap:7px;margin-bottom:3px;color:#DDE2F7;font-size:11px;font-weight:700;}
+.v2app .v2-day-summary button,.v2app .v2-day-summary-row{
+  display:flex;align-items:center;gap:7px;width:100%;padding:5px 3px;border:0;background:transparent;color:#AEB4CC;
+  font-size:10.5px;text-align:left;border-radius:7px;
+}
+.v2app .v2-day-summary button{cursor:pointer;transition:background .15s,color .15s;}
+.v2app .v2-day-summary button:hover{background:rgba(255,255,255,.06);color:#fff;}
+.v2app .v2-day-summary strong{color:#F4F6FF;font-weight:750;}
+.v2app .v2-day-summary-dot{display:grid;place-items:center;width:22px;height:22px;flex:none;border-radius:7px;color:#fff;}
+.v2app .v2-day-summary-dot.blue{background:#2757EB}.v2app .v2-day-summary-dot.amber{background:#F59E0B}.v2app .v2-day-summary-dot.green{background:#12B886}
+
 .v2app .v2-tip{
   margin-top:auto;background:linear-gradient(160deg,#1C2340,#171C33);
   border:1px solid rgba(255,255,255,.06);
@@ -84,7 +99,7 @@
 .v2app .v2-tip-head{display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:600;color:#C9CBDC;margin-bottom:6px}
 .v2app .v2-tip p{font-size:11.5px;color:#8A8DA6;line-height:1.55}
 .v2app .v2-profile-link{
-  display:flex;align-items:center;gap:10px;width:100%;margin-top:auto;padding:10px 12px;
+  display:flex;align-items:center;gap:10px;width:100%;margin-top:8px;padding:10px 12px;
   border:1px solid rgba(255,255,255,.08);border-radius:11px;background:rgba(255,255,255,.035);
   color:#C9CBDC;font-size:13px;font-weight:550;text-align:left;cursor:pointer;white-space:nowrap;
   transition:background .15s,color .15s,border-color .15s;

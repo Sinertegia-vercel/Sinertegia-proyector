@@ -1,8 +1,9 @@
 import { useEffect, useState, useRef } from 'react'
-import { MessageSquare, CheckCircle, Clock, ClipboardList, MessageCircle, Map, Plus, CalendarDays, Link2, Loader2, XCircle, FileText, ChevronDown, Home, AlertTriangle, ArrowRight, PlayCircle, Eye, UserRound, PanelLeftClose, PanelLeftOpen, LogOut } from 'lucide-react'
+import { MessageSquare, CheckCircle, Clock, ClipboardList, MessageCircle, Map, Plus, CalendarDays, Link2, Loader2, XCircle, FileText, ChevronDown, Home, AlertTriangle, ArrowRight, PlayCircle, Eye, UserRound, PanelLeftClose, PanelLeftOpen, LogOut, PieChart as PieChartIcon } from 'lucide-react'
 import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
+import { useWorkSession } from '../../contexts/WorkSessionContext'
 import type { Task, Project, User, Priority } from '../../types'
 import PriorityBadge from '../shared/PriorityBadge'
 import StatusBadge from '../shared/StatusBadge'
@@ -45,6 +46,7 @@ interface Props {
 
 export default function TeamDashboard({ embedded = false }: Props) {
   const { user } = useAuth()
+  const { elapsedMinutes } = useWorkSession()
   const [tasks, setTasks] = useState<Task[]>([])
   const [reviewTasks, setReviewTasks] = useState<Task[]>([])
   const [myReviewTasks, setMyReviewTasks] = useState<Task[]>([])
@@ -67,6 +69,9 @@ export default function TeamDashboard({ embedded = false }: Props) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   const isTraffickerOrLider = user?.department === 'trafficker' || user?.department === 'lider'
+  const sessionHours = Math.floor(elapsedMinutes / 60)
+  const sessionMinutes = elapsedMinutes % 60
+  const sidebarSessionLabel = sessionHours > 0 ? `${sessionHours} h ${sessionMinutes} min` : `${sessionMinutes} min`
 
   useEffect(() => {
     if (user) {
@@ -676,6 +681,15 @@ export default function TeamDashboard({ embedded = false }: Props) {
               {!sidebarCollapsed && label}
             </button>
           ))}
+
+          {!sidebarCollapsed && (
+            <div className="v2-day-summary">
+              <div className="v2-day-summary-title"><PieChartIcon size={14} /> Resumen de hoy</div>
+              <button type="button" onClick={() => setTeamView('today')}><span className="v2-day-summary-dot blue"><ClipboardList size={12} /></span><strong>{todayTasks.length}</strong> tareas para hoy</button>
+              <button type="button" onClick={() => setTeamView('entregables')}><span className="v2-day-summary-dot amber"><FileText size={12} /></span><strong>{myReviewTasks.length}</strong> entregas pendientes</button>
+              <div className="v2-day-summary-row"><span className="v2-day-summary-dot green"><Clock size={12} /></span>Sesión: <strong>{sidebarSessionLabel}</strong></div>
+            </div>
+          )}
 
           <button
             type="button"
