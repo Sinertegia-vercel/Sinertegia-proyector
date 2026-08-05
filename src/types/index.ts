@@ -130,6 +130,7 @@ export interface Task {
   commitment_date?: string
   completion_date?: string
   reviewer_id?: string
+  approver_id?: string
   review_status?: 'pendiente_revision' | 'pendiente_trafficker' | 'en_revision' | 'aprobada' | 'cambios_solicitados'
   client_approval?: 'aprobada' | 'cambios_solicitados'
   change_count?: number

@@ -17,13 +17,14 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone,
   const isAdmin = user?.role === 'admin'
   const isTeam = user?.role === 'team'
   const isReviewer = user?.id === task.reviewer_id
-  const canAuthorize = isAdmin || user?.department === 'trafficker' || user?.department === 'lider'
+  const isTaskApprover = !!task.approver_id && user?.id === task.approver_id
+  const canAuthorize = isAdmin || isTaskApprover || (!task.approver_id && (user?.department === 'trafficker' || user?.department === 'lider'))
 
   const [teamMembers, setTeamMembers] = useState<User[]>([])
   const [links, setLinks] = useState<{ id: string; label: string; url: string }[]>(task.links || [])
   const [newLabel, setNewLabel] = useState('')
   const [newUrl, setNewUrl] = useState('')
-  const [reviewerId, setReviewerId] = useState(task.reviewer_id || '')
+  const [reviewerId, setReviewerId] = useState(task.reviewer_id || task.approver_id || '')
   const [reworkNote, setReworkNote] = useState('')
   const [showRework, setShowRework] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -785,14 +786,16 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone,
           {step === 1 && isTeam && (
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-blue-700 mb-1">Enviar para revisión a</label>
+                <label className="block text-xs font-semibold text-blue-700 mb-1">Enviar para revisión y autorización a</label>
                 <select value={reviewerId} onChange={e => setReviewerId(e.target.value)}
+                  disabled={!!task.approver_id}
                   className="w-full border border-blue-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
                   <option value="">Trafficker / Líder (por defecto)</option>
                   {teamMembers.filter(m => m.id !== user?.id).map(m => (
                     <option key={m.id} value={m.id}>{m.full_name}</option>
                   ))}
                 </select>
+                {task.approver_id && <p className="mt-1 text-xs text-blue-600">La persona responsable fue definida al crear esta tarea.</p>}
               </div>
               <button type="button" onClick={() => {
                 setSubmitAttempted(true)
@@ -822,12 +825,12 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone,
                 </button>
               )}
 
-              {/* Trafficker / Admin → autoriza directo */}
+              {/* Responsable elegido / Trafficker / Admin autoriza directo */}
               {canAuthorize && (
                 <button type="button" onClick={authorizeForClient} disabled={busy}
                   className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold py-2.5 rounded-lg transition disabled:opacity-50">
                   <ShieldCheck size={14} />
-                  {busy ? 'Autorizando...' : '🛡️ Autorizar — mostrar al cliente'}
+                  {busy ? 'Autorizando...' : 'Autorizar tarea terminada'}
                 </button>
               )}
 

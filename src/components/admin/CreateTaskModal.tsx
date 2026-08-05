@@ -31,6 +31,7 @@ export default function CreateTaskModal({ projects, teamMembers, defaultProjectI
     title: prefillTitle || '',
     description: '',
     assigned_to: '',
+    approver_id: user?.id || '',
     department: '' as Department,
     priority: 'media' as Priority,
     start_date: '',
@@ -44,7 +45,7 @@ export default function CreateTaskModal({ projects, teamMembers, defaultProjectI
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
-    if (!form.project_id || !form.title || !form.assigned_to || !form.department) {
+    if (!form.project_id || !form.title || !form.assigned_to || !form.approver_id || !form.department) {
       setError('Por favor completa todos los campos requeridos')
       return
     }
@@ -54,6 +55,7 @@ export default function CreateTaskModal({ projects, teamMembers, defaultProjectI
       title: form.title,
       description: form.description || null,
       assigned_to: form.assigned_to,
+      approver_id: form.approver_id,
       department: form.department,
       priority: form.priority,
       status: 'pendiente',
@@ -76,7 +78,7 @@ export default function CreateTaskModal({ projects, teamMembers, defaultProjectI
 
     // Notificaciones al asignado y al cliente
     const project = projects.find(p => p.id === form.project_id)
-    const notifs: any[] = []
+    const notifs: Array<{ user_id: string; title: string; message: string; type: string }> = []
 
     if (form.assigned_to) {
       notifs.push({
@@ -84,6 +86,15 @@ export default function CreateTaskModal({ projects, teamMembers, defaultProjectI
         title: '📋 Nueva tarea asignada',
         message: `"${form.title}" — ${project?.client?.name || project?.name || 'Proyecto'}`,
         type: 'task',
+      })
+    }
+
+    if (form.approver_id && form.approver_id !== form.assigned_to) {
+      notifs.push({
+        user_id: form.approver_id,
+        title: 'Tarea pendiente de tu autorización',
+        message: `Cuando "${form.title}" sea entregada, te llegará para revisión y autorización.`,
+        type: 'review',
       })
     }
 
@@ -153,6 +164,16 @@ export default function CreateTaskModal({ projects, teamMembers, defaultProjectI
                 {DEPARTMENTS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
               </select>
             </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-blue-700 mb-1 uppercase tracking-wide">Quién revisa y autoriza *</label>
+            <select value={form.approver_id} onChange={e => setForm({ ...form, approver_id: e.target.value })}
+              className="w-full border-2 border-blue-200 bg-blue-50 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option value="">Selecciona a la persona responsable</option>
+              {teamMembers.map(m => <option key={m.id} value={m.id}>{m.full_name}{m.id === user?.id ? ' (yo)' : ''}</option>)}
+            </select>
+            <p className="mt-1 text-xs text-blue-600">Esta persona recibirá la tarea terminada y podrá aprobarla o solicitar cambios.</p>
           </div>
 
           <div>
