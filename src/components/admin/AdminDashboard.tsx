@@ -39,7 +39,7 @@ const STATUS_FILTER_LABELS: { value: StatusFilter; label: string }[] = [
 
 const ADMIN_NAV_ITEMS = [
   { id: 'overview', label: 'Proyectos', icon: FolderKanban },
-  { id: 'team', label: 'Capacidad del equipo', icon: Users },
+  { id: 'team', label: 'Carga del equipo', icon: Users },
   { id: 'calendar', label: 'Calendario', icon: Calendar },
   { id: 'performance', label: 'Rendimiento', icon: TrendingUp },
   { id: 'mytasks', label: 'Mis tareas', icon: ClipboardList },

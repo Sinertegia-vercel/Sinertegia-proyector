@@ -1,6 +1,9 @@
 import { useState } from 'react'
-import type { Task, User } from '../../types'
-import { CheckCircle, Clock, AlertTriangle, ShieldCheck, Shield, UserX } from 'lucide-react'
+import type { Department, Task, User } from '../../types'
+import {
+  AlertTriangle, CalendarDays, CheckCircle2, ChevronDown, Clock3,
+  Search, Shield, ShieldCheck, UserCheck, UserPlus, Users, UserX,
+} from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
 interface Props {
@@ -11,17 +14,84 @@ interface Props {
 }
 
 const DEPT_LABELS: Record<string, string> = {
-  edicion: 'Edición', grabacion: 'Grabación', diseno: 'Diseño',
-  copy: 'Copy', webmaster: 'Webmaster', trafficker: 'Trafficker',
-  lider: 'Líder', cliente: 'Cliente',
+  edicion: 'Edición', grabacion: 'Grabación', diseno: 'Diseño', copy: 'Copy',
+  webmaster: 'Webmaster', trafficker: 'Trafficker', lider: 'Líder', cliente: 'Cliente',
+}
+
+const PRIORITY_WEIGHT = { critica: 2, alta: 1.5, media: 1, baja: 0.65 }
+
+function startOfToday() {
+  const date = new Date()
+  date.setHours(0, 0, 0, 0)
+  return date
 }
 
 export default function TeamCapacity({ teamMembers, tasks, onAssign, onUpdate }: Props) {
+  const [search, setSearch] = useState('')
+  const [department, setDepartment] = useState<'all' | Department>('all')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [expandedId, setExpandedId] = useState<string | null>(null)
   const [confirmingId, setConfirmingId] = useState<string | null>(null)
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const [removingId, setRemovingId] = useState<string | null>(null)
   const [reassignTarget, setReassignTarget] = useState('')
   const [removeError, setRemoveError] = useState('')
+
+  const today = startOfToday()
+  const weekEnd = new Date(today)
+  weekEnd.setDate(today.getDate() + 7)
+
+  function activeTasksOf(memberId: string) {
+    return tasks.filter(t => t.assigned_to === memberId && t.status !== 'completada')
+  }
+
+  function overdueTasksOf(memberId: string) {
+    return activeTasksOf(memberId).filter(t => t.commitment_date && new Date(`${t.commitment_date}T23:59:59`) < today)
+  }
+
+  function weekTasksOf(memberId: string) {
+    return activeTasksOf(memberId).filter(t => t.commitment_date && new Date(`${t.commitment_date}T23:59:59`) <= weekEnd)
+  }
+
+  function loadOf(memberId: string) {
+    const active = activeTasksOf(memberId)
+    const overdueIds = new Set(overdueTasksOf(memberId).map(t => t.id))
+    const score = active.reduce((total, task) => {
+      const priority = PRIORITY_WEIGHT[task.priority] ?? 1
+      const dueSoon = task.commitment_date && new Date(`${task.commitment_date}T23:59:59`) <= weekEnd ? 1.25 : 0.35
+      const overdue = overdueIds.has(task.id) ? 1.4 : 0
+      return total + priority * dueSoon + overdue
+    }, 0)
+    return Math.min(130, Math.round((score / 8) * 100))
+  }
+
+  function stateOf(load: number) {
+    if (load >= 100) return { key: 'overloaded', label: 'Sobrecargado', color: 'red' }
+    if (load >= 55) return { key: 'balanced', label: 'Carga equilibrada', color: 'blue' }
+    return { key: 'available', label: 'Disponible', color: 'green' }
+  }
+
+  const members = teamMembers.map(member => {
+    const active = activeTasksOf(member.id)
+    const weekly = weekTasksOf(member.id)
+    const overdue = overdueTasksOf(member.id)
+    const load = loadOf(member.id)
+    return { member, active, weekly, overdue, load, state: stateOf(load) }
+  })
+
+  const filteredMembers = members.filter(({ member, state }) => {
+    const text = `${member.full_name} ${member.department ?? ''}`.toLowerCase()
+    return text.includes(search.toLowerCase()) &&
+      (department === 'all' || member.department === department) &&
+      (statusFilter === 'all' || state.key === statusFilter)
+  })
+
+  const totals = {
+    available: members.filter(m => m.state.key === 'available').length,
+    balanced: members.filter(m => m.state.key === 'balanced').length,
+    overloaded: members.filter(m => m.state.key === 'overloaded').length,
+    overdue: members.reduce((sum, m) => sum + m.overdue.length, 0),
+  }
 
   async function makeAdmin(memberId: string) {
     setUpdatingId(memberId)
@@ -31,10 +101,6 @@ export default function TeamCapacity({ teamMembers, tasks, onAssign, onUpdate }:
     onUpdate?.()
   }
 
-  function pendingTasksOf(memberId: string) {
-    return tasks.filter(t => t.assigned_to === memberId && t.status !== 'completada')
-  }
-
   function startRemove(memberId: string) {
     setRemovingId(memberId)
     setReassignTarget('')
@@ -42,14 +108,15 @@ export default function TeamCapacity({ teamMembers, tasks, onAssign, onUpdate }:
   }
 
   async function confirmRemove(memberId: string) {
-    const pending = pendingTasksOf(memberId)
+    const pending = activeTasksOf(memberId)
+    if (pending.length > 0 && !reassignTarget) {
+      setRemoveError('Selecciona a quién reasignar sus tareas pendientes')
+      return
+    }
+    setUpdatingId(memberId)
     if (pending.length > 0) {
-      if (!reassignTarget) { setRemoveError('Selecciona a quién reasignar sus tareas pendientes'); return }
-      setUpdatingId(memberId)
       await supabase.from('tasks').update({ assigned_to: reassignTarget })
         .eq('assigned_to', memberId).neq('status', 'completada')
-    } else {
-      setUpdatingId(memberId)
     }
     await supabase.from('users').update({ active: false }).eq('id', memberId)
     setRemovingId(null)
@@ -57,204 +124,77 @@ export default function TeamCapacity({ teamMembers, tasks, onAssign, onUpdate }:
     onUpdate?.()
   }
 
-  function getMemberTasks(memberId: string) {
-    return tasks.filter(t => t.assigned_to === memberId)
-  }
-
-  function getWeeklyLoad(memberId: string) {
-    const now = new Date()
-    const weekEnd = new Date(now)
-    weekEnd.setDate(now.getDate() + 7)
-    return tasks.filter(t =>
-      t.assigned_to === memberId &&
-      t.status !== 'completada' &&
-      t.commitment_date &&
-      new Date(t.commitment_date) <= weekEnd
-    )
-  }
-
-  function getOverdueTasks(memberId: string) {
-    return tasks.filter(t =>
-      t.assigned_to === memberId &&
-      t.status !== 'completada' &&
-      t.commitment_date &&
-      new Date(t.commitment_date) < new Date()
-    )
-  }
+  const summary = [
+    { label: 'Disponibles', value: totals.available, help: 'Pueden recibir trabajo', icon: UserCheck, tone: 'green' },
+    { label: 'Carga equilibrada', value: totals.balanced, help: 'Carga estable esta semana', icon: Users, tone: 'blue' },
+    { label: 'Sobrecargados', value: totals.overloaded, help: 'Requieren redistribución', icon: AlertTriangle, tone: 'orange' },
+    { label: 'Tareas vencidas', value: totals.overdue, help: 'Fuera de su fecha límite', icon: CalendarDays, tone: 'red' },
+  ]
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="font-semibold text-gray-800">Capacidad del equipo esta semana</h3>
-        <button onClick={onAssign}
-          className="text-sm bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">
-          + Asignar tarea
+    <section className="team-load-view">
+      <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[.18em] text-blue-600">Planeación semanal</p>
+          <h1 className="mt-1 text-2xl font-bold text-gray-900">Carga del equipo</h1>
+          <p className="mt-1 text-sm text-gray-500">Distribuye el trabajo según disponibilidad, fechas y prioridad.</p>
+        </div>
+        <button onClick={onAssign} className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700">
+          <UserPlus size={17} /> Asignar tarea
         </button>
+      </header>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {summary.map(item => <div key={item.label} className={`team-load-summary team-load-summary--${item.tone}`}>
+          <span className="team-load-summary__icon"><item.icon size={22} /></span>
+          <div><p className="text-sm font-semibold text-gray-700">{item.label}</p><p className="text-2xl font-bold text-gray-900">{item.value}</p><p className="text-xs text-gray-500">{item.help}</p></div>
+        </div>)}
       </div>
 
-      <div className="space-y-4">
-        {teamMembers.map(member => {
-          const allTasks = getMemberTasks(member.id)
-          const weekTasks = getWeeklyLoad(member.id)
-          const overdue = getOverdueTasks(member.id)
-          const completed = allTasks.filter(t => t.status === 'completada').length
-          const active = allTasks.filter(t => t.status !== 'completada').length
-          const loadPct = Math.min(100, (weekTasks.length / 5) * 100)
-          const loadColor = loadPct >= 90 ? 'bg-red-500' : loadPct >= 60 ? 'bg-orange-400' : 'bg-green-500'
+      <div className="my-5 grid gap-3 rounded-2xl border border-gray-200 bg-white p-3 shadow-sm md:grid-cols-[1.4fr_1fr_1fr]">
+        <label className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={17} /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nombre" className="team-load-input pl-10" /></label>
+        <select value={department} onChange={e => setDepartment(e.target.value as 'all' | Department)} className="team-load-input"><option value="all">Todos los departamentos</option>{Object.entries(DEPT_LABELS).filter(([key]) => key !== 'cliente').map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>
+        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="team-load-input"><option value="all">Todos los estados</option><option value="available">Disponibles</option><option value="balanced">Carga equilibrada</option><option value="overloaded">Sobrecargados</option></select>
+      </div>
 
-          return (
-            <div key={member.id} className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
-              <div className="flex items-start justify-between mb-3 flex-wrap gap-3">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-600 to-red-500 flex items-center justify-center text-white font-bold text-sm">
-                      {member.full_name.charAt(0)}
-                    </div>
-                    <div>
-                      <p className="font-semibold text-gray-800 flex items-center gap-1.5">
-                        {member.full_name}
-                        {member.role === 'admin' && (
-                          <span className="flex items-center gap-1 text-[10px] font-semibold text-purple-600 bg-purple-50 border border-purple-200 px-1.5 py-0.5 rounded-full">
-                            <ShieldCheck size={10} /> Admin
-                          </span>
-                        )}
-                      </p>
-                      <p className="text-xs text-gray-400">{member.department ? DEPT_LABELS[member.department] : '—'}</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs text-gray-400">Carga esta semana</p>
-                  <p className="text-lg font-bold text-gray-800">{weekTasks.length} tareas</p>
-                </div>
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        {filteredMembers.map(({ member, active, weekly, overdue, load, state }) => {
+          const upcoming = [...active].sort((a, b) => (a.commitment_date ?? '9999').localeCompare(b.commitment_date ?? '9999')).slice(0, 3)
+          return <article key={member.id} className="team-load-card">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
+                {member.avatar_url ? <img src={member.avatar_url} alt="" className="h-12 w-12 rounded-full object-cover ring-2 ring-white shadow" /> : <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-500 font-bold text-white">{member.full_name.charAt(0)}</div>}
+                <div className="min-w-0"><p className="truncate font-bold text-gray-900">{member.full_name}</p><p className="text-xs text-gray-500">{member.department ? DEPT_LABELS[member.department] : 'Sin departamento'}</p><span className={`team-load-badge team-load-badge--${state.color}`}>● {state.label}</span></div>
               </div>
-
-              {/* Barra de acciones sobre la persona: bien visible, no escondida */}
-              <div className="flex items-center gap-2 mb-4 flex-wrap">
-                {member.role !== 'admin' && (
-                  confirmingId === member.id ? (
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-500">¿Hacerlo administrador?</span>
-                      <button onClick={() => makeAdmin(member.id)} disabled={updatingId === member.id}
-                        className="text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700 px-3 py-1.5 rounded-lg transition disabled:opacity-60">
-                        {updatingId === member.id ? '...' : 'Sí, hacer admin'}
-                      </button>
-                      <button onClick={() => setConfirmingId(null)}
-                        className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1.5">
-                        Cancelar
-                      </button>
-                    </div>
-                  ) : (
-                    <button onClick={() => setConfirmingId(member.id)}
-                      className="flex items-center gap-1.5 text-xs font-semibold text-purple-700 bg-purple-50 border border-purple-200 hover:bg-purple-100 px-3 py-1.5 rounded-lg transition">
-                      <Shield size={13} /> Hacer administrador
-                    </button>
-                  )
-                )}
-                {removingId !== member.id && (
-                  <button onClick={() => startRemove(member.id)}
-                    className="flex items-center gap-1.5 text-xs font-semibold text-red-700 bg-red-50 border border-red-200 hover:bg-red-100 px-3 py-1.5 rounded-lg transition">
-                    <UserX size={13} /> Eliminar del equipo
-                  </button>
-                )}
-              </div>
-
-              {/* Panel de confirmación / reasignación al eliminar */}
-              {removingId === member.id && (() => {
-                const pending = pendingTasksOf(member.id)
-                const otherMembers = teamMembers.filter(m => m.id !== member.id)
-                return (
-                  <div className="mb-4 bg-red-50 border border-red-200 rounded-xl p-3 space-y-2.5">
-                    {pending.length > 0 ? (
-                      <>
-                        <p className="text-xs font-semibold text-red-700">
-                          {member.full_name.split(' ')[0]} tiene {pending.length} tarea{pending.length > 1 ? 's' : ''} pendiente{pending.length > 1 ? 's' : ''}. ¿A quién se las reasignamos?
-                        </p>
-                        <select value={reassignTarget} onChange={e => { setReassignTarget(e.target.value); setRemoveError('') }}
-                          className="w-full border border-red-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-red-400">
-                          <option value="">Selecciona una persona</option>
-                          {otherMembers.map(m => <option key={m.id} value={m.id}>{m.full_name}</option>)}
-                        </select>
-                      </>
-                    ) : (
-                      <p className="text-xs font-semibold text-red-700">
-                        {member.full_name.split(' ')[0]} no tiene tareas pendientes. Se desactivará su acceso a la app (su historial se conserva).
-                      </p>
-                    )}
-                    {removeError && <p className="text-xs text-red-600">{removeError}</p>}
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => confirmRemove(member.id)} disabled={updatingId === member.id}
-                        className="text-xs font-semibold text-white bg-red-600 hover:bg-red-700 px-3 py-1.5 rounded-lg transition disabled:opacity-60">
-                        {updatingId === member.id ? 'Procesando...' : pending.length > 0 ? 'Reasignar y eliminar' : 'Sí, eliminar del equipo'}
-                      </button>
-                      <button onClick={() => setRemovingId(null)}
-                        className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1.5">
-                        Cancelar
-                      </button>
-                    </div>
-                  </div>
-                )
-              })()}
-
-              {/* Barra de carga */}
-              <div className="mb-4">
-                <div className="flex justify-between text-xs text-gray-500 mb-1">
-                  <span>Capacidad semanal</span>
-                  <span className={loadPct >= 90 ? 'text-red-600 font-semibold' : ''}>{Math.round(loadPct)}% ocupado</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div className={`${loadColor} h-2 rounded-full transition-all`} style={{ width: `${loadPct}%` }} />
-                </div>
-              </div>
-
-              {/* Stats */}
-              <div className="grid grid-cols-3 gap-3 mb-4">
-                <div className="bg-gray-50 rounded-lg p-2 text-center">
-                  <p className="text-lg font-bold text-gray-700">{active}</p>
-                  <p className="text-xs text-gray-400">Activas</p>
-                </div>
-                <div className="bg-green-50 rounded-lg p-2 text-center">
-                  <p className="text-lg font-bold text-green-700">{completed}</p>
-                  <p className="text-xs text-gray-400">Completadas</p>
-                </div>
-                <div className={`rounded-lg p-2 text-center ${overdue.length > 0 ? 'bg-red-50' : 'bg-gray-50'}`}>
-                  <p className={`text-lg font-bold ${overdue.length > 0 ? 'text-red-600' : 'text-gray-700'}`}>{overdue.length}</p>
-                  <p className="text-xs text-gray-400">Vencidas</p>
-                </div>
-              </div>
-
-              {/* Tareas de la semana */}
-              {weekTasks.length > 0 && (
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Tareas esta semana</p>
-                  <div className="space-y-1.5">
-                    {weekTasks.slice(0, 4).map(t => {
-                      const isLate = t.commitment_date && new Date(t.commitment_date) < new Date()
-                      return (
-                        <div key={t.id} className={`flex items-center gap-2 text-xs rounded-lg px-3 py-1.5 ${isLate ? 'bg-red-50 text-red-700' : 'bg-gray-50 text-gray-600'}`}>
-                          {isLate ? <AlertTriangle size={11} className="shrink-0" /> : <Clock size={11} className="shrink-0" />}
-                          <span className="flex-1 truncate">{t.title}</span>
-                          <span className="shrink-0 text-gray-400">{t.project?.client?.name}</span>
-                        </div>
-                      )
-                    })}
-                    {weekTasks.length > 4 && (
-                      <p className="text-xs text-gray-400 px-3">+{weekTasks.length - 4} más esta semana</p>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {weekTasks.length === 0 && (
-                <div className="flex items-center gap-2 text-xs text-green-600 bg-green-50 rounded-lg px-3 py-2">
-                  <CheckCircle size={13} />
-                  <span>Disponible — sin tareas esta semana</span>
-                </div>
-              )}
+              {member.role === 'admin' && <span className="inline-flex items-center gap-1 rounded-full bg-purple-50 px-2 py-1 text-[10px] font-bold text-purple-700"><ShieldCheck size={11} /> Admin</span>}
             </div>
-          )
+
+            <div className="mt-5">
+              <div className="mb-2 flex items-end justify-between"><div><p className="text-xs text-gray-500">Carga semanal estimada</p><p className={`text-2xl font-bold team-load-text--${state.color}`}>{load}%</p></div><p className="text-xs text-gray-500">{weekly.length} con fecha esta semana</p></div>
+              <div className="h-2.5 overflow-hidden rounded-full bg-gray-100"><div className={`team-load-bar team-load-bar--${state.color}`} style={{ width: `${Math.min(load, 100)}%` }} /></div>
+            </div>
+
+            <div className="my-4 grid grid-cols-3 divide-x divide-gray-200 rounded-xl bg-gray-50 py-3 text-center"><div><b className="block text-gray-900">{active.length}</b><span className="text-[11px] text-gray-500">Activas</span></div><div><b className="block text-gray-900">{weekly.length}</b><span className="text-[11px] text-gray-500">Esta semana</span></div><div><b className={overdue.length ? 'block text-red-600' : 'block text-gray-900'}>{overdue.length}</b><span className="text-[11px] text-gray-500">Vencidas</span></div></div>
+
+            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-500">Próximas tareas</p>
+            <div className="min-h-24 space-y-2">{upcoming.length ? upcoming.map(task => {
+              const late = task.commitment_date && new Date(`${task.commitment_date}T23:59:59`) < today
+              return <div key={task.id} className="flex items-center gap-2 rounded-lg border border-gray-100 px-3 py-2 text-xs"><span className={`h-2 w-2 shrink-0 rounded-full ${task.priority === 'critica' ? 'bg-red-500' : task.priority === 'alta' ? 'bg-orange-500' : task.priority === 'media' ? 'bg-amber-400' : 'bg-green-500'}`} /><span className="min-w-0 flex-1 truncate font-medium text-gray-700" title={task.title}>{task.title}</span><span className={late ? 'font-semibold text-red-600' : 'text-gray-400'}>{task.commitment_date ? new Date(`${task.commitment_date}T12:00:00`).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }) : 'Sin fecha'}</span></div>
+            }) : <div className="flex h-20 items-center justify-center gap-2 rounded-xl bg-green-50 text-sm text-green-700"><CheckCircle2 size={16} /> Sin tareas activas</div>}</div>
+
+            <div className="mt-4 flex gap-2"><button onClick={() => setExpandedId(expandedId === member.id ? null : member.id)} className="team-load-secondary flex-1">Administrar <ChevronDown size={15} className={expandedId === member.id ? 'rotate-180 transition' : 'transition'} /></button><button onClick={onAssign} className="team-load-primary flex-1"><UserPlus size={15} /> Asignar tarea</button></div>
+
+            {expandedId === member.id && <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3">
+              <p className="mb-2 text-xs font-semibold text-gray-600">Administración de la cuenta</p>
+              <div className="flex flex-wrap gap-2">{member.role !== 'admin' && (confirmingId === member.id ? <><button onClick={() => makeAdmin(member.id)} disabled={updatingId === member.id} className="team-load-admin-action">Confirmar administrador</button><button onClick={() => setConfirmingId(null)} className="team-load-secondary">Cancelar</button></> : <button onClick={() => setConfirmingId(member.id)} className="team-load-secondary"><Shield size={14} /> Hacer administrador</button>)}<button onClick={() => startRemove(member.id)} className="team-load-danger"><UserX size={14} /> Eliminar del equipo</button></div>
+              {removingId === member.id && <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3"><p className="text-xs text-red-700">{active.length ? `Reasigna primero sus ${active.length} tareas activas.` : 'Se desactivará su acceso; el historial se conservará.'}</p>{active.length > 0 && <select value={reassignTarget} onChange={e => { setReassignTarget(e.target.value); setRemoveError('') }} className="team-load-input mt-2"><option value="">Selecciona una persona</option>{teamMembers.filter(m => m.id !== member.id).map(m => <option key={m.id} value={m.id}>{m.full_name}</option>)}</select>}{removeError && <p className="mt-1 text-xs text-red-600">{removeError}</p>}<div className="mt-2 flex gap-2"><button onClick={() => confirmRemove(member.id)} disabled={updatingId === member.id} className="team-load-danger">{updatingId === member.id ? 'Procesando...' : 'Confirmar'}</button><button onClick={() => setRemovingId(null)} className="team-load-secondary">Cancelar</button></div></div>}
+            </div>}
+          </article>
         })}
       </div>
-    </div>
+
+      {!filteredMembers.length && <div className="mt-5 rounded-2xl border border-dashed border-gray-300 py-12 text-center text-sm text-gray-500">No encontramos integrantes con esos filtros.</div>}
+      <div className="mt-5 flex items-start gap-2 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs text-blue-700"><Clock3 size={16} className="mt-0.5 shrink-0" /><p><b>Estimación orientativa:</b> la carga combina tareas activas, prioridad, vencimientos y compromisos de los próximos siete días. Cuando se agreguen horas estimadas a las tareas, esta vista podrá calcular capacidad por horas reales.</p></div>
+    </section>
   )
 }
