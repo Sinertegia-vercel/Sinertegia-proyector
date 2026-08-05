@@ -256,7 +256,7 @@ export default function AdminDashboard() {
             </button>
           ))}
 
-          {!sidebarCollapsed && <div className="v2-tip">
+          {false && <div className="v2-tip">
             <div className="v2-tip-head">💡 Consejo rápido</div>
             <p>Organiza tus tareas con prioridades y fechas de entrega para mejorar tu productividad.</p>
           </div>}
