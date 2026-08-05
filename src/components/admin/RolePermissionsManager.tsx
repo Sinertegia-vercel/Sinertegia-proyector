@@ -1,235 +1,573 @@
-import { useEffect, useState } from 'react'
-import {
-  CalendarDays,
-  Check,
-  CheckCircle2,
-  ClipboardList,
-  FolderKanban,
-  KeyRound,
-  Link2,
-  LoaderCircle,
-  Map,
-  MessageCircle,
-  MessagesSquare,
-  ShieldCheck,
-  Users,
-} from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Check, Copy, KeyRound, LoaderCircle, Mail, Plus, Search, ShieldCheck, Trash2, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
+import type { Client, Department, User } from '../../types'
 
-interface PermissionRow {
-  id: string
-  role: 'admin' | 'team' | 'client'
-  section_key: string
-  allowed: boolean
+type Tab = 'client' | 'team' | 'admin'
+type Section = { key: string; label: string; description: string }
+type Permission = { user_id: string; section_key: string; allowed: boolean }
+
+const SECTIONS: Record<Tab, Section[]> = {
+  admin: [
+    ['overview', 'Proyectos', 'Consultar y administrar proyectos'],
+    ['team', 'Carga del equipo', 'Distribuir trabajo y revisar disponibilidad'],
+    ['calendar', 'Calendario general', 'Consultar fechas de todo el equipo'],
+    ['performance', 'Rendimiento', 'Acceder a métricas del equipo'],
+    ['mytasks', 'Mis tareas', 'Trabajar en sus tareas'],
+    ['roadmap', 'Hoja de ruta', 'Consultar la planeación general'],
+    ['clientes', 'Clientes', 'Administrar clientes y asignaciones'],
+    ['requests', 'Solicitudes', 'Autorizar solicitudes de clientes'],
+    ['chat_team', 'Chat del equipo', 'Participar en conversaciones internas'],
+    ['chat_clients', 'Chat con clientes', 'Conversar con clientes'],
+    ['entregables', 'Entregables', 'Revisar y administrar entregables'],
+  ].map(([key, label, description]) => ({ key, label, description })),
+  team: [
+    ['tasks', 'Mis tareas', 'Consultar y trabajar en tareas asignadas'],
+    ['calendar', 'Mi calendario', 'Ver fechas y compromisos'],
+    ['roadmap', 'Hoja de ruta', 'Consultar la planeación de tareas'],
+    ['chat_team', 'Chat del equipo', 'Participar en el chat interno'],
+    ['chat_clients', 'Chat con clientes', 'Conversar con clientes asignados'],
+    ['entregables', 'Entregables', 'Subir y consultar entregables'],
+  ].map(([key, label, description]) => ({ key, label, description })),
+  client: [
+    ['mistareas', 'Mis tareas', 'Consultar tareas que requieren su participación'],
+    ['progreso', 'Todas las tareas', 'Ver el avance completo'],
+    ['area', 'Por área', 'Consultar trabajo por departamento'],
+    ['calendario', 'Calendario', 'Ver fechas y compromisos'],
+    ['roadmap', 'Hoja de ruta', 'Consultar la planeación del proyecto'],
+    ['chat', 'Chat con el equipo', 'Comunicarse con el equipo'],
+    ['entregables', 'Entregables', 'Revisar archivos y versiones finales'],
+  ].map(([key, label, description]) => ({ key, label, description })),
 }
 
-const ADMIN_SECTIONS = [
-  { key: 'overview', label: 'Proyectos', description: 'Consultar y administrar los proyectos de la empresa.', icon: FolderKanban },
-  { key: 'team', label: 'Carga del equipo', description: 'Revisar disponibilidad y distribuir trabajo.', icon: Users },
-  { key: 'calendar', label: 'Calendario general', description: 'Consultar fechas y compromisos de todo el equipo.', icon: CalendarDays },
-  { key: 'performance', label: 'Rendimiento', description: 'Acceder a métricas y resultados del equipo.', icon: CheckCircle2 },
-  { key: 'mytasks', label: 'Mis tareas', description: 'Consultar y trabajar en sus propias tareas.', icon: ClipboardList },
-  { key: 'roadmap', label: 'Hoja de ruta', description: 'Consultar la planeación general en el tiempo.', icon: Map },
-  { key: 'clientes', label: 'Clientes', description: 'Asignar equipos y administrar clientes.', icon: ShieldCheck },
-  { key: 'requests', label: 'Solicitudes', description: 'Revisar solicitudes enviadas por clientes.', icon: KeyRound },
-  { key: 'chat_team', label: 'Chat del equipo', description: 'Participar en conversaciones internas.', icon: MessagesSquare },
-  { key: 'chat_clients', label: 'Chat con clientes', description: 'Conversar con los clientes de la empresa.', icon: MessageCircle },
-  { key: 'entregables', label: 'Entregables', description: 'Revisar y administrar los entregables.', icon: Link2 },
-]
+const DEPARTMENTS: Department[] = ['edicion', 'grabacion', 'diseno', 'copy', 'webmaster', 'trafficker', 'lider']
 
-const TEAM_SECTIONS = [
-  { key: 'tasks', label: 'Mis tareas', description: 'Consultar y trabajar en las tareas asignadas.', icon: ClipboardList },
-  { key: 'calendar', label: 'Mi calendario', description: 'Ver compromisos y fechas de entrega.', icon: CalendarDays },
-  { key: 'roadmap', label: 'Hoja de ruta', description: 'Consultar la planeación de tareas en el tiempo.', icon: Map },
-  { key: 'chat_team', label: 'Chat del equipo', description: 'Participar en conversaciones internas.', icon: MessagesSquare },
-  { key: 'chat_clients', label: 'Chat con clientes', description: 'Conversar con los clientes asignados.', icon: MessageCircle },
-  { key: 'entregables', label: 'Entregables', description: 'Subir, consultar y dar seguimiento a entregables.', icon: Link2 },
-]
-
-const CLIENT_SECTIONS = [
-  { key: 'mistareas', label: 'Mis tareas', description: 'Consultar las tareas que requieren su participación.', icon: ClipboardList },
-  { key: 'progreso', label: 'Todas las tareas', description: 'Ver el avance completo de sus proyectos.', icon: FolderKanban },
-  { key: 'area', label: 'Por área', description: 'Consultar el trabajo organizado por departamento.', icon: Users },
-  { key: 'calendario', label: 'Calendario', description: 'Ver fechas y próximos compromisos.', icon: CalendarDays },
-  { key: 'roadmap', label: 'Hoja de ruta', description: 'Consultar la planeación general del proyecto.', icon: Map },
-  { key: 'chat', label: 'Chat con el equipo', description: 'Comunicarse con el equipo responsable.', icon: MessageCircle },
-  { key: 'entregables', label: 'Entregables', description: 'Revisar archivos, enlaces y versiones finales.', icon: Link2 },
-]
-
-type Role = 'admin' | 'team' | 'client'
+interface Person {
+  id: string
+  userId?: string
+  name: string
+  email: string
+  role: Tab
+  subtitle: string
+  active: boolean
+  isSuperAdmin?: boolean
+}
 
 export default function RolePermissionsManager() {
-  const [rows, setRows] = useState<PermissionRow[]>([])
+  const { user: currentUser } = useAuth()
+  const [tab, setTab] = useState<Tab>('client')
+  const [users, setUsers] = useState<User[]>([])
+  const [clients, setClients] = useState<Client[]>([])
+  const [permissions, setPermissions] = useState<Permission[]>([])
+  const [roleDefaults, setRoleDefaults] = useState<Record<string, boolean>>({})
+  const [selectedId, setSelectedId] = useState('')
+  const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
-  const [savingKey, setSavingKey] = useState<string | null>(null)
-  const [savedKey, setSavedKey] = useState<string | null>(null)
+  const [saving, setSaving] = useState('')
   const [error, setError] = useState('')
+  const [inviteOpen, setInviteOpen] = useState(false)
+  const [inviteLink, setInviteLink] = useState('')
+  const [inviteStatus, setInviteStatus] = useState('')
+  const [invite, setInvite] = useState({
+    full_name: '',
+    email: '',
+    company: '',
+    department: '' as Department | '',
+  })
+  const [invitePermissions, setInvitePermissions] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
-    fetchPermissions()
+    void load()
   }, [])
 
-  async function fetchPermissions() {
-    const { data, error: fetchError } = await supabase.from('role_permissions').select('*')
-    if (fetchError) setError('No fue posible cargar los permisos. Intenta recargar la página.')
-    setRows((data as PermissionRow[]) || [])
+  async function load() {
+    setLoading(true)
+    const [usersResult, clientsResult, permissionsResult, defaultsResult] = await Promise.all([
+      supabase.from('users').select('*').order('full_name'),
+      supabase.from('clients').select('*').order('name'),
+      supabase.from('user_permissions').select('user_id, section_key, allowed'),
+      supabase.from('role_permissions').select('role, section_key, allowed'),
+    ])
+    setUsers((usersResult.data as User[]) || [])
+    setClients((clientsResult.data as Client[]) || [])
+    setPermissions((permissionsResult.data as Permission[]) || [])
+    const defaults: Record<string, boolean> = {}
+    ;(defaultsResult.data || []).forEach((row) => {
+      defaults[`${row.role}:${row.section_key}`] = row.allowed
+    })
+    setRoleDefaults(defaults)
+    if (usersResult.error || clientsResult.error || permissionsResult.error) setError('No fue posible cargar todos los usuarios y permisos.')
     setLoading(false)
   }
 
-  function isAllowed(role: Role, key: string): boolean {
-    const row = rows.find(item => item.role === role && item.section_key === key)
-    return row ? row.allowed : true
+  const people = useMemo<Person[]>(() => {
+    if (tab === 'client')
+      return clients.map((client) => {
+        const linked = users.find((item) => item.id === client.user_id)
+        return {
+          id: client.id,
+          userId: linked?.id,
+          name: client.name,
+          email: linked?.email || 'Invitación pendiente',
+          role: 'client',
+          subtitle: client.company || 'Cliente',
+          active: client.active !== false && linked?.active !== false,
+        }
+      })
+    return users
+      .filter((item) => item.role === tab)
+      .map((item) => ({
+        id: item.id,
+        userId: item.id,
+        name: item.full_name,
+        email: item.email,
+        role: tab,
+        subtitle: item.department || (tab === 'admin' ? 'Administrador' : 'Equipo'),
+        active: item.active !== false,
+        isSuperAdmin: item.is_super_admin,
+      }))
+  }, [tab, users, clients])
+
+  const visiblePeople = people.filter((person) => `${person.name} ${person.email}`.toLowerCase().includes(search.toLowerCase()))
+  const selected = people.find((person) => person.id === selectedId) || visiblePeople[0]
+
+  function allowed(sectionKey: string) {
+    if (selected?.isSuperAdmin) return true
+    const specific = permissions.find((row) => row.user_id === selected?.userId && row.section_key === sectionKey)
+    if (specific) return specific.allowed
+    return roleDefaults[`${tab}:${sectionKey}`] !== false
   }
 
-  function updateLocal(role: Role, key: string, allowed: boolean) {
-    setRows(previous => {
-      const exists = previous.some(item => item.role === role && item.section_key === key)
-      if (exists) return previous.map(item => item.role === role && item.section_key === key ? { ...item, allowed } : item)
-      return [...previous, { id: `${role}:${key}`, role, section_key: key, allowed }]
+  async function toggle(sectionKey: string) {
+    if (!selected?.userId || selected.isSuperAdmin) return
+    const next = !allowed(sectionKey)
+    setSaving(sectionKey)
+    const { error: saveError } = await supabase.from('user_permissions').upsert({ user_id: selected.userId, section_key: sectionKey, allowed: next }, { onConflict: 'user_id,section_key' })
+    if (saveError) setError('No se pudo guardar el permiso individual.')
+    else
+      setPermissions((previous) => [
+        ...previous.filter((row) => !(row.user_id === selected.userId && row.section_key === sectionKey)),
+        { user_id: selected.userId!, section_key: sectionKey, allowed: next },
+      ])
+    setSaving('')
+  }
+
+  async function toggleAll() {
+    if (!selected?.userId || selected.isSuperAdmin) return
+    const sections = SECTIONS[tab]
+    const next = !sections.every((section) => allowed(section.key))
+    setSaving('all')
+    const payload = sections.map((section) => ({
+      user_id: selected.userId!,
+      section_key: section.key,
+      allowed: next,
+    }))
+    const { error: saveError } = await supabase.from('user_permissions').upsert(payload, { onConflict: 'user_id,section_key' })
+    if (saveError) setError('No se pudieron guardar los permisos.')
+    else {
+      setPermissions((previous) => [...previous.filter((row) => row.user_id !== selected.userId), ...payload])
+    }
+    setSaving('')
+  }
+
+  async function deactivate() {
+    if (!selected || selected.isSuperAdmin || selected.userId === currentUser?.id) return
+    if (!window.confirm(`¿Desactivar el acceso de ${selected.name}? El historial se conservará.`)) return
+    setSaving('delete')
+    if (selected.role === 'client') {
+      await supabase.from('clients').update({ active: false }).eq('id', selected.id)
+      if (selected.userId) await supabase.from('users').update({ active: false }).eq('id', selected.userId)
+    } else if (selected.userId) await supabase.from('users').update({ active: false }).eq('id', selected.userId)
+    await load()
+    setSaving('')
+  }
+
+  function resetInvite() {
+    setInvite({ full_name: '', email: '', company: '', department: '' })
+    setInvitePermissions(Object.fromEntries(SECTIONS[tab].map((section) => [section.key, roleDefaults[`${tab}:${section.key}`] !== false])))
+    setInviteLink('')
+    setInviteStatus('')
+    setError('')
+  }
+
+  async function createInvitation(event: React.FormEvent) {
+    event.preventDefault()
+    if (!invite.full_name.trim() || !invite.email.trim()) return
+    setSaving('invite')
+    setInviteStatus('')
+    let url: string
+    const permissionPreset = Object.fromEntries(SECTIONS[tab].map((section) => [section.key, invitePermissions[section.key] !== false]))
+    if (tab === 'client') {
+      const { data: client, error: clientError } = await supabase
+        .from('clients')
+        .insert({
+          name: invite.full_name.trim(),
+          company: invite.company.trim() || invite.full_name.trim(),
+          active: true,
+        })
+        .select('id')
+        .single()
+      if (clientError || !client) {
+        setError('No se pudo crear el cliente.')
+        setSaving('')
+        return
+      }
+      const { data, error: invitationError } = await supabase
+        .from('client_invitations')
+        .insert({
+          client_id: client.id,
+          email: invite.email.trim(),
+          permissions: permissionPreset,
+        })
+        .select('id')
+        .single()
+      if (invitationError || !data) {
+        setError('No se pudo crear la invitación.')
+        setSaving('')
+        return
+      }
+      url = `https://agencia.sinertegia.com?invite=${data.id}`
+    } else {
+      const { data, error: invitationError } = await supabase
+        .from('team_invitations')
+        .insert({
+          email: invite.email.trim(),
+          full_name: invite.full_name.trim(),
+          role: tab,
+          department: invite.department || null,
+          permissions: permissionPreset,
+        })
+        .select('id')
+        .single()
+      if (invitationError || !data) {
+        setError('No se pudo crear la invitación.')
+        setSaving('')
+        return
+      }
+      url = `https://agencia.sinertegia.com?team_invite=${data.id}`
+    }
+    setInviteLink(url)
+    const roleLabel = tab === 'admin' ? 'administrador' : tab === 'team' ? 'integrante del equipo' : 'cliente'
+    const { error: mailError } = await supabase.functions.invoke('send-user-invitation', {
+      body: {
+        email: invite.email.trim(),
+        fullName: invite.full_name.trim(),
+        roleLabel,
+        inviteUrl: url,
+      },
     })
+    setInviteStatus(mailError ? 'Invitación creada. Configura la función de correo o comparte el enlace.' : 'Invitación enviada por correo correctamente.')
+    setSaving('')
+    await load()
   }
 
-  function showSaved(key: string) {
-    setSavedKey(key)
-    window.setTimeout(() => setSavedKey(current => current === key ? null : current), 1600)
+  async function copyInvite() {
+    await navigator.clipboard.writeText(inviteLink)
+    setInviteStatus('Enlace copiado.')
   }
 
-  async function toggle(role: Role, key: string) {
-    const nextAllowed = !isAllowed(role, key)
-    const rowKey = `${role}:${key}`
-    setError('')
-    setSavingKey(rowKey)
-    updateLocal(role, key, nextAllowed)
-
-    const { error: saveError } = await supabase.from('role_permissions')
-      .upsert({ role, section_key: key, allowed: nextAllowed }, { onConflict: 'role,section_key' })
-
-    if (saveError) {
-      updateLocal(role, key, !nextAllowed)
-      setError('No se pudo guardar el permiso. Intenta nuevamente.')
-    } else {
-      showSaved(rowKey)
-    }
-    setSavingKey(null)
-  }
-
-  async function toggleAll(role: Role, keys: string[]) {
-    const allAllowed = keys.every(key => isAllowed(role, key))
-    const nextAllowed = !allAllowed
-    const rowKey = `${role}:all`
-    setError('')
-    setSavingKey(rowKey)
-    keys.forEach(key => updateLocal(role, key, nextAllowed))
-
-    const payload = keys.map(section_key => ({ role, section_key, allowed: nextAllowed }))
-    const { error: saveError } = await supabase.from('role_permissions')
-      .upsert(payload, { onConflict: 'role,section_key' })
-
-    if (saveError) {
-      await fetchPermissions()
-      setError('No se pudieron actualizar todos los permisos. Intenta nuevamente.')
-    } else {
-      showSaved(rowKey)
-    }
-    setSavingKey(null)
-  }
-
-  if (loading) return <div className="flex items-center justify-center gap-2 py-16 text-sm text-gray-400"><LoaderCircle size={18} className="animate-spin" /> Cargando permisos...</div>
-
-  const roles = [
-    { role: 'admin' as const, title: 'Administradores', subtitle: 'Accesos operativos delegados por el superadmin', sections: ADMIN_SECTIONS, icon: KeyRound, accent: 'indigo' },
-    { role: 'team' as const, title: 'Equipo', subtitle: 'Accesos para colaboradores internos', sections: TEAM_SECTIONS, icon: Users, accent: 'blue' },
-    { role: 'client' as const, title: 'Clientes', subtitle: 'Accesos disponibles en el portal del cliente', sections: CLIENT_SECTIONS, icon: ShieldCheck, accent: 'purple' },
-  ]
+  if (loading)
+    return (
+      <div className="flex items-center justify-center gap-2 py-20 text-sm text-gray-400">
+        <LoaderCircle className="animate-spin" size={18} /> Cargando usuarios y permisos...
+      </div>
+    )
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <div className="mx-auto max-w-7xl space-y-5">
+      <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-blue-600"><KeyRound size={14} /> Control de acceso</div>
-          <h1 className="text-2xl font-bold text-gray-900">Permisos por rol</h1>
-          <p className="mt-1 text-sm text-gray-500">Decide qué secciones puede ver cada tipo de usuario dentro de la aplicación.</p>
+          <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-blue-600">
+            <KeyRound size={14} /> Administración
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900">Usuarios y permisos</h1>
+          <p className="mt-1 text-sm text-gray-500">Administra el acceso individual de clientes, equipo y administradores.</p>
         </div>
-        <div className="flex items-center gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-2 text-xs font-semibold text-green-700">
-          <CheckCircle2 size={15} /> Los cambios se guardan automáticamente
-        </div>
-      </div>
+        <button
+          type="button"
+          onClick={() => {
+            resetInvite()
+            setInviteOpen(true)
+          }}
+          className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-blue-700"
+        >
+          <Plus size={17} /> Agregar persona
+        </button>
+      </header>
 
       {error && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-        {roles.map(({ role, title, subtitle, sections, icon: RoleIcon, accent }) => {
-          const enabledCount = sections.filter(section => isAllowed(role, section.key)).length
-          const allAllowed = enabledCount === sections.length
-          const bulkKey = `${role}:all`
-          const isBulkSaving = savingKey === bulkKey
-          const blue = accent === 'blue'
-          const indigo = accent === 'indigo'
-          const activeColor = indigo ? 'bg-indigo-600' : blue ? 'bg-blue-600' : 'bg-purple-600'
-          const softColor = indigo ? 'bg-indigo-50 text-indigo-600' : blue ? 'bg-blue-50 text-blue-600' : 'bg-purple-50 text-purple-600'
-          const headerColor = indigo ? 'border-indigo-100 bg-indigo-50/70' : blue ? 'border-blue-100 bg-blue-50/70' : 'border-purple-100 bg-purple-50/70'
-          const countColor = indigo ? 'text-indigo-700' : blue ? 'text-blue-700' : 'text-purple-700'
+      <div className="inline-flex rounded-xl border border-gray-200 bg-white p-1 shadow-sm">
+        {(
+          [
+            ['client', 'Clientes'],
+            ['team', 'Equipo'],
+            ['admin', 'Administradores'],
+          ] as const
+        ).map(([value, label]) => (
+          <button
+            key={value}
+            onClick={() => {
+              setTab(value)
+              setSearch('')
+            }}
+            className={`rounded-lg px-5 py-2 text-sm font-semibold ${tab === value ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+          >
+            {label} <span className="ml-1 opacity-70">{value === tab ? people.length : ''}</span>
+          </button>
+        ))}
+      </div>
 
-          return (
-            <section key={role} className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-              <div className={`border-b px-5 py-5 ${headerColor}`}>
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl text-white ${activeColor}`}><RoleIcon size={21} /></div>
-                    <div className="min-w-0">
-                      <h2 className="font-bold text-gray-900">{title}</h2>
-                      <p className="truncate text-xs text-gray-500">{subtitle}</p>
-                    </div>
+      <div className="grid min-h-[620px] overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm lg:grid-cols-[340px_1fr]">
+        <aside className="border-r border-gray-200 bg-gray-50/60 p-4">
+          <div className="mb-3 flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2">
+            <Search size={15} className="text-gray-400" />
+            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar persona..." className="w-full bg-transparent text-sm outline-none" />
+          </div>
+          <div className="space-y-2">
+            {visiblePeople.map((person) => (
+              <button
+                key={person.id}
+                onClick={() => setSelectedId(person.id)}
+                className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition ${selected?.id === person.id ? 'border-blue-300 bg-blue-50' : 'border-transparent bg-white hover:border-gray-200'}`}
+              >
+                <span className="grid h-10 w-10 place-items-center rounded-full bg-gradient-to-br from-blue-600 to-purple-600 text-sm font-bold text-white">
+                  {person.name.slice(0, 2).toUpperCase()}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-2 truncate text-sm font-bold text-gray-800">
+                    {person.name}
+                    {person.isSuperAdmin && <ShieldCheck size={14} className="text-amber-500" />}
+                  </span>
+                  <span className="block truncate text-xs text-gray-400">{person.email}</span>
+                </span>
+                <span className={`h-2.5 w-2.5 rounded-full ${person.active ? 'bg-green-500' : 'bg-gray-300'}`} />
+              </button>
+            ))}
+          </div>
+          {visiblePeople.length === 0 && <p className="py-12 text-center text-sm text-gray-400">No hay personas en esta sección.</p>}
+        </aside>
+
+        <main className="p-5 lg:p-7">
+          {!selected ? (
+            <div className="grid h-full place-items-center text-sm text-gray-400">Selecciona o agrega una persona.</div>
+          ) : (
+            <>
+              <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 pb-5">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-xl font-bold text-gray-900">{selected.name}</h2>
+                    {selected.isSuperAdmin && <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-700">Superadmin</span>}
                   </div>
-                  <div className="shrink-0 text-right">
-                    <strong className={`text-lg ${countColor}`}>{enabledCount}/{sections.length}</strong>
-                    <p className="text-[11px] text-gray-400">activos</p>
-                  </div>
+                  <p className="mt-1 text-sm text-gray-500">
+                    {selected.subtitle} · {selected.email}
+                  </p>
                 </div>
+                {!selected.isSuperAdmin && (
+                  <button
+                    onClick={deactivate}
+                    disabled={saving === 'delete'}
+                    className="flex items-center gap-2 rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50"
+                  >
+                    <Trash2 size={14} /> {selected.active ? 'Desactivar acceso' : 'Acceso desactivado'}
+                  </button>
+                )}
+              </div>
+              {!selected.userId ? (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                  Este cliente todavía no ha aceptado su invitación. Podrás personalizar sus permisos cuando cree su cuenta.
+                </div>
+              ) : (
+                <>
+                  <div className="mb-3 flex items-center justify-between rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
+                    <div>
+                      <p className="text-sm font-bold text-blue-900">Acceso a todas las secciones</p>
+                      <p className="text-xs text-blue-600">Control individual para esta persona</p>
+                    </div>
+                    <button
+                      onClick={toggleAll}
+                      disabled={selected.isSuperAdmin || !!saving}
+                      className={`relative h-7 w-12 rounded-full ${SECTIONS[tab].every((section) => allowed(section.key)) ? 'bg-blue-600' : 'bg-gray-300'} disabled:opacity-60`}
+                    >
+                      <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${SECTIONS[tab].every((section) => allowed(section.key)) ? 'left-6' : 'left-1'}`} />
+                    </button>
+                  </div>
+                  <div className="divide-y divide-gray-100 rounded-xl border border-gray-200">
+                    {SECTIONS[tab].map((section) => {
+                      const enabled = allowed(section.key)
+                      return (
+                        <div key={section.key} className="flex items-center gap-3 px-4 py-3.5">
+                          <span className={`grid h-9 w-9 place-items-center rounded-lg ${enabled ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-400'}`}>
+                            <Check size={16} />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-sm font-semibold text-gray-800">{section.label}</span>
+                            <span className="block truncate text-xs text-gray-400">{section.description}</span>
+                          </span>
+                          <button
+                            onClick={() => toggle(section.key)}
+                            disabled={selected.isSuperAdmin || !!saving}
+                            className={`relative h-6 w-11 rounded-full ${enabled ? 'bg-blue-600' : 'bg-gray-300'} disabled:opacity-60`}
+                          >
+                            <span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow transition-all ${enabled ? 'left-6' : 'left-1'}`} />
+                            {saving === section.key && <LoaderCircle className="absolute left-3.5 top-1.5 animate-spin text-white" size={11} />}
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  {selected.isSuperAdmin && (
+                    <div className="mt-4 flex gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                      <ShieldCheck size={18} className="shrink-0" />
+                      El superadmin siempre conserva acceso completo.
+                    </div>
+                  )}
+                </>
+              )}
+            </>
+          )}
+        </main>
+      </div>
 
-                <div className="mt-4 flex items-center justify-between rounded-xl border border-white/80 bg-white/80 px-3 py-2.5">
-                  <div><p className="text-sm font-semibold text-gray-700">Permitir todas las secciones</p><p className="text-[11px] text-gray-400">Control general para este rol</p></div>
-                  <button type="button" onClick={() => toggleAll(role, sections.map(section => section.key))} disabled={savingKey !== null}
-                    className={`relative h-6 w-11 rounded-full transition ${allAllowed ? activeColor : 'bg-gray-300'} disabled:opacity-60`} aria-pressed={allAllowed}>
-                    <span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow transition-all ${allAllowed ? 'left-6' : 'left-1'}`} />
-                    {isBulkSaving && <LoaderCircle size={12} className="absolute left-[14px] top-[6px] animate-spin text-white" />}
+      {inviteOpen && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4">
+          <div className="flex max-h-[92vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-gray-100 p-5">
+              <div>
+                <h2 className="font-bold text-gray-900">Agregar {tab === 'admin' ? 'administrador' : tab === 'team' ? 'integrante del equipo' : 'cliente'}</h2>
+                <p className="text-xs text-gray-400">Se enviará una invitación para crear su acceso.</p>
+              </div>
+              <button onClick={() => setInviteOpen(false)}>
+                <X size={19} />
+              </button>
+            </div>
+            <form onSubmit={createInvitation} className="space-y-4 overflow-y-auto p-5">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="text-xs font-semibold text-gray-600">
+                  Nombre completo
+                  <input
+                    value={invite.full_name}
+                    onChange={(event) =>
+                      setInvite((value) => ({
+                        ...value,
+                        full_name: event.target.value,
+                      }))
+                    }
+                    required
+                    className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  />
+                </label>
+                <label className="text-xs font-semibold text-gray-600">
+                  Correo
+                  <input
+                    type="email"
+                    value={invite.email}
+                    onChange={(event) =>
+                      setInvite((value) => ({
+                        ...value,
+                        email: event.target.value,
+                      }))
+                    }
+                    required
+                    className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  />
+                </label>
+              </div>
+              {tab === 'client' ? (
+                <label className="block text-xs font-semibold text-gray-600">
+                  Empresa
+                  <input
+                    value={invite.company}
+                    onChange={(event) =>
+                      setInvite((value) => ({
+                        ...value,
+                        company: event.target.value,
+                      }))
+                    }
+                    className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  />
+                </label>
+              ) : (
+                <label className="block text-xs font-semibold text-gray-600">
+                  Departamento
+                  <select
+                    value={invite.department}
+                    onChange={(event) =>
+                      setInvite((value) => ({
+                        ...value,
+                        department: event.target.value as Department,
+                      }))
+                    }
+                    className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  >
+                    <option value="">Sin departamento</option>
+                    {DEPARTMENTS.map((department) => (
+                      <option key={department} value={department}>
+                        {department}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              <section>
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-bold text-gray-800">Accesos iniciales</p>
+                    <p className="text-xs text-gray-400">Elige qué podrá ver esta persona al entrar.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const all = SECTIONS[tab].every((section) => invitePermissions[section.key] !== false)
+                      setInvitePermissions(Object.fromEntries(SECTIONS[tab].map((section) => [section.key, !all])))
+                    }}
+                    className="shrink-0 text-xs font-bold text-blue-600"
+                  >
+                    {SECTIONS[tab].every((section) => invitePermissions[section.key] !== false) ? 'Quitar todos' : 'Permitir todos'}
                   </button>
                 </div>
-              </div>
-
-              <div className="divide-y divide-gray-100">
-                {sections.map(section => {
-                  const allowed = isAllowed(role, section.key)
-                  const rowKey = `${role}:${section.key}`
-                  const Icon = section.icon
-                  const saving = savingKey === rowKey
-                  const saved = savedKey === rowKey
-
-                  return (
-                    <div key={section.key} className="flex items-center gap-3 px-5 py-3.5 transition hover:bg-gray-50/80">
-                      <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${allowed ? softColor : 'bg-gray-100 text-gray-400'}`}><Icon size={17} /></div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2"><p className="text-sm font-semibold text-gray-800">{section.label}</p>{saved && <span className="flex items-center gap-1 text-[10px] font-semibold text-green-600"><Check size={11} /> Guardado</span>}</div>
-                        <p className="truncate text-xs text-gray-400">{section.description}</p>
-                      </div>
-                      <button type="button" onClick={() => toggle(role, section.key)} disabled={savingKey !== null}
-                        className={`relative h-6 w-11 shrink-0 rounded-full transition ${allowed ? activeColor : 'bg-gray-300'} disabled:opacity-60`} aria-label={`${allowed ? 'Ocultar' : 'Mostrar'} ${section.label}`} aria-pressed={allowed}>
-                        <span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow transition-all ${allowed ? 'left-6' : 'left-1'}`} />
-                        {saving && <LoaderCircle size={12} className="absolute left-[14px] top-[6px] animate-spin text-white" />}
-                      </button>
-                    </div>
-                  )
-                })}
-              </div>
-            </section>
-          )
-        })}
-      </div>
-
-      <div className="flex gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-        <ShieldCheck size={18} className="mt-0.5 shrink-0" />
-        <p><strong>Los administradores siempre conservan acceso completo.</strong> Los usuarios afectados verán el menú actualizado al recargar o volver a entrar.</p>
-      </div>
+                <div className="divide-y divide-gray-100 rounded-xl border border-gray-200">
+                  {SECTIONS[tab].map((section) => {
+                    const enabled = invitePermissions[section.key] !== false
+                    return (
+                      <label key={section.key} className="flex cursor-pointer items-center gap-3 px-3 py-2.5">
+                        <input
+                          type="checkbox"
+                          checked={enabled}
+                          onChange={() =>
+                            setInvitePermissions((previous) => ({
+                              ...previous,
+                              [section.key]: !enabled,
+                            }))
+                          }
+                          className="h-4 w-4 rounded border-gray-300 text-blue-600"
+                        />
+                        <span className="min-w-0">
+                          <span className="block text-sm font-semibold text-gray-700">{section.label}</span>
+                          <span className="block truncate text-xs text-gray-400">{section.description}</span>
+                        </span>
+                      </label>
+                    )
+                  })}
+                </div>
+              </section>
+              {inviteStatus && <p className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">{inviteStatus}</p>}
+              {inviteLink && (
+                <div className="flex gap-2 rounded-lg border border-gray-200 bg-gray-50 p-2">
+                  <input readOnly value={inviteLink} className="min-w-0 flex-1 bg-transparent text-xs text-gray-500 outline-none" />
+                  <button type="button" onClick={copyInvite} className="flex items-center gap-1 text-xs font-bold text-blue-600">
+                    <Copy size={13} /> Copiar
+                  </button>
+                </div>
+              )}
+              <button disabled={saving === 'invite'} className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 py-2.5 text-sm font-bold text-white disabled:opacity-60">
+                {saving === 'invite' ? <LoaderCircle className="animate-spin" size={16} /> : <Mail size={16} />} Crear y enviar invitación
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

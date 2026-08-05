@@ -80,8 +80,14 @@ export default function TeamDashboard({ embedded = false }: Props) {
   }, [user])
 
   async function fetchPermissions() {
-    const { data } = await supabase.from('role_permissions').select('section_key, allowed').eq('role', 'team')
-    const hidden = new Set((data || []).filter(r => !r.allowed).map(r => r.section_key))
+    const [roleResult, userResult] = await Promise.all([
+      supabase.from('role_permissions').select('section_key, allowed').eq('role', 'team'),
+      supabase.from('user_permissions').select('section_key, allowed').eq('user_id', user!.id),
+    ])
+    const resolved = new Map<string, boolean>()
+    ;(roleResult.data || []).forEach(row => resolved.set(row.section_key, row.allowed))
+    ;(userResult.data || []).forEach(row => resolved.set(row.section_key, row.allowed))
+    const hidden = new Set([...resolved].filter(([, allowed]) => !allowed).map(([key]) => key))
     setHiddenSections(hidden)
     if (hidden.has(teamView)) setTeamView(embedded ? 'tasks' : 'today')
   }
