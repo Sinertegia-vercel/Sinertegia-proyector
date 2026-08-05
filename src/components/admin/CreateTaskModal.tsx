@@ -31,7 +31,7 @@ export default function CreateTaskModal({ projects, teamMembers, defaultProjectI
     title: prefillTitle || '',
     description: '',
     assigned_to: '',
-    approver_id: user?.id || '',
+    approver_ids: user?.id ? [user.id] : [] as string[],
     department: '' as Department,
     priority: 'media' as Priority,
     start_date: '',
@@ -45,7 +45,7 @@ export default function CreateTaskModal({ projects, teamMembers, defaultProjectI
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
-    if (!form.project_id || !form.title || !form.assigned_to || !form.approver_id || !form.department) {
+    if (!form.project_id || !form.title || !form.assigned_to || form.approver_ids.length === 0 || !form.department) {
       setError('Por favor completa todos los campos requeridos')
       return
     }
@@ -55,7 +55,8 @@ export default function CreateTaskModal({ projects, teamMembers, defaultProjectI
       title: form.title,
       description: form.description || null,
       assigned_to: form.assigned_to,
-      approver_id: form.approver_id,
+      approver_id: form.approver_ids[0],
+      approver_ids: form.approver_ids,
       department: form.department,
       priority: form.priority,
       status: 'pendiente',
@@ -89,14 +90,14 @@ export default function CreateTaskModal({ projects, teamMembers, defaultProjectI
       })
     }
 
-    if (form.approver_id && form.approver_id !== form.assigned_to) {
+    form.approver_ids.filter(id => id !== form.assigned_to).forEach(approverId => {
       notifs.push({
-        user_id: form.approver_id,
+        user_id: approverId,
         title: 'Tarea pendiente de tu autorización',
         message: `Cuando "${form.title}" sea entregada, te llegará para revisión y autorización.`,
         type: 'review',
       })
-    }
+    })
 
     if (project?.client?.user_id) {
       notifs.push({
@@ -167,13 +168,29 @@ export default function CreateTaskModal({ projects, teamMembers, defaultProjectI
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-blue-700 mb-1 uppercase tracking-wide">Quién revisa y autoriza *</label>
-            <select value={form.approver_id} onChange={e => setForm({ ...form, approver_id: e.target.value })}
-              className="w-full border-2 border-blue-200 bg-blue-50 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-              <option value="">Selecciona a la persona responsable</option>
-              {teamMembers.map(m => <option key={m.id} value={m.id}>{m.full_name}{m.id === user?.id ? ' (yo)' : ''}</option>)}
-            </select>
-            <p className="mt-1 text-xs text-blue-600">Esta persona recibirá la tarea terminada y podrá aprobarla o solicitar cambios.</p>
+            <label className="block text-xs font-semibold text-blue-700 mb-1 uppercase tracking-wide">Quiénes revisan y autorizan *</label>
+            <div className="max-h-36 space-y-1 overflow-y-auto rounded-lg border-2 border-blue-200 bg-blue-50 p-2">
+              {teamMembers.map(member => {
+                const checked = form.approver_ids.includes(member.id)
+                return (
+                  <label key={member.id} className={`flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-sm transition ${checked ? 'bg-blue-600 font-semibold text-white' : 'bg-white text-gray-700 hover:bg-blue-100'}`}>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => setForm(current => ({
+                        ...current,
+                        approver_ids: checked
+                          ? current.approver_ids.filter(id => id !== member.id)
+                          : [...current.approver_ids, member.id],
+                      }))}
+                      className="h-4 w-4 accent-blue-600"
+                    />
+                    <span>{member.full_name}{member.id === user?.id ? ' (yo)' : ''}</span>
+                  </label>
+                )
+              })}
+            </div>
+            <p className="mt-1 text-xs text-blue-600">Selecciona una o varias personas. A todas les aparecerá la tarea y cualquiera podrá aprobarla o solicitar cambios.</p>
           </div>
 
           <div>

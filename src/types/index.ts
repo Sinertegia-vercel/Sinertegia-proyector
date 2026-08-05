@@ -131,6 +131,7 @@ export interface Task {
   completion_date?: string
   reviewer_id?: string
   approver_id?: string
+  approver_ids?: string[]
   review_status?: 'pendiente_revision' | 'pendiente_trafficker' | 'en_revision' | 'aprobada' | 'cambios_solicitados'
   client_approval?: 'aprobada' | 'cambios_solicitados'
   change_count?: number

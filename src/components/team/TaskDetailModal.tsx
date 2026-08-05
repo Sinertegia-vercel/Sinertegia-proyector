@@ -16,15 +16,16 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone,
   const { user } = useAuth()
   const isAdmin = user?.role === 'admin'
   const isTeam = user?.role === 'team'
-  const isReviewer = user?.id === task.reviewer_id
-  const isTaskApprover = !!task.approver_id && user?.id === task.approver_id
+  const approverIds = task.approver_ids?.length ? task.approver_ids : (task.approver_id ? [task.approver_id] : [])
+  const isReviewer = user?.id === task.reviewer_id || (!!user?.id && approverIds.includes(user.id))
+  const isTaskApprover = !!user?.id && approverIds.includes(user.id)
   const canAuthorize = isAdmin || isTaskApprover || (!task.approver_id && (user?.department === 'trafficker' || user?.department === 'lider'))
 
   const [teamMembers, setTeamMembers] = useState<User[]>([])
   const [links, setLinks] = useState<{ id: string; label: string; url: string }[]>(task.links || [])
   const [newLabel, setNewLabel] = useState('')
   const [newUrl, setNewUrl] = useState('')
-  const [reviewerId, setReviewerId] = useState(task.reviewer_id || task.approver_id || '')
+  const [reviewerId, setReviewerId] = useState(task.reviewer_id || approverIds[0] || '')
   const [reworkNote, setReworkNote] = useState('')
   const [showRework, setShowRework] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -329,8 +330,8 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone,
     }).eq('id', task.id)
     await updateReviewStatus('pendiente_revision')
 
-    const notifyIds: string[] = reviewerId ? [reviewerId] : []
-    if (!reviewerId) {
+    const notifyIds: string[] = approverIds.length > 0 ? approverIds : (reviewerId ? [reviewerId] : [])
+    if (notifyIds.length === 0) {
       const [{ data: admins }, { data: traf }] = await Promise.all([
         supabase.from('users').select('id').eq('role', 'admin'),
         supabase.from('users').select('id').eq('department', 'trafficker'),
@@ -788,14 +789,14 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone,
               <div>
                 <label className="block text-xs font-semibold text-blue-700 mb-1">Enviar para revisión y autorización a</label>
                 <select value={reviewerId} onChange={e => setReviewerId(e.target.value)}
-                  disabled={!!task.approver_id}
+                  disabled={approverIds.length > 0}
                   className="w-full border border-blue-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
                   <option value="">Trafficker / Líder (por defecto)</option>
                   {teamMembers.filter(m => m.id !== user?.id).map(m => (
                     <option key={m.id} value={m.id}>{m.full_name}</option>
                   ))}
                 </select>
-                {task.approver_id && <p className="mt-1 text-xs text-blue-600">La persona responsable fue definida al crear esta tarea.</p>}
+                {approverIds.length > 0 && <p className="mt-1 text-xs text-blue-600">Esta tarea se enviará a {approverIds.length} persona{approverIds.length === 1 ? '' : 's'} responsable{approverIds.length === 1 ? '' : 's'}.</p>}
               </div>
               <button type="button" onClick={() => {
                 setSubmitAttempted(true)

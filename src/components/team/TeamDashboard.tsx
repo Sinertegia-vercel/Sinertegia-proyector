@@ -164,8 +164,8 @@ export default function TeamDashboard({ embedded = false }: Props) {
     const { data } = await supabase
       .from('tasks')
       .select('*, project:projects(*, client:clients(*)), links:task_links(*)')
-      .eq('reviewer_id', user!.id)
       .eq('review_status', 'pendiente_revision')
+      .or(`reviewer_id.eq.${user!.id},approver_ids.cs.{${user!.id}}`)
       .order('created_at', { ascending: false })
     setMyReviewTasks((data as any) || [])
   }
