@@ -31,6 +31,7 @@ export default function LicenseManager() {
   const [notes, setNotes] = useState('')
   const [paymentLink, setPaymentLink] = useState('')
   const [linkCopied, setLinkCopied] = useState(false)
+  const [confirmSuspend, setConfirmSuspend] = useState(false)
 
   useEffect(() => {
     fetchLicense()
@@ -79,6 +80,7 @@ export default function LicenseManager() {
     const newStatus = status === 'active' ? 'suspended' : 'active'
     setStatus(newStatus)
     await saveAll({ status: newStatus })
+    setConfirmSuspend(false)
   }
 
   function extend(months: number) {
@@ -95,8 +97,12 @@ export default function LicenseManager() {
   const remaining = daysUntil(expiresAt)
 
   return (
-    <div className="max-w-4xl">
-      <p className="text-sm text-gray-500 mb-5">
+    <div className="mx-auto max-w-6xl">
+      <div className="mb-5">
+        <h1 className="text-2xl font-bold text-gray-900">Licencia</h1>
+        <p className="mt-1 text-sm text-gray-500">Administra la vigencia, mensualidad y acceso de esta instalación.</p>
+      </div>
+      <p className="hidden">
         Panel exclusivo de súper administrador. Suspende esta instancia si el cliente que renta la app no cubrió su pago — nadie más podrá entrar hasta que la reactives.
       </p>
 
@@ -123,12 +129,12 @@ export default function LicenseManager() {
                 {remaining < 0 ? `Vencida hace ${Math.abs(remaining)} días` : `Faltan ${remaining} días`}
               </span>
             )}
-            <button onClick={toggleStatus} disabled={saving}
+            {!isActive && <button onClick={toggleStatus} disabled={saving}
               className={`mt-4 w-full py-2.5 rounded-lg text-sm font-semibold transition disabled:opacity-50 ${
                 isActive ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-green-600 hover:bg-green-700 text-white'
               }`}>
               {saving ? 'Procesando...' : isActive ? 'Suspender ahora' : 'Reactivar ahora'}
-            </button>
+            </button>}
           </div>
 
           <div className="bg-white border border-gray-200 rounded-xl p-5">
@@ -165,14 +171,6 @@ export default function LicenseManager() {
               <input value={clientName} onChange={e => setClientName(e.target.value)} placeholder="Ej: Terraza360 — Instalación inicial"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Estado</label>
-              <select value={status} onChange={e => setStatus(e.target.value as 'active' | 'suspended')}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <option value="active">✅ Activa</option>
-                <option value="suspended">🚫 Suspendida</option>
-              </select>
-            </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Fecha inicio</label>
@@ -201,7 +199,7 @@ export default function LicenseManager() {
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
             </div>
             <button onClick={() => saveAll()} disabled={saving}
-              className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-700 to-red-600 text-white text-sm font-semibold py-2.5 rounded-lg hover:opacity-90 transition disabled:opacity-50">
+              className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold py-2.5 rounded-lg transition disabled:opacity-50">
               <Save size={14} /> Guardar configuración
             </button>
           </div>
@@ -222,6 +220,15 @@ export default function LicenseManager() {
           </div>
         </div>
       </div>
+
+      {isActive && <section className="mt-5 rounded-2xl border border-red-200 bg-red-50/70 p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div><h2 className="font-bold text-red-700">Zona de peligro</h2><p className="mt-1 text-sm text-gray-600">Suspender el acceso impedirá que todos los usuarios entren a la aplicación.</p></div>
+          <div className="text-right"><button type="button" onClick={() => setConfirmSuspend(true)} className="rounded-lg border border-red-300 bg-white px-5 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-50">Suspender aplicación</button><p className="mt-1 text-xs text-gray-400">Requiere confirmación</p></div>
+        </div>
+      </section>}
+
+      {confirmSuspend && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm"><div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"><div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-red-100 text-red-600"><ShieldAlert size={24} /></div><h2 className="mt-4 text-center text-lg font-bold text-gray-900">¿Suspender la aplicación?</h2><p className="mt-2 text-center text-sm leading-relaxed text-gray-500">Ningún usuario podrá entrar hasta que un superadministrador reactive la licencia.</p><div className="mt-6 grid grid-cols-2 gap-3"><button type="button" onClick={() => setConfirmSuspend(false)} className="rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600">Cancelar</button><button type="button" onClick={toggleStatus} disabled={saving} className="rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{saving ? 'Suspendiendo...' : 'Sí, suspender'}</button></div></div></div>}
     </div>
   )
 }
