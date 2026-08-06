@@ -55,6 +55,7 @@ export interface User {
   work_end?: number
   active?: boolean
   is_super_admin?: boolean
+  directory_hidden?: boolean
 }
 
 export interface Client {
@@ -65,6 +66,8 @@ export interface Client {
   user_id?: string
   cover_image?: string
   avatar_url?: string
+  active?: boolean
+  directory_hidden?: boolean
   created_at: string
 }
 

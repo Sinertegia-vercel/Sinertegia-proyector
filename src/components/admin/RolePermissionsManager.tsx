@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Check, Copy, KeyRound, LoaderCircle, Mail, Plus, Search, ShieldCheck, Trash2, X } from 'lucide-react'
+import { Check, Copy, KeyRound, LoaderCircle, Mail, Plus, Search, ShieldCheck, Trash2, UserX, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import type { Client, Department, User } from '../../types'
@@ -106,7 +106,7 @@ export default function RolePermissionsManager() {
 
   const people = useMemo<Person[]>(() => {
     if (tab === 'client')
-      return clients.map((client) => {
+      return clients.filter(client => !client.directory_hidden).map((client) => {
         const linked = users.find((item) => item.id === client.user_id)
         return {
           id: client.id,
@@ -120,7 +120,7 @@ export default function RolePermissionsManager() {
         }
       })
     return users
-      .filter((item) => item.role === tab)
+      .filter((item) => item.role === tab && !item.directory_hidden)
       .map((item) => ({
         id: item.id,
         userId: item.id,
@@ -184,6 +184,29 @@ export default function RolePermissionsManager() {
       await supabase.from('clients').update({ active: false }).eq('id', selected.id)
       if (selected.userId) await supabase.from('users').update({ active: false }).eq('id', selected.userId)
     } else if (selected.userId) await supabase.from('users').update({ active: false }).eq('id', selected.userId)
+    await load()
+    setSaving('')
+  }
+
+  async function removePerson() {
+    if (!selected || selected.isSuperAdmin || selected.userId === currentUser?.id) return
+    const confirmed = window.confirm(`¿Eliminar a ${selected.name} de esta lista?\n\nSe revocará su acceso y dejará de aparecer aquí. Sus tareas, proyectos, comentarios y reportes anteriores se conservarán.`)
+    if (!confirmed) return
+
+    setSaving('remove')
+    setError('')
+    if (selected.role === 'client') {
+      const { error: clientError } = await supabase.from('clients').update({ active: false, directory_hidden: true }).eq('id', selected.id)
+      if (clientError) { setError('No se pudo eliminar al cliente de la lista.'); setSaving(''); return }
+      if (selected.userId) {
+        const { error: userError } = await supabase.from('users').update({ active: false, directory_hidden: true }).eq('id', selected.userId)
+        if (userError) { setError('El cliente se ocultó, pero no fue posible actualizar su cuenta de acceso.'); setSaving(''); return }
+      }
+    } else if (selected.userId) {
+      const { error: userError } = await supabase.from('users').update({ active: false, directory_hidden: true }).eq('id', selected.userId)
+      if (userError) { setError('No se pudo eliminar a la persona de la lista.'); setSaving(''); return }
+    }
+    setSelectedId('')
     await load()
     setSaving('')
   }
@@ -368,13 +391,22 @@ export default function RolePermissionsManager() {
                   </p>
                 </div>
                 {!selected.isSuperAdmin && (
-                  <button
-                    onClick={deactivate}
-                    disabled={saving === 'delete'}
-                    className="flex items-center gap-2 rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50"
-                  >
-                    <Trash2 size={14} /> {selected.active ? 'Desactivar acceso' : 'Acceso desactivado'}
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={deactivate}
+                      disabled={saving === 'delete' || !selected.active}
+                      className="flex items-center gap-2 rounded-lg border border-amber-200 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <UserX size={14} /> {selected.active ? 'Desactivar acceso' : 'Acceso desactivado'}
+                    </button>
+                    <button
+                      onClick={removePerson}
+                      disabled={saving === 'remove'}
+                      className="flex items-center gap-2 rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+                    >
+                      {saving === 'remove' ? <LoaderCircle className="animate-spin" size={14} /> : <Trash2 size={14} />} Eliminar persona
+                    </button>
+                  </div>
                 )}
               </div>
               {!selected.userId ? (
