@@ -52,7 +52,7 @@ function dateChip(d: string | null): string {
 }
 
 function taskRow(t: ReportTask, idx: number): string {
-  return `<div style="display:flex;align-items:center;gap:16px;background:${CARD};border:1px solid ${LINE};border-radius:14px;padding:14px 18px;margin-bottom:11px;box-shadow:0 2px 6px rgba(40,50,65,.04);">
+  return `<div data-pdf-avoid="true" style="display:flex;align-items:center;gap:16px;background:${CARD};border:1px solid ${LINE};border-radius:14px;padding:14px 18px;margin-bottom:11px;box-shadow:0 2px 6px rgba(40,50,65,.04);">
     <div style="font-size:11.5px;font-weight:700;color:${MUTED};width:24px;flex:0 0 auto;text-align:center;">${String(idx).padStart(2, '0')}</div>
     <div style="flex:1;min-width:0;">
       <div style="font-size:12.5px;font-weight:500;color:${INK};line-height:1.3;">${esc(t.title)}</div>
@@ -67,7 +67,7 @@ function section(title: string, items: ReportTask[], accent: string, icon: strin
     ? `<div style="font-size:12px;color:${MUTED};padding:18px;text-align:center;background:${CARD};border:1px dashed ${LINE};border-radius:14px;">Sin tareas en esta categoría.</div>`
     : items.map((t, i) => taskRow(t, i + 1)).join('')
   return `<section style="margin-bottom:30px;">
-    <div style="display:flex;align-items:center;gap:13px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid ${accent};">
+    <div data-pdf-avoid="true" style="display:flex;align-items:center;gap:13px;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid ${accent};">
       <span style="width:28px;height:28px;border-radius:9px;color:#fff;font-size:15px;display:flex;align-items:center;justify-content:center;background:${accent};">${icon}</span>
       <h2 style="font-size:16px;font-weight:700;color:${SLATE};flex:1;letter-spacing:-.2px;margin:0;">${esc(title)}</h2>
       <span style="color:#fff;font-size:11.5px;font-weight:700;padding:4px 13px;border-radius:20px;background:${accent};">${items.length}</span>
@@ -102,7 +102,7 @@ function buildReportHtml(opts: {
       const done = doneByResp.get(name) || 0
       const w = Math.round((c / maxc) * 100)
       const wd = c ? Math.round((done / c) * 100) : 0
-      return `<div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;">
+      return `<div data-pdf-avoid="true" style="display:flex;align-items:center;gap:14px;margin-bottom:16px;">
         <div style="width:230px;flex:0 0 230px;font-size:11.5px;line-height:1.6;font-weight:500;color:${INK};display:flex;align-items:center;gap:9px;white-space:nowrap;">
           ${avatar(name, 20)}<span style="white-space:nowrap;">${esc(name)}</span>
         </div>
@@ -179,12 +179,61 @@ function buildReportHtml(opts: {
       ${section('Faltantes / Pendientes', pendientes, RED, '!')}
     </div>
 
-    <div style="position:relative;height:24mm;padding:0 44px;display:flex;align-items:center;justify-content:space-between;background:${SLATE};color:#fff;font-size:10.5px;font-weight:300;">
+    <div data-pdf-avoid="true" style="position:relative;height:24mm;padding:0 44px;display:flex;align-items:center;justify-content:space-between;background:${SLATE};color:#fff;font-size:10.5px;font-weight:300;">
       <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,${RED} 0 60%,${YELLOW} 60% 100%);"></div>
       <div><b>${esc(pie)}</b></div>
       <div style="color:#C7CDD6;">Generado el ${esc(fecha)}</div>
     </div>
   </div>`
+}
+
+interface PdfBlock {
+  top: number
+  bottom: number
+}
+
+function findSafePageBreaks(root: HTMLElement, pageHeightPx: number): number[] {
+  const rootRect = root.getBoundingClientRect()
+  const contentHeight = root.scrollHeight
+  const blocks: PdfBlock[] = Array.from(root.querySelectorAll<HTMLElement>('[data-pdf-avoid="true"]'))
+    .map(element => {
+      const rect = element.getBoundingClientRect()
+      return { top: rect.top - rootRect.top, bottom: rect.bottom - rootRect.top }
+    })
+    .filter(block => block.bottom > block.top)
+
+  const breaks = [0]
+  let pageStart = 0
+  const minimumPageFill = pageHeightPx * 0.45
+
+  while (pageStart + pageHeightPx < contentHeight) {
+    const idealBreak = pageStart + pageHeightPx
+    const intersecting = blocks.find(block => block.top < idealBreak && block.bottom > idealBreak)
+    let pageEnd = intersecting?.top ?? idealBreak
+
+    if (pageEnd - pageStart < minimumPageFill && intersecting && intersecting.bottom - pageStart <= pageHeightPx) {
+      pageEnd = intersecting.bottom
+    }
+    if (pageEnd <= pageStart + 1) pageEnd = idealBreak
+
+    breaks.push(Math.min(pageEnd, contentHeight))
+    pageStart = pageEnd
+  }
+
+  if (breaks[breaks.length - 1] < contentHeight) breaks.push(contentHeight)
+  return breaks
+}
+
+function canvasSlice(source: HTMLCanvasElement, top: number, height: number): HTMLCanvasElement {
+  const slice = document.createElement('canvas')
+  slice.width = source.width
+  slice.height = Math.max(1, Math.ceil(height))
+  const context = slice.getContext('2d')
+  if (!context) throw new Error('No se pudo preparar una página del PDF')
+  context.fillStyle = '#ffffff'
+  context.fillRect(0, 0, slice.width, slice.height)
+  context.drawImage(source, 0, top, source.width, height, 0, 0, source.width, height)
+  return slice
 }
 
 export async function generateClientReportPdf(opts: {
@@ -207,7 +256,8 @@ export async function generateClientReportPdf(opts: {
   document.body.appendChild(container)
 
   try {
-    const canvas = await html2canvas(container.firstElementChild as HTMLElement, {
+    const reportElement = container.firstElementChild as HTMLElement
+    const canvas = await html2canvas(reportElement, {
       scale: 2,
       useCORS: true,
       backgroundColor: '#ffffff',
@@ -216,29 +266,28 @@ export async function generateClientReportPdf(opts: {
     const pageWidthMm = 210
     const pageHeightMm = 297
     const imgHeightMm = (canvas.height * pageWidthMm) / canvas.width
-    const imgData = canvas.toDataURL('image/png')
 
     if (imgHeightMm <= pageHeightMm) {
       // Cabe en una sola hoja: la hoja se hace del tamaño exacto del contenido, sin espacio sobrante.
       const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: [pageWidthMm, imgHeightMm] })
-      pdf.addImage(imgData, 'PNG', 0, 0, pageWidthMm, imgHeightMm)
+      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, pageWidthMm, imgHeightMm)
       pdf.save(opts.filename)
       return
     }
 
     // No cabe en una sola hoja: se reparte en hojas A4 normales.
     const pdf = new jsPDF('p', 'mm', 'a4')
-    let heightLeft = imgHeightMm
-    let position = 0
+    const cssPageHeight = (pageHeightMm * reportElement.scrollWidth) / pageWidthMm
+    const breaks = findSafePageBreaks(reportElement, cssPageHeight)
+    const canvasPerCssPixel = canvas.height / reportElement.scrollHeight
 
-    pdf.addImage(imgData, 'PNG', 0, position, pageWidthMm, imgHeightMm)
-    heightLeft -= pageHeightMm
-
-    while (heightLeft > 0) {
-      position = heightLeft - imgHeightMm
-      pdf.addPage()
-      pdf.addImage(imgData, 'PNG', 0, position, pageWidthMm, imgHeightMm)
-      heightLeft -= pageHeightMm
+    for (let index = 0; index < breaks.length - 1; index++) {
+      const top = Math.round(breaks[index] * canvasPerCssPixel)
+      const bottom = Math.round(breaks[index + 1] * canvasPerCssPixel)
+      const slice = canvasSlice(canvas, top, bottom - top)
+      const sliceHeightMm = (slice.height * pageWidthMm) / slice.width
+      if (index > 0) pdf.addPage()
+      pdf.addImage(slice.toDataURL('image/png'), 'PNG', 0, 0, pageWidthMm, sliceHeightMm)
     }
 
     pdf.save(opts.filename)
