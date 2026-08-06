@@ -79,6 +79,9 @@ export default function RolePermissionsManager() {
     department: '' as Department | '',
   })
   const [invitePermissions, setInvitePermissions] = useState<Record<string, boolean>>({})
+  const [removeOpen, setRemoveOpen] = useState(false)
+  const [activeTaskCount, setActiveTaskCount] = useState(0)
+  const [reassignTo, setReassignTo] = useState('')
 
   useEffect(() => {
     void load()
@@ -188,13 +191,51 @@ export default function RolePermissionsManager() {
     setSaving('')
   }
 
+  async function prepareRemoval() {
+    if (!selected || selected.isSuperAdmin || selected.userId === currentUser?.id) return
+    setSaving('inspect-remove')
+    setError('')
+    setReassignTo('')
+    let count = 0
+    if (selected.userId) {
+      const { count: taskCount, error: taskError } = await supabase
+        .from('tasks')
+        .select('id', { count: 'exact', head: true })
+        .eq('assigned_to', selected.userId)
+        .neq('status', 'completada')
+      if (taskError) {
+        setError('No fue posible revisar las tareas activas de esta persona.')
+        setSaving('')
+        return
+      }
+      count = taskCount || 0
+    }
+    setActiveTaskCount(count)
+    setRemoveOpen(true)
+    setSaving('')
+  }
+
   async function removePerson() {
     if (!selected || selected.isSuperAdmin || selected.userId === currentUser?.id) return
-    const confirmed = window.confirm(`¿Eliminar a ${selected.name} de esta lista?\n\nSe revocará su acceso y dejará de aparecer aquí. Sus tareas, proyectos, comentarios y reportes anteriores se conservarán.`)
-    if (!confirmed) return
+    if (activeTaskCount > 0 && !reassignTo) {
+      setError('Selecciona a quién se reasignarán las tareas activas antes de eliminar a la persona.')
+      return
+    }
 
     setSaving('remove')
     setError('')
+    if (selected.userId && activeTaskCount > 0) {
+      const { error: taskError } = await supabase
+        .from('tasks')
+        .update({ assigned_to: reassignTo })
+        .eq('assigned_to', selected.userId)
+        .neq('status', 'completada')
+      if (taskError) {
+        setError('No se pudieron reasignar las tareas activas. La persona no fue eliminada.')
+        setSaving('')
+        return
+      }
+    }
     if (selected.role === 'client') {
       const { error: clientError } = await supabase.from('clients').update({ active: false, directory_hidden: true }).eq('id', selected.id)
       if (clientError) { setError('No se pudo eliminar al cliente de la lista.'); setSaving(''); return }
@@ -206,6 +247,7 @@ export default function RolePermissionsManager() {
       const { error: userError } = await supabase.from('users').update({ active: false, directory_hidden: true }).eq('id', selected.userId)
       if (userError) { setError('No se pudo eliminar a la persona de la lista.'); setSaving(''); return }
     }
+    setRemoveOpen(false)
     setSelectedId('')
     await load()
     setSaving('')
@@ -400,11 +442,11 @@ export default function RolePermissionsManager() {
                       <UserX size={14} /> {selected.active ? 'Desactivar acceso' : 'Acceso desactivado'}
                     </button>
                     <button
-                      onClick={removePerson}
-                      disabled={saving === 'remove'}
+                      onClick={prepareRemoval}
+                      disabled={saving === 'remove' || saving === 'inspect-remove'}
                       className="flex items-center gap-2 rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
                     >
-                      {saving === 'remove' ? <LoaderCircle className="animate-spin" size={14} /> : <Trash2 size={14} />} Eliminar persona
+                      {saving === 'remove' || saving === 'inspect-remove' ? <LoaderCircle className="animate-spin" size={14} /> : <Trash2 size={14} />} Eliminar persona
                     </button>
                   </div>
                 )}
@@ -600,6 +642,45 @@ export default function RolePermissionsManager() {
                 {saving === 'invite' ? <LoaderCircle className="animate-spin" size={16} /> : <Mail size={16} />} Crear y enviar invitación
               </button>
             </form>
+          </div>
+        </div>
+      )}
+      {removeOpen && selected && (
+        <div className="fixed inset-0 z-[100] grid place-items-center bg-black/50 p-4" onMouseDown={() => saving !== 'remove' && setRemoveOpen(false)}>
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Eliminar a {selected.name}</h3>
+                <p className="mt-1 text-sm text-gray-500">Perderá el acceso y dejará de aparecer en el directorio.</p>
+              </div>
+              <button type="button" onClick={() => setRemoveOpen(false)} disabled={saving === 'remove'} className="rounded-lg p-1 text-gray-400 hover:bg-gray-100"><X size={18} /></button>
+            </div>
+
+            {activeTaskCount > 0 ? (
+              <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                <p className="text-sm font-bold text-amber-900">Tiene {activeTaskCount} {activeTaskCount === 1 ? 'tarea activa' : 'tareas activas'}</p>
+                <p className="mt-1 text-xs text-amber-700">Debes elegir quién continuará estas actividades. Las tareas completadas conservarán a {selected.name} como responsable histórico.</p>
+                <label className="mt-4 block text-xs font-bold text-gray-700">
+                  Reasignar tareas activas a *
+                  <select value={reassignTo} onChange={(event) => setReassignTo(event.target.value)} className="mt-1.5 w-full rounded-lg border border-amber-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-500">
+                    <option value="">Selecciona una persona</option>
+                    {users.filter((user) => user.id !== selected.userId && user.active !== false && !user.directory_hidden && (user.role === 'team' || user.role === 'admin')).map((user) => (
+                      <option key={user.id} value={user.id}>{user.full_name}{user.department ? ` · ${user.department}` : ''}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            ) : (
+              <div className="mt-5 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800">Esta persona no tiene tareas activas pendientes de reasignación.</div>
+            )}
+
+            <p className="mt-4 text-xs text-gray-500">Sus proyectos, comentarios, entregables, tiempos y reportes anteriores no se borrarán.</p>
+            <div className="mt-6 flex justify-end gap-2">
+              <button type="button" onClick={() => setRemoveOpen(false)} disabled={saving === 'remove'} className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50">Cancelar</button>
+              <button type="button" onClick={removePerson} disabled={saving === 'remove' || (activeTaskCount > 0 && !reassignTo)} className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50">
+                {saving === 'remove' ? <LoaderCircle className="animate-spin" size={16} /> : <Trash2 size={16} />} {activeTaskCount > 0 ? 'Reasignar y eliminar' : 'Eliminar persona'}
+              </button>
+            </div>
           </div>
         </div>
       )}
