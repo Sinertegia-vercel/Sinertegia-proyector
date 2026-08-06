@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Check, Copy, KeyRound, LoaderCircle, Mail, Plus, Search, ShieldCheck, Trash2, UserX, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import type { Client, Department, User } from '../../types'
+import type { Client, User } from '../../types'
 import UserAvatar from '../shared/UserAvatar'
 
 type Tab = 'client' | 'team' | 'admin'
@@ -43,7 +43,11 @@ const SECTIONS: Record<Tab, Section[]> = {
   ].map(([key, label, description]) => ({ key, label, description })),
 }
 
-const DEPARTMENTS: Department[] = ['edicion', 'grabacion', 'diseno', 'copy', 'webmaster', 'trafficker', 'lider']
+const DEFAULT_DEPARTMENTS = [
+  ['edicion', 'Edición'], ['grabacion', 'Grabación'], ['diseno', 'Diseño'], ['copy', 'Copy'],
+  ['webmaster', 'Webmaster'], ['trafficker', 'Trafficker'], ['lider', 'Líder'],
+] as const
+type WorkDepartment = { id: string; name: string }
 
 interface Person {
   id: string
@@ -62,6 +66,7 @@ export default function RolePermissionsManager() {
   const [tab, setTab] = useState<Tab>('client')
   const [users, setUsers] = useState<User[]>([])
   const [clients, setClients] = useState<Client[]>([])
+  const [departments, setDepartments] = useState<WorkDepartment[]>(DEFAULT_DEPARTMENTS.map(([id, name]) => ({ id, name })))
   const [permissions, setPermissions] = useState<Permission[]>([])
   const [roleDefaults, setRoleDefaults] = useState<Record<string, boolean>>({})
   const [selectedId, setSelectedId] = useState('')
@@ -76,9 +81,11 @@ export default function RolePermissionsManager() {
     full_name: '',
     email: '',
     company: '',
-    department: '' as Department | '',
+    department: '',
   })
   const [invitePermissions, setInvitePermissions] = useState<Record<string, boolean>>({})
+  const [newDepartment, setNewDepartment] = useState('')
+  const [departmentOpen, setDepartmentOpen] = useState(false)
   const [removeOpen, setRemoveOpen] = useState(false)
   const [activeTaskCount, setActiveTaskCount] = useState(0)
   const [reassignTo, setReassignTo] = useState('')
@@ -89,14 +96,16 @@ export default function RolePermissionsManager() {
 
   async function load() {
     setLoading(true)
-    const [usersResult, clientsResult, permissionsResult, defaultsResult] = await Promise.all([
+    const [usersResult, clientsResult, permissionsResult, defaultsResult, departmentsResult] = await Promise.all([
       supabase.from('users').select('*').order('full_name'),
       supabase.from('clients').select('*').order('name'),
       supabase.from('user_permissions').select('user_id, section_key, allowed'),
       supabase.from('role_permissions').select('role, section_key, allowed'),
+      supabase.from('team_departments').select('id, name').eq('active', true).order('name'),
     ])
     setUsers((usersResult.data as User[]) || [])
     setClients((clientsResult.data as Client[]) || [])
+    if (departmentsResult.data?.length) setDepartments(departmentsResult.data as WorkDepartment[])
     setPermissions((permissionsResult.data as Permission[]) || [])
     const defaults: Record<string, boolean> = {}
     ;(defaultsResult.data || []).forEach((row) => {
@@ -130,14 +139,22 @@ export default function RolePermissionsManager() {
         name: item.full_name,
         email: item.email,
         role: tab,
-        subtitle: item.department || (tab === 'admin' ? 'Administrador' : 'Equipo'),
+        subtitle: departments.find((department) => department.id === item.department)?.name || item.department || (tab === 'admin' ? 'Administrador' : 'Sin departamento'),
         active: item.active !== false,
         avatarUrl: item.avatar_url,
         isSuperAdmin: item.is_super_admin,
       }))
-  }, [tab, users, clients])
+  }, [tab, users, clients, departments])
 
   const visiblePeople = people.filter((person) => `${person.name} ${person.email}`.toLowerCase().includes(search.toLowerCase()))
+  const groupedTeamPeople = useMemo(() => {
+    const groups = new Map<string, Person[]>()
+    visiblePeople.forEach((person) => {
+      const key = person.subtitle || 'Sin departamento'
+      groups.set(key, [...(groups.get(key) || []), person])
+    })
+    return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b, 'es'))
+  }, [visiblePeople])
   const selected = people.find((person) => person.id === selectedId) || visiblePeople[0]
 
   function allowed(sectionKey: string) {
@@ -176,6 +193,35 @@ export default function RolePermissionsManager() {
     else {
       setPermissions((previous) => [...previous.filter((row) => row.user_id !== selected.userId), ...payload])
     }
+    setSaving('')
+  }
+
+  async function updateDepartment(department: string) {
+    if (!selected?.userId || selected.role !== 'team') return
+    setSaving('department')
+    setError('')
+    const { error: saveError } = await supabase.from('users').update({ department: department || null }).eq('id', selected.userId)
+    if (saveError) setError('No se pudo cambiar el departamento de esta persona.')
+    else await load()
+    setSaving('')
+  }
+
+  async function createDepartment() {
+    const name = newDepartment.trim()
+    if (!name) return
+    const id = name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
+    if (!id) return
+    setSaving('new-department')
+    setError('')
+    const { error: saveError } = await supabase.from('team_departments').upsert({ id, name, active: true }, { onConflict: 'id' })
+    if (saveError) {
+      setError('No se pudo crear el departamento.')
+      setSaving('')
+      return
+    }
+    setNewDepartment('')
+    setDepartmentOpen(false)
+    await load()
     setSaving('')
   }
 
@@ -337,6 +383,23 @@ export default function RolePermissionsManager() {
     setInviteStatus('Enlace copiado.')
   }
 
+  function personRow(person: Person) {
+    return (
+      <button
+        key={person.id}
+        onClick={() => setSelectedId(person.id)}
+        className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition ${selected?.id === person.id ? 'border-blue-300 bg-blue-50' : 'border-transparent bg-white hover:border-gray-200'}`}
+      >
+        <UserAvatar name={person.name} avatarUrl={person.avatarUrl} size={40} />
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-2 truncate text-sm font-bold text-gray-800">{person.name}{person.isSuperAdmin && <ShieldCheck size={14} className="text-amber-500" />}</span>
+          <span className="block truncate text-xs text-gray-400">{person.email}</span>
+        </span>
+        <span className={`h-2.5 w-2.5 rounded-full ${person.active ? 'bg-green-500' : 'bg-gray-300'}`} />
+      </button>
+    )
+  }
+
   if (loading)
     return (
       <div className="flex items-center justify-center gap-2 py-20 text-sm text-gray-400">
@@ -395,24 +458,15 @@ export default function RolePermissionsManager() {
             <Search size={15} className="text-gray-400" />
             <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar persona..." className="w-full bg-transparent text-sm outline-none" />
           </div>
-          <div className="space-y-2">
-            {visiblePeople.map((person) => (
-              <button
-                key={person.id}
-                onClick={() => setSelectedId(person.id)}
-                className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition ${selected?.id === person.id ? 'border-blue-300 bg-blue-50' : 'border-transparent bg-white hover:border-gray-200'}`}
-              >
-                <UserAvatar name={person.name} avatarUrl={person.avatarUrl} size={40} />
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-2 truncate text-sm font-bold text-gray-800">
-                    {person.name}
-                    {person.isSuperAdmin && <ShieldCheck size={14} className="text-amber-500" />}
-                  </span>
-                  <span className="block truncate text-xs text-gray-400">{person.email}</span>
-                </span>
-                <span className={`h-2.5 w-2.5 rounded-full ${person.active ? 'bg-green-500' : 'bg-gray-300'}`} />
-              </button>
-            ))}
+          <div className="space-y-4">
+            {tab === 'team'
+              ? groupedTeamPeople.map(([department, members]) => (
+                <section key={department}>
+                  <div className="mb-1.5 flex items-center justify-between px-1 text-[11px] font-bold uppercase tracking-wider text-gray-500"><span>{department}</span><span className="rounded-full bg-gray-200 px-2 py-0.5 text-[10px] text-gray-600">{members.length}</span></div>
+                  <div className="space-y-2">{members.map(personRow)}</div>
+                </section>
+              ))
+              : <div className="space-y-2">{visiblePeople.map(personRow)}</div>}
           </div>
           {visiblePeople.length === 0 && <p className="py-12 text-center text-sm text-gray-400">No hay personas en esta sección.</p>}
         </aside>
@@ -451,6 +505,21 @@ export default function RolePermissionsManager() {
                   </div>
                 )}
               </div>
+              {selected.role === 'team' && selected.userId && (
+                <div className="mb-5 rounded-xl border border-indigo-100 bg-indigo-50/60 p-4">
+                  <div className="flex flex-wrap items-end gap-3">
+                    <label className="min-w-[240px] flex-1 text-xs font-bold text-gray-700">
+                      Departamento de {selected.name}
+                      <select value={users.find((user) => user.id === selected.userId)?.department || ''} onChange={(event) => void updateDepartment(event.target.value)} disabled={saving === 'department'} className="mt-1.5 w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm font-medium outline-none focus:border-blue-500">
+                        <option value="">Sin departamento</option>
+                        {departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}
+                      </select>
+                    </label>
+                    <button type="button" onClick={() => setDepartmentOpen(true)} className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-3 py-2.5 text-xs font-bold text-blue-600 hover:bg-blue-50"><Plus size={14} /> Nuevo departamento</button>
+                  </div>
+                  <p className="mt-2 text-xs text-indigo-600">La lista de Equipo se ordena automáticamente por estos departamentos.</p>
+                </div>
+              )}
               {!selected.userId ? (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
                   Este cliente todavía no ha aceptado su invitación. Podrás personalizar sus permisos cuando cree su cuenta.
@@ -573,18 +642,19 @@ export default function RolePermissionsManager() {
                     onChange={(event) =>
                       setInvite((value) => ({
                         ...value,
-                        department: event.target.value as Department,
+                        department: event.target.value,
                       }))
                     }
                     className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                   >
                     <option value="">Sin departamento</option>
-                    {DEPARTMENTS.map((department) => (
-                      <option key={department} value={department}>
-                        {department}
+                    {departments.map((department) => (
+                      <option key={department.id} value={department.id}>
+                        {department.name}
                       </option>
                     ))}
                   </select>
+                  {tab === 'team' && <button type="button" onClick={() => setDepartmentOpen(true)} className="mt-2 flex items-center gap-1 text-xs font-bold text-blue-600"><Plus size={13} /> Crear nuevo departamento</button>}
                 </label>
               )}
               <section>
@@ -642,6 +712,23 @@ export default function RolePermissionsManager() {
                 {saving === 'invite' ? <LoaderCircle className="animate-spin" size={16} /> : <Mail size={16} />} Crear y enviar invitación
               </button>
             </form>
+          </div>
+        </div>
+      )}
+      {departmentOpen && (
+        <div className="fixed inset-0 z-[110] grid place-items-center bg-black/50 p-4" onMouseDown={() => setDepartmentOpen(false)}>
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="flex items-start justify-between gap-4">
+              <div><h3 className="text-lg font-bold text-gray-900">Nuevo departamento</h3><p className="mt-1 text-sm text-gray-500">Se agregará a la organización y al formulario de invitación.</p></div>
+              <button type="button" onClick={() => setDepartmentOpen(false)} className="rounded-lg p-1 text-gray-400 hover:bg-gray-100"><X size={18} /></button>
+            </div>
+            <label className="mt-5 block text-xs font-bold text-gray-700">Nombre del departamento *
+              <input value={newDepartment} onChange={(event) => setNewDepartment(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void createDepartment() }} autoFocus placeholder="Ej. Community Manager" className="mt-1.5 w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500" />
+            </label>
+            <div className="mt-6 flex justify-end gap-2">
+              <button type="button" onClick={() => setDepartmentOpen(false)} className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600">Cancelar</button>
+              <button type="button" onClick={() => void createDepartment()} disabled={!newDepartment.trim() || saving === 'new-department'} className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{saving === 'new-department' ? <LoaderCircle className="animate-spin" size={16} /> : <Plus size={16} />} Crear departamento</button>
+            </div>
           </div>
         </div>
       )}
