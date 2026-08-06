@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { LoaderCircle, Pencil, Plus, Workflow } from 'lucide-react'
+import { LoaderCircle, Pencil, Plus, Trash2, Workflow } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { PROJECT_TEMPLATES } from '../../data/projectTemplates'
 import type { Department, Priority } from '../../types'
 import CreateFunnelTemplateModal, { type EditableFunnel } from './CreateFunnelTemplateModal'
 
-interface DbTemplate { id: string; name: string; icon: string; description: string | null }
+interface DbTemplate { id: string; name: string; icon: string; description: string | null; archived?: boolean }
 interface DbTask { template_id: string; title: string; department: Department; priority: Priority }
 
 export default function FunnelTemplatesManager() {
@@ -13,13 +13,15 @@ export default function FunnelTemplatesManager() {
   const [tasks, setTasks] = useState<DbTask[]>([])
   const [editing, setEditing] = useState<EditableFunnel | null | undefined>(undefined)
   const [loading, setLoading] = useState(true)
+  const [deletingId, setDeletingId] = useState('')
+  const [error, setError] = useState('')
 
   useEffect(() => { void load() }, [])
 
   async function load() {
     setLoading(true)
     const [templateResult, taskResult] = await Promise.all([
-      supabase.from('project_templates').select('id, name, icon, description').order('created_at'),
+      supabase.from('project_templates').select('id, name, icon, description, archived').order('created_at'),
       supabase.from('template_tasks').select('template_id, title, department, priority').order('created_at'),
     ])
     setTemplates((templateResult.data as DbTemplate[]) || [])
@@ -28,7 +30,7 @@ export default function FunnelTemplatesManager() {
   }
 
   const funnels = useMemo<EditableFunnel[]>(() => {
-    const builtIns = PROJECT_TEMPLATES.map(template => {
+    const builtIns = PROJECT_TEMPLATES.filter(template => templates.find(item => item.id === template.id)?.archived !== true).map(template => {
       const stored = templates.find(item => item.id === template.id)
       const storedTasks = tasks.filter(task => task.template_id === template.id)
       return {
@@ -40,7 +42,7 @@ export default function FunnelTemplatesManager() {
       }
     })
     const custom = templates
-      .filter(template => !PROJECT_TEMPLATES.some(item => item.id === template.id))
+      .filter(template => !template.archived && !PROJECT_TEMPLATES.some(item => item.id === template.id))
       .map(template => ({
         id: template.id,
         name: template.name,
@@ -51,6 +53,31 @@ export default function FunnelTemplatesManager() {
     return [...builtIns, ...custom]
   }, [templates, tasks])
 
+  async function removeFunnel(funnel: EditableFunnel) {
+    if (!window.confirm(`¿Eliminar el embudo "${funnel.name}"?\n\nSe eliminará esta plantilla y sus ${funnel.tasks.length} tareas predefinidas. Los proyectos que ya fueron creados conservarán sus tareas y avances.`)) return
+    setDeletingId(funnel.id)
+    setError('')
+    const { error: tasksError } = await supabase.from('template_tasks').delete().eq('template_id', funnel.id)
+    if (tasksError) {
+      setError(`No se pudieron eliminar las tareas del embudo: ${tasksError.message}`)
+      setDeletingId('')
+      return
+    }
+
+    const isBuiltIn = PROJECT_TEMPLATES.some(template => template.id === funnel.id)
+    const result = isBuiltIn
+      ? await supabase.from('project_templates').upsert({ id: funnel.id, name: funnel.name, icon: funnel.icon, description: funnel.description || null, archived: true }, { onConflict: 'id' })
+      : await supabase.from('project_templates').delete().eq('id', funnel.id)
+    if (result.error) {
+      setError(`No se pudo eliminar el embudo: ${result.error.message}`)
+      setDeletingId('')
+      return
+    }
+    if (editing?.id === funnel.id) setEditing(undefined)
+    await load()
+    setDeletingId('')
+  }
+
   if (loading) return <div className="flex items-center justify-center gap-2 py-24 text-sm text-gray-400"><LoaderCircle className="animate-spin" size={18} /> Cargando embudos...</div>
 
   return (
@@ -60,10 +87,12 @@ export default function FunnelTemplatesManager() {
         <button onClick={() => setEditing(null)} className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-blue-700"><Plus size={17} /> Crear embudo</button>
       </header>
 
+      {error && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {funnels.map(funnel => (
           <article key={funnel.id} className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-            <div className="flex items-start justify-between gap-3"><span className="grid h-12 w-12 place-items-center rounded-xl bg-blue-50 text-2xl">{funnel.icon}</span><button onClick={() => setEditing(funnel)} className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-gray-600 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"><Pencil size={13} /> Editar</button></div>
+            <div className="flex items-start justify-between gap-3"><span className="grid h-12 w-12 place-items-center rounded-xl bg-blue-50 text-2xl">{funnel.icon}</span><div className="flex gap-2"><button onClick={() => setEditing(funnel)} className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-bold text-gray-600 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"><Pencil size={13} /> Editar</button><button onClick={() => void removeFunnel(funnel)} disabled={deletingId === funnel.id} className="flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 disabled:opacity-50">{deletingId === funnel.id ? <LoaderCircle className="animate-spin" size={13} /> : <Trash2 size={13} />} Eliminar</button></div></div>
             <h2 className="mt-4 text-lg font-bold text-gray-900">{funnel.name}</h2>
             <p className="mt-1 min-h-10 text-sm text-gray-500">{funnel.description}</p>
             <div className="mt-4 flex items-center justify-between border-t border-gray-100 pt-4"><span className="text-sm font-semibold text-blue-600">{funnel.tasks.length} tareas</span><span className="text-xs text-gray-400">Reutilizable</span></div>

@@ -89,7 +89,7 @@ export default function CreateFunnelTemplateModal({ onClose, onCreated, template
 
     const id = template?.id || slugify(name)
     const { error: tplErr } = await supabase.from('project_templates').upsert({
-      id, name: name.trim(), icon: icon.trim() || '🗂️', description: description.trim() || null,
+      id, name: name.trim(), icon: icon.trim() || '🗂️', description: description.trim() || null, archived: false,
     }, { onConflict: 'id' })
     if (tplErr) { setError('Error al crear el embudo: ' + tplErr.message); setSaving(false); return }
 

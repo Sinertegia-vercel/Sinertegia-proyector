@@ -55,6 +55,7 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
   const [clientUsers, setClientUsers] = useState<User[]>([])
   const [customTemplates, setCustomTemplates] = useState<CustomTemplate[]>([])
   const [databaseTemplateIds, setDatabaseTemplateIds] = useState<Set<string>>(new Set())
+  const [archivedTemplateIds, setArchivedTemplateIds] = useState<Set<string>>(new Set())
   const [showCreateFunnel, setShowCreateFunnel] = useState(false)
 
   useEffect(() => {
@@ -66,15 +67,21 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
 
   async function fetchCustomTemplates() {
     const { data: templates } = await supabase.from('project_templates').select('*').order('created_at')
-    if (!templates || templates.length === 0) { setCustomTemplates([]); return }
-    setDatabaseTemplateIds(new Set(templates.map((template: { id: string }) => template.id)))
-    const { data: counts } = await supabase
-      .from('template_tasks')
-      .select('template_id')
-      .in('template_id', templates.map((t: any) => t.id))
+    if (!templates || templates.length === 0) {
+      setCustomTemplates([])
+      setDatabaseTemplateIds(new Set())
+      setArchivedTemplateIds(new Set())
+      return
+    }
+    const activeTemplates = templates.filter((template: { archived?: boolean }) => !template.archived)
+    setDatabaseTemplateIds(new Set(activeTemplates.map((template: { id: string }) => template.id)))
+    setArchivedTemplateIds(new Set(templates.filter((template: { archived?: boolean }) => template.archived).map((template: { id: string }) => template.id)))
+    const { data: counts } = activeTemplates.length
+      ? await supabase.from('template_tasks').select('template_id').in('template_id', activeTemplates.map((t: any) => t.id))
+      : { data: [] }
     const countByTemplate: Record<string, number> = {}
     ;(counts || []).forEach((row: any) => { countByTemplate[row.template_id] = (countByTemplate[row.template_id] || 0) + 1 })
-    setCustomTemplates(templates.filter((t: any) => !['vsl', 'webinar', 'otro'].includes(t.id)).map((t: any) => ({
+    setCustomTemplates(activeTemplates.filter((t: any) => !['vsl', 'webinar', 'otro'].includes(t.id)).map((t: any) => ({
       id: t.id, name: t.name, icon: t.icon, description: t.description, taskCount: countByTemplate[t.id] || 0,
     })))
   }
@@ -511,7 +518,7 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
             <div>
               <label className="block text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Tipo de embudo *</label>
               <div className="grid grid-cols-3 gap-3">
-                {PROJECT_TEMPLATES.filter(t => t.id !== 'otro').map(tpl => (
+                {PROJECT_TEMPLATES.filter(t => t.id !== 'otro' && !archivedTemplateIds.has(t.id)).map(tpl => (
                   <button key={tpl.id} type="button"
                     onClick={() => setForm({ ...form, templateId: tpl.id })}
                     className={`border-2 rounded-xl p-4 text-left transition cursor-pointer ${
@@ -545,7 +552,7 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
                   </button>
                 ))}
 
-                {PROJECT_TEMPLATES.filter(t => t.id === 'otro').map(tpl => (
+                {PROJECT_TEMPLATES.filter(t => t.id === 'otro' && !archivedTemplateIds.has(t.id)).map(tpl => (
                   <button key={tpl.id} type="button"
                     onClick={() => setForm({ ...form, templateId: tpl.id })}
                     className={`border-2 rounded-xl p-4 text-left transition cursor-pointer ${
