@@ -3,9 +3,24 @@ import { X, Plus, Trash2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import type { Department, Priority } from '../../types'
 
+export interface FunnelTaskInput {
+  title: string
+  department: Department
+  priority: Priority
+}
+
+export interface EditableFunnel {
+  id: string
+  name: string
+  icon: string
+  description: string
+  tasks: FunnelTaskInput[]
+}
+
 interface Props {
   onClose: () => void
   onCreated: (template: { id: string; name: string; icon: string; description: string }) => void
+  template?: EditableFunnel
 }
 
 const DEPARTMENTS: { value: Department; label: string }[] = [
@@ -33,11 +48,7 @@ const EMOJI_OPTIONS = [
   '🧲', '📣', '🛫', '🏢', '🏠', '🎓', '🍽️', '🩺', '⚖️', '💪',
 ]
 
-interface TaskRow {
-  title: string
-  department: Department
-  priority: Priority
-}
+type TaskRow = FunnelTaskInput
 
 function slugify(name: string): string {
   const base = name
@@ -49,13 +60,11 @@ function slugify(name: string): string {
   return `${base || 'embudo'}_${suffix}`
 }
 
-export default function CreateFunnelTemplateModal({ onClose, onCreated }: Props) {
-  const [name, setName] = useState('')
-  const [icon, setIcon] = useState('🗂️')
-  const [description, setDescription] = useState('')
-  const [tasks, setTasks] = useState<TaskRow[]>([
-    { title: '', department: 'lider', priority: 'alta' },
-  ])
+export default function CreateFunnelTemplateModal({ onClose, onCreated, template }: Props) {
+  const [name, setName] = useState(template?.name || '')
+  const [icon, setIcon] = useState(template?.icon || '🗂️')
+  const [description, setDescription] = useState(template?.description || '')
+  const [tasks, setTasks] = useState<TaskRow[]>(template?.tasks.length ? template.tasks : [{ title: '', department: 'lider', priority: 'alta' }])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
@@ -78,11 +87,14 @@ export default function CreateFunnelTemplateModal({ onClose, onCreated }: Props)
     setSaving(true)
     setError('')
 
-    const id = slugify(name)
-    const { error: tplErr } = await supabase.from('project_templates').insert({
+    const id = template?.id || slugify(name)
+    const { error: tplErr } = await supabase.from('project_templates').upsert({
       id, name: name.trim(), icon: icon.trim() || '🗂️', description: description.trim() || null,
-    })
+    }, { onConflict: 'id' })
     if (tplErr) { setError('Error al crear el embudo: ' + tplErr.message); setSaving(false); return }
+
+    const { error: deleteError } = await supabase.from('template_tasks').delete().eq('template_id', id)
+    if (deleteError) { setError('No se pudieron actualizar las tareas: ' + deleteError.message); setSaving(false); return }
 
     if (validTasks.length > 0) {
       const { error: tasksErr } = await supabase.from('template_tasks').insert(
@@ -99,7 +111,7 @@ export default function CreateFunnelTemplateModal({ onClose, onCreated }: Props)
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col">
         <div className="flex items-center justify-between p-6 border-b border-gray-100 shrink-0">
-          <h3 className="text-lg font-bold text-gray-900">Crear embudo nuevo</h3>
+          <h3 className="text-lg font-bold text-gray-900">{template ? 'Editar embudo' : 'Crear embudo nuevo'}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
         </div>
 
@@ -185,7 +197,7 @@ export default function CreateFunnelTemplateModal({ onClose, onCreated }: Props)
           </button>
           <button onClick={handleSave} disabled={saving}
             className="px-4 py-2 bg-gradient-to-r from-blue-700 to-red-600 text-white text-sm font-semibold rounded-lg hover:opacity-90 transition disabled:opacity-50">
-            {saving ? 'Creando...' : 'Crear embudo'}
+            {saving ? 'Guardando...' : template ? 'Guardar cambios' : 'Crear embudo'}
           </button>
         </div>
       </div>

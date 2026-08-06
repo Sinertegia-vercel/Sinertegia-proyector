@@ -25,6 +25,7 @@ import {
   LogOut,
   PanelLeftClose,
   PanelLeftOpen,
+  Workflow,
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import type { Task, Project, User, Client } from '../../types'
@@ -46,6 +47,7 @@ import ClientReportModal from './ClientReportModal'
 import ClientDeliverables from './ClientDeliverables'
 import RolePermissionsManager from './RolePermissionsManager'
 import LicenseManager from './LicenseManager'
+import FunnelTemplatesManager from './FunnelTemplatesManager'
 import { usePresence } from '../../hooks/usePresence'
 import { useAuth } from '../../contexts/AuthContext'
 import TaskDetailModal from '../team/TaskDetailModal'
@@ -69,6 +71,7 @@ type View =
   | 'create_project'
   | 'permisos'
   | 'licencia'
+  | 'funnels'
   | 'profile'
 type StatusFilter = 'activo' | 'pausado' | 'completado' | 'todos'
 
@@ -91,6 +94,7 @@ const ADMIN_NAV_ITEMS = [
   { id: 'chat_team', label: 'Chat Equipo', icon: MessageSquare },
   { id: 'chat_clients', label: 'Chat Clientes', icon: MessageCircle },
   { id: 'entregables', label: 'Entregables', icon: Link2 },
+  { id: 'funnels', label: 'Embudos', icon: Workflow },
   { id: 'permisos', label: 'Usuarios y permisos', icon: KeyRound },
 ]
 
@@ -135,6 +139,7 @@ export default function AdminDashboard() {
   const [unreadTeamChat, setUnreadTeamChat] = useState(0)
   const [unreadClientChat, setUnreadClientChat] = useState(0)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [createProjectReturnView, setCreateProjectReturnView] = useState<View>('overview')
   const [adminPermissions, setAdminPermissions] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
@@ -299,7 +304,7 @@ export default function AdminDashboard() {
       label: 'Comunicación',
       ids: ['chat_team', 'chat_clients', 'entregables'],
     },
-    { label: 'Administración', ids: ['clientes', 'permisos', 'licencia'] },
+    { label: 'Administración', ids: ['clientes', 'funnels', 'permisos', 'licencia'] },
   ]
 
   function selectView(id: string) {
@@ -393,7 +398,7 @@ export default function AdminDashboard() {
                     </div>
                   </div>
                   <div className="v2-actions">
-                    <button className="v2-btn v2-btn-ghost" onClick={() => setView('create_project')}>
+                    <button className="v2-btn v2-btn-ghost" onClick={() => { setCreateProjectReturnView('overview'); setView('create_project') }}>
                       <Plus /> Nuevo proyecto
                     </button>
                     <button className="v2-btn v2-btn-primary" onClick={() => setView('create')}>
@@ -534,7 +539,7 @@ export default function AdminDashboard() {
                   <div className="text-center py-16 text-gray-400">
                     <FolderKanban size={32} className="mx-auto mb-2 opacity-30" />
                     <p>No hay proyectos {statusFilter !== 'todos' ? `"${STATUS_FILTER_LABELS.find((s) => s.value === statusFilter)?.label.toLowerCase()}"` : ''}</p>
-                    <button onClick={() => setView('create_project')} className="mt-3 text-blue-600 text-sm hover:underline">
+                    <button onClick={() => { setCreateProjectReturnView('overview'); setView('create_project') }} className="mt-3 text-blue-600 text-sm hover:underline">
                       + Crear el primer proyecto
                     </button>
                   </div>
@@ -651,7 +656,9 @@ export default function AdminDashboard() {
             {view === 'entregables' && <ClientDeliverables />}
 
             {/* Vista: Asignación de clientes */}
-            {view === 'clientes' && <ClientAssignmentManager clients={clients} teamMembers={teamMembers} />}
+            {view === 'clientes' && <ClientAssignmentManager clients={clients} teamMembers={teamMembers} onCreateProject={() => { setCreateProjectReturnView('clientes'); setView('create_project') }} onOpenFunnels={() => setView('funnels')} />}
+
+            {view === 'funnels' && <FunnelTemplatesManager />}
 
             {/* Vista: Permisos por rol */}
             {view === 'permisos' && user?.is_super_admin && <RolePermissionsManager />}
@@ -676,7 +683,7 @@ export default function AdminDashboard() {
       {view === 'create' && <CreateTaskModal projects={projects} teamMembers={teamMembers} onClose={() => setView('overview')} onCreated={fetchAll} />}
 
       {/* Modal nuevo proyecto */}
-      {view === 'create_project' && <CreateProjectModal clients={clients} teamMembers={teamMembers} onClose={() => setView('overview')} onCreated={fetchAll} />}
+      {view === 'create_project' && <CreateProjectModal clients={clients} teamMembers={teamMembers} onClose={() => setView(createProjectReturnView)} onCreated={fetchAll} />}
 
       {/* Modal tarea desde campanita */}
       {notifTask && <TaskDetailModal task={notifTask} onClose={() => setNotifTask(null)} onUpdate={fetchAll} />}

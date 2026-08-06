@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { UserPlus, X, Link, Copy, Check } from 'lucide-react'
+import { UserPlus, X, Link, Copy, Check, Plus, Workflow } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import type { Client, User } from '../../types'
 import UserAvatar from '../shared/UserAvatar'
@@ -14,9 +14,11 @@ interface Assignment {
 interface Props {
   clients: Client[]
   teamMembers: User[]
+  onCreateProject: () => void
+  onOpenFunnels: () => void
 }
 
-export default function ClientAssignmentManager({ clients, teamMembers }: Props) {
+export default function ClientAssignmentManager({ clients, teamMembers, onCreateProject, onOpenFunnels }: Props) {
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [adding, setAdding] = useState<{ clientId: string; userId: string } | null>(null)
   const [loadingId, setLoadingId] = useState<string | null>(null)
@@ -83,7 +85,13 @@ export default function ClientAssignmentManager({ clients, teamMembers }: Props)
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-gray-500">Asigna integrantes del equipo a cada cliente. Solo verán las tareas de sus clientes asignados.</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div><h2 className="text-xl font-bold text-gray-900">Clientes y accesos</h2><p className="text-sm text-gray-500">Crea un cliente con su proyecto, comparte su invitación y asigna al equipo responsable.</p></div>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={onOpenFunnels} className="flex items-center gap-2 rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50"><Workflow size={16} /> Administrar embudos</button>
+          <button onClick={onCreateProject} className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"><Plus size={16} /> Nuevo proyecto / cliente</button>
+        </div>
+      </div>
 
       {clients.map(client => {
         const assigned = assignedTo(client.id)

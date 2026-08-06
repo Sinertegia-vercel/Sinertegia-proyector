@@ -21,6 +21,7 @@ const SECTIONS: Record<Tab, Section[]> = {
     ['chat_team', 'Chat del equipo', 'Participar en conversaciones internas'],
     ['chat_clients', 'Chat con clientes', 'Conversar con clientes'],
     ['entregables', 'Entregables', 'Revisar y administrar entregables'],
+    ['funnels', 'Embudos', 'Crear y modificar plantillas de proyectos'],
   ].map(([key, label, description]) => ({ key, label, description })),
   team: [
     ['tasks', 'Mis tareas', 'Consultar y trabajar en tareas asignadas'],

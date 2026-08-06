@@ -3,7 +3,7 @@ import { X, Plus, ChevronLeft, CheckSquare, Square, GripVertical, MoreVertical, 
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import type { Client, User } from '../../types'
-import { PROJECT_TEMPLATES, GROUP_LABELS, GROUP_COLORS, TEMPLATE_GROUP_ORDER } from '../../data/projectTemplates'
+import { PROJECT_TEMPLATES, GROUP_LABELS, GROUP_COLORS, TEMPLATE_GROUP_ORDER, DEPT_LABELS } from '../../data/projectTemplates'
 import CreateFunnelTemplateModal from './CreateFunnelTemplateModal'
 
 interface CustomTemplate { id: string; name: string; icon: string; description: string | null; taskCount: number }
@@ -54,6 +54,7 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
   const [clientUser, setClientUser] = useState<User | null>(null)
   const [clientUsers, setClientUsers] = useState<User[]>([])
   const [customTemplates, setCustomTemplates] = useState<CustomTemplate[]>([])
+  const [databaseTemplateIds, setDatabaseTemplateIds] = useState<Set<string>>(new Set())
   const [showCreateFunnel, setShowCreateFunnel] = useState(false)
 
   useEffect(() => {
@@ -66,13 +67,14 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
   async function fetchCustomTemplates() {
     const { data: templates } = await supabase.from('project_templates').select('*').order('created_at')
     if (!templates || templates.length === 0) { setCustomTemplates([]); return }
+    setDatabaseTemplateIds(new Set(templates.map((template: { id: string }) => template.id)))
     const { data: counts } = await supabase
       .from('template_tasks')
       .select('template_id')
       .in('template_id', templates.map((t: any) => t.id))
     const countByTemplate: Record<string, number> = {}
     ;(counts || []).forEach((row: any) => { countByTemplate[row.template_id] = (countByTemplate[row.template_id] || 0) + 1 })
-    setCustomTemplates(templates.map((t: any) => ({
+    setCustomTemplates(templates.filter((t: any) => !['vsl', 'webinar', 'otro'].includes(t.id)).map((t: any) => ({
       id: t.id, name: t.name, icon: t.icon, description: t.description, taskCount: countByTemplate[t.id] || 0,
     })))
   }
@@ -110,11 +112,6 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
     if (!validateStep1()) return
     const tpl = PROJECT_TEMPLATES.find(t => t.id === form.templateId)
 
-    if (form.templateId === 'otro') {
-      handleCreate([])
-      return
-    }
-
     setLoadingTasks(true)
     const { data: customDbTasks } = await supabase
       .from('template_tasks')
@@ -122,9 +119,16 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
       .eq('template_id', form.templateId)
       .order('created_at')
 
+    if (form.templateId === 'otro' && (!customDbTasks || customDbTasks.length === 0)) {
+      setLoadingTasks(false)
+      handleCreate([])
+      return
+    }
+
     // tpl viene de PROJECT_TEMPLATES (vsl/webinar/otro); si es un embudo personalizado, tpl es undefined
     // y todas sus tareas vienen de template_tasks (customDbTasks) en vez de tareas fijas en el código.
-    const baseTasks: CombinedTask[] = (tpl?.tasks || []).map(t => ({ ...t, isCustom: false, group: t.group }))
+    const isManagedOverride = !!tpl && databaseTemplateIds.has(form.templateId)
+    const baseTasks: CombinedTask[] = isManagedOverride ? [] : (tpl?.tasks || []).map(t => ({ ...t, isCustom: false, group: t.group }))
     const customTasks: CombinedTask[] = (customDbTasks || []).map(t => ({
       title: t.title,
       department: t.department,
@@ -380,6 +384,7 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
     if (!tasksByGroup[key]) tasksByGroup[key] = []
     tasksByGroup[key].push({ title: t.title, idx: i, isCustom: t.isCustom })
   })
+  const visibleGroupOrder = [...TEMPLATE_GROUP_ORDER.filter(group => tasksByGroup[group]), ...Object.keys(tasksByGroup).filter(group => !TEMPLATE_GROUP_ORDER.includes(group))]
 
   const selectedCount = selectedTasks.size
   const selectedTpl = PROJECT_TEMPLATES.find(t => t.id === form.templateId)
@@ -579,7 +584,7 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
         {step === 2 && (
           <>
             <div className="overflow-y-auto flex-1">
-              {TEMPLATE_GROUP_ORDER.filter(g => tasksByGroup[g]).map(groupKey => {
+              {visibleGroupOrder.map(groupKey => {
                 const groupTasks = tasksByGroup[groupKey]
                 const allSel = groupTasks.every(t => selectedTasks.has(t.idx))
                 const colorClass = GROUP_COLORS[groupKey] || 'bg-gray-100 text-gray-700 border-gray-200'
@@ -597,7 +602,7 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
                           : <Square size={18} className="text-gray-400" />}
                       </button>
                       <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${colorClass}`}>
-                        {GROUP_LABELS[groupKey]}
+                        {GROUP_LABELS[groupKey] || DEPT_LABELS[groupKey] || groupKey}
                       </span>
                       <span className="text-xs text-gray-400">
                         {groupTasks.filter(t => selectedTasks.has(t.idx)).length}/{groupTasks.length}
