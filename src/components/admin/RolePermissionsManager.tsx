@@ -3,6 +3,7 @@ import { Check, Copy, KeyRound, LoaderCircle, Mail, Plus, Search, ShieldCheck, T
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import type { Client, Department, User } from '../../types'
+import UserAvatar from '../shared/UserAvatar'
 
 type Tab = 'client' | 'team' | 'admin'
 type Section = { key: string; label: string; description: string }
@@ -52,6 +53,7 @@ interface Person {
   role: Tab
   subtitle: string
   active: boolean
+  avatarUrl?: string | null
   isSuperAdmin?: boolean
 }
 
@@ -114,6 +116,7 @@ export default function RolePermissionsManager() {
           role: 'client',
           subtitle: client.company || 'Cliente',
           active: client.active !== false && linked?.active !== false,
+          avatarUrl: linked?.avatar_url || client.avatar_url,
         }
       })
     return users
@@ -126,6 +129,7 @@ export default function RolePermissionsManager() {
         role: tab,
         subtitle: item.department || (tab === 'admin' ? 'Administrador' : 'Equipo'),
         active: item.active !== false,
+        avatarUrl: item.avatar_url,
         isSuperAdmin: item.is_super_admin,
       }))
   }, [tab, users, clients])
@@ -333,9 +337,7 @@ export default function RolePermissionsManager() {
                 onClick={() => setSelectedId(person.id)}
                 className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition ${selected?.id === person.id ? 'border-blue-300 bg-blue-50' : 'border-transparent bg-white hover:border-gray-200'}`}
               >
-                <span className="grid h-10 w-10 place-items-center rounded-full bg-gradient-to-br from-blue-600 to-purple-600 text-sm font-bold text-white">
-                  {person.name.slice(0, 2).toUpperCase()}
-                </span>
+                <UserAvatar name={person.name} avatarUrl={person.avatarUrl} size={40} />
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-2 truncate text-sm font-bold text-gray-800">
                     {person.name}
