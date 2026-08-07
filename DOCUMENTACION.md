@@ -229,5 +229,6 @@ No hace falta tocar nada en Vercel para esto — la conexión GitHub↔Vercel ya
 - Se agregÃ³ el apartado administrativo **Tareas del equipo**, separado de Carga del equipo y Mis tareas.
 - Permite seleccionar a un integrante o consultar a todo el equipo, buscar tareas y filtrar por estado.
 - El administrador puede abrir el detalle, marcar una tarea como completada directamente o eliminarla con confirmaciÃ³n.
+- La tabla muestra el comentario mÃ¡s reciente de cada tarea, su autor y la cantidad total; al pulsarlo se abre la conversaciÃ³n completa.
 - Las acciones sensibles se validan en Supabase mediante las funciones `admin_complete_team_task` y `admin_delete_team_task` del archivo `sql/2026-08-07_admin_team_task_controls.sql`.
 - El nuevo apartado cuenta con permiso individual `team_tasks` para administradores delegados; el superadministrador conserva acceso total.

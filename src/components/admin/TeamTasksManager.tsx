@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { CheckCircle2, ClipboardList, Eye, Search, Trash2, Users } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { CheckCircle2, ClipboardList, Eye, MessageSquare, Search, Trash2, Users } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import type { Task, TaskStatus, User } from '../../types'
 import PriorityBadge from '../shared/PriorityBadge'
@@ -14,6 +14,13 @@ interface Props {
 }
 
 type StatusFilter = 'activas' | TaskStatus | 'todas'
+type TaskCommentSummary = {
+  id: string
+  task_id: string
+  content: string
+  created_at: string
+  user?: { full_name?: string } | null
+}
 
 export default function TeamTasksManager({ teamMembers, tasks, onTasksChange }: Props) {
   const [selectedMemberId, setSelectedMemberId] = useState('all')
@@ -23,6 +30,30 @@ export default function TeamTasksManager({ teamMembers, tasks, onTasksChange }: 
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [busyTaskId, setBusyTaskId] = useState('')
   const [error, setError] = useState('')
+  const [comments, setComments] = useState<TaskCommentSummary[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    supabase
+      .from('task_comments')
+      .select('id, task_id, content, created_at, user:users!user_id(full_name)')
+      .order('created_at', { ascending: false })
+      .then(({ data, error: commentsError }) => {
+        if (cancelled) return
+        if (commentsError) {
+          setError(`No se pudieron cargar los comentarios: ${commentsError.message}`)
+          return
+        }
+        setComments((data || []) as unknown as TaskCommentSummary[])
+      })
+    return () => { cancelled = true }
+  }, [tasks])
+
+  const commentsByTask = useMemo(() => {
+    const grouped = new Map<string, TaskCommentSummary[]>()
+    comments.forEach((comment) => grouped.set(comment.task_id, [...(grouped.get(comment.task_id) || []), comment]))
+    return grouped
+  }, [comments])
 
   const members = useMemo(() => [...teamMembers].sort((a, b) => a.full_name.localeCompare(b.full_name)), [teamMembers])
   const visibleMembers = members.filter((member) => member.full_name.toLowerCase().includes(memberSearch.toLowerCase()))
@@ -125,16 +156,25 @@ export default function TeamTasksManager({ teamMembers, tasks, onTasksChange }: 
           </div>
 
           <div className="overflow-x-auto rounded-xl border border-gray-200">
-            <table className="w-full min-w-[900px] text-left text-sm">
-              <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500"><tr><th className="px-4 py-3">Tarea</th><th className="px-4 py-3">Integrante</th><th className="px-4 py-3">Estado</th><th className="px-4 py-3">Prioridad</th><th className="px-4 py-3">Entrega</th><th className="px-4 py-3 text-right">Acciones</th></tr></thead>
+            <table className="w-full min-w-[1120px] text-left text-sm">
+              <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500"><tr><th className="px-4 py-3">Tarea</th><th className="px-4 py-3">Integrante</th><th className="px-4 py-3">Estado</th><th className="px-4 py-3">Prioridad</th><th className="px-4 py-3">Entrega</th><th className="px-4 py-3">Comentarios</th><th className="px-4 py-3 text-right">Acciones</th></tr></thead>
               <tbody className="divide-y divide-gray-100">
-                {filteredTasks.map((task) => <tr key={task.id} className="hover:bg-blue-50/30">
+                {filteredTasks.map((task) => {
+                  const taskComments = commentsByTask.get(task.id) || []
+                  const latestComment = taskComments[0]
+                  return <tr key={task.id} className="hover:bg-blue-50/30">
                   <td className="px-4 py-3"><button type="button" onClick={() => setSelectedTask(task)} className="max-w-[300px] text-left"><b className="block truncate text-gray-900 hover:text-blue-600">{task.title}</b><small className="block truncate text-gray-500">{task.project?.client?.name || 'Sin cliente'} · {task.project?.name || 'Sin proyecto'}</small></button></td>
                   <td className="px-4 py-3"><div className="flex items-center gap-2"><UserAvatar name={task.assignee?.full_name || 'Sin asignar'} avatarUrl={task.assignee?.avatar_url} size={28} /><span className="max-w-[145px] truncate">{task.assignee?.full_name || 'Sin asignar'}</span></div></td>
                   <td className="px-4 py-3"><StatusBadge status={task.status} /></td><td className="px-4 py-3"><PriorityBadge priority={task.priority} /></td>
                   <td className="whitespace-nowrap px-4 py-3 text-gray-600">{task.commitment_date ? new Date(`${task.commitment_date}T00:00:00`).toLocaleDateString('es-MX') : 'Sin fecha'}</td>
+                  <td className="max-w-[250px] px-4 py-3">
+                    {latestComment ? <button type="button" onClick={() => setSelectedTask(task)} className="group flex w-full items-start gap-2 text-left" title="Abrir todos los comentarios">
+                      <span className="mt-0.5 rounded-lg bg-blue-50 p-1.5 text-blue-600"><MessageSquare size={14} /></span>
+                      <span className="min-w-0"><span className="block truncate text-xs font-semibold text-gray-700 group-hover:text-blue-600">{latestComment.user?.full_name || 'Usuario'} · {taskComments.length}</span><span className="block truncate text-xs text-gray-500">{latestComment.content}</span></span>
+                    </button> : <span className="text-xs text-gray-400">Sin comentarios</span>}
+                  </td>
                   <td className="px-4 py-3"><div className="flex justify-end gap-2"><button type="button" onClick={() => setSelectedTask(task)} title="Ver detalle" className="rounded-lg border border-gray-200 p-2 text-gray-600 hover:border-blue-300 hover:text-blue-600"><Eye size={16} /></button>{task.status !== 'completada' && <button type="button" disabled={busyTaskId === task.id} onClick={() => completeTask(task)} title="Marcar completada" className="rounded-lg border border-emerald-200 p-2 text-emerald-600 hover:bg-emerald-50 disabled:opacity-50"><CheckCircle2 size={16} /></button>}<button type="button" disabled={busyTaskId === task.id} onClick={() => deleteTask(task)} title="Eliminar tarea" className="rounded-lg border border-red-200 p-2 text-red-600 hover:bg-red-50 disabled:opacity-50"><Trash2 size={16} /></button></div></td>
-                </tr>)}
+                </tr>})}
               </tbody>
             </table>
             {!filteredTasks.length && <div className="flex min-h-64 flex-col items-center justify-center p-8 text-center text-gray-400"><ClipboardList size={42} className="mb-3 text-gray-300" /><b className="text-gray-600">No hay tareas con estos filtros</b><span className="mt-1 text-sm">Prueba otra persona, estado o búsqueda.</span></div>}
