@@ -207,6 +207,39 @@ export default function RolePermissionsManager() {
     setSaving('')
   }
 
+  async function promoteToAdministrator() {
+    if (!selected?.userId || selected.role !== 'team') return
+    if (!window.confirm(`¿Asignar a ${selected.name} como administrador?\n\nConservará sus tareas e historial. Después podrás decidir exactamente qué secciones administrativas puede usar.`)) return
+    setSaving('promote-admin')
+    setError('')
+
+    const { data: promoted, error: promoteError } = await supabase
+      .from('users')
+      .update({ role: 'admin', department: null })
+      .eq('id', selected.userId)
+      .eq('role', 'team')
+      .select('id')
+      .maybeSingle()
+
+    if (promoteError || !promoted) {
+      setError(promoteError?.message ? `No se pudo asignar como administrador: ${promoteError.message}` : 'No se pudo cambiar el rol de esta persona.')
+      setSaving('')
+      return
+    }
+
+    // Los permisos anteriores pertenecían al rol Equipo. El nuevo administrador
+    // inicia con la configuración general del rol y después puede personalizarse.
+    const { error: permissionError } = await supabase.from('user_permissions').delete().eq('user_id', selected.userId)
+    if (permissionError) setError('La persona ya es administradora, pero no se pudieron reiniciar sus permisos anteriores. Revísalos en la pestaña Administradores.')
+
+    const promotedUserId = selected.userId
+    await load()
+    setTab('admin')
+    setSelectedId(promotedUserId)
+    setSearch('')
+    setSaving('')
+  }
+
   async function createDepartment() {
     const name = newDepartment.trim()
     if (!name) return
@@ -489,6 +522,15 @@ export default function RolePermissionsManager() {
                 </div>
                 {!selected.isSuperAdmin && (
                   <div className="flex flex-wrap gap-2">
+                    {selected.role === 'team' && (
+                      <button
+                        onClick={promoteToAdministrator}
+                        disabled={!!saving || !selected.active}
+                        className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {saving === 'promote-admin' ? <LoaderCircle className="animate-spin" size={14} /> : <ShieldCheck size={14} />} Asignar administrador
+                      </button>
+                    )}
                     <button
                       onClick={deactivate}
                       disabled={saving === 'delete' || !selected.active}
