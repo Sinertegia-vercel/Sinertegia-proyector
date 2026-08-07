@@ -233,3 +233,4 @@ No hace falta tocar nada en Vercel para esto — la conexión GitHub↔Vercel ya
 - La vista administrativa **Mis tareas** ahora coincide con el panel del equipo: incluye estadÃ­sticas, progreso, prioridades, prÃ³ximas entregas y tabla, sin repetir calendario, hoja de ruta, chats o entregables dentro de la pÃ¡gina.
 - Las acciones sensibles se validan en Supabase mediante las funciones `admin_complete_team_task` y `admin_delete_team_task` del archivo `sql/2026-08-07_admin_team_task_controls.sql`.
 - El nuevo apartado cuenta con permiso individual `team_tasks` para administradores delegados; el superadministrador conserva acceso total.
+- El historial de **Solicitudes** conserva y muestra las aprobadas, reconoce estados antiguos equivalentes y verifica que Supabase guarde cada aprobaciÃ³n o rechazo antes de mostrarlo como exitoso.

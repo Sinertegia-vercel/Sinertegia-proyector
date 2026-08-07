@@ -20,6 +20,13 @@ interface TaskRequest {
   project?: { name: string }
 }
 
+function normalizeRequestStatus(status?: string): 'pendiente' | 'aprobada' | 'rechazada' {
+  const value = (status || '').trim().toLowerCase()
+  if (['aprobada', 'aprobado', 'approved', 'aceptada', 'aceptado', 'completada'].includes(value)) return 'aprobada'
+  if (['rechazada', 'rechazado', 'rejected', 'cancelada', 'cancelado'].includes(value)) return 'rechazada'
+  return 'pendiente'
+}
+
 export default function TaskRequestsPanel() {
   const [requests, setRequests] = useState<TaskRequest[]>([])
   const [loading, setLoading] = useState(true)
@@ -64,6 +71,7 @@ export default function TaskRequestsPanel() {
     const projectsById = new Map((projectRows || []).map(row => [row.id, { name: row.name }]))
     setRequests(raw.map(request => ({
       ...request,
+      status: normalizeRequestStatus(request.status),
       client: clientsById.get(request.client_id),
       requester: usersById.get(request.requester_id),
       assignee: request.assigned_to ? usersById.get(request.assigned_to) : undefined,
@@ -75,12 +83,18 @@ export default function TaskRequestsPanel() {
   async function approve(req: TaskRequest) {
     setProcessingId(req.id)
     setError('')
-    const { error: approveError } = await supabase.from('task_requests').update({ status: 'aprobada' }).eq('id', req.id)
-    if (approveError) {
-      setError('No se pudo aprobar la solicitud. Intenta nuevamente.')
+    const { data: approvedRequest, error: approveError } = await supabase
+      .from('task_requests')
+      .update({ status: 'aprobada', updated_at: new Date().toISOString() })
+      .eq('id', req.id)
+      .select('id, status')
+      .maybeSingle()
+    if (approveError || !approvedRequest || normalizeRequestStatus(approvedRequest.status) !== 'aprobada') {
+      setError(approveError?.message ? `No se pudo aprobar la solicitud: ${approveError.message}` : 'Supabase no guardo la aprobacion. Revisa los permisos de actualizacion de task_requests.')
       setProcessingId(null)
       return
     }
+    setRequests(current => current.map(item => item.id === req.id ? { ...item, status: 'aprobada' } : item))
     // Notificar al cliente
     const { data: clientUser } = await supabase
       .from('clients')
@@ -102,14 +116,22 @@ export default function TaskRequestsPanel() {
   async function reject(req: TaskRequest) {
     setProcessingId(req.id)
     setError('')
-    const { error: rejectError } = await supabase.from('task_requests').update({ status: 'rechazada' }).eq('id', req.id)
-    if (rejectError) setError('No se pudo rechazar la solicitud. Intenta nuevamente.')
+    const { data: rejectedRequest, error: rejectError } = await supabase
+      .from('task_requests')
+      .update({ status: 'rechazada', updated_at: new Date().toISOString() })
+      .eq('id', req.id)
+      .select('id, status')
+      .maybeSingle()
+    if (rejectError || !rejectedRequest) setError(rejectError?.message ? `No se pudo rechazar la solicitud: ${rejectError.message}` : 'Supabase no guardo el rechazo. Revisa los permisos de task_requests.')
+    else setRequests(current => current.map(item => item.id === req.id ? { ...item, status: 'rechazada' } : item))
     await fetchRequests()
     setProcessingId(null)
   }
 
   const filtered = filter === 'todas' ? requests : requests.filter(r => r.status === filter)
   const pending = requests.filter(r => r.status === 'pendiente').length
+  const approved = requests.filter(r => r.status === 'aprobada').length
+  const rejected = requests.filter(r => r.status === 'rechazada').length
 
   if (loading) return <div className="flex items-center justify-center h-40 text-gray-400">Cargando solicitudes...</div>
 
@@ -137,7 +159,7 @@ export default function TaskRequestsPanel() {
         {(['pendiente', 'aprobada', 'rechazada', 'todas'] as const).map(f => (
           <button key={f} onClick={() => setFilter(f)}
             className={`px-3 py-1.5 rounded-full text-xs font-semibold transition ${filter === f ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-            {f === 'pendiente' ? '⏳ Pendientes' : f === 'aprobada' ? '✅ Aprobadas' : f === 'rechazada' ? '❌ Rechazadas' : '📋 Todas'}
+            {f === 'pendiente' ? `⏳ Pendientes (${pending})` : f === 'aprobada' ? `✅ Aprobadas (${approved})` : f === 'rechazada' ? `❌ Rechazadas (${rejected})` : `📋 Todas (${requests.length})`}
           </button>
         ))}
       </div>
