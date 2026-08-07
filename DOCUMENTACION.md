@@ -235,3 +235,4 @@ No hace falta tocar nada en Vercel para esto — la conexión GitHub↔Vercel ya
 - El nuevo apartado cuenta con permiso individual `team_tasks` para administradores delegados; el superadministrador conserva acceso total.
 - El historial de **Solicitudes** conserva y muestra las aprobadas, reconoce estados antiguos equivalentes y verifica que Supabase guarde cada aprobaciÃ³n o rechazo antes de mostrarlo como exitoso.
 - En **Usuarios y permisos → Equipo**, el superadministrador puede convertir a un integrante en administrador. La persona conserva tareas e historial, pasa a la pestaña Administradores y sus permisos se reinician con la configuración general del nuevo rol para personalizarlos ahí.
+- La sección **Clientes** usa tarjetas compactas en dos columnas con búsqueda, filtros por equipo/acceso, prioridad de atención, estado de invitación, avatares del equipo y paginación; conserva la creación de clientes/proyectos, embudos, invitaciones y edición de asignaciones.
