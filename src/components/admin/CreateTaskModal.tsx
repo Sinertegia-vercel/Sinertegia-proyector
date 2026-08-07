@@ -50,7 +50,7 @@ export default function CreateTaskModal({ projects, teamMembers, defaultProjectI
       return
     }
     setSaving(true)
-    const { error: err } = await supabase.from('tasks').insert({
+    const { data: createdTask, error: err } = await supabase.from('tasks').insert({
       project_id: form.project_id,
       title: form.title,
       description: form.description || null,
@@ -64,7 +64,7 @@ export default function CreateTaskModal({ projects, teamMembers, defaultProjectI
       needed_date: form.needed_date || null,
       commitment_date: form.commitment_date || null,
       created_by: user!.id,
-    })
+    }).select('id').single()
     if (err) { setError('Error al crear la tarea'); setSaving(false); return }
 
     // Guardar en plantilla si se marcó
@@ -79,7 +79,7 @@ export default function CreateTaskModal({ projects, teamMembers, defaultProjectI
 
     // Notificaciones al asignado y al cliente
     const project = projects.find(p => p.id === form.project_id)
-    const notifs: Array<{ user_id: string; title: string; message: string; type: string }> = []
+    const notifs: Array<{ user_id: string; title: string; message: string; type: string; task_id: string }> = []
 
     if (form.assigned_to) {
       notifs.push({
@@ -87,6 +87,7 @@ export default function CreateTaskModal({ projects, teamMembers, defaultProjectI
         title: '📋 Nueva tarea asignada',
         message: `"${form.title}" — ${project?.client?.name || project?.name || 'Proyecto'}`,
         type: 'task',
+        task_id: createdTask.id,
       })
     }
 
@@ -96,6 +97,7 @@ export default function CreateTaskModal({ projects, teamMembers, defaultProjectI
         title: 'Tarea pendiente de tu autorización',
         message: `Cuando "${form.title}" sea entregada, te llegará para revisión y autorización.`,
         type: 'review',
+        task_id: createdTask.id,
       })
     })
 
@@ -105,6 +107,7 @@ export default function CreateTaskModal({ projects, teamMembers, defaultProjectI
         title: '📋 Nueva tarea en tu proyecto',
         message: `"${form.title}" — ${project?.name || 'Tu proyecto'}`,
         type: 'task',
+        task_id: createdTask.id,
       })
     }
 

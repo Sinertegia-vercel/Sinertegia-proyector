@@ -1,16 +1,14 @@
 import { useState } from 'react'
 import type { Department, Task, User } from '../../types'
 import {
-  AlertTriangle, CalendarDays, CheckCircle2, ChevronDown, Clock3,
-  Search, Shield, ShieldCheck, UserCheck, UserPlus, Users, UserX,
+  AlertTriangle, CalendarDays, CheckCircle2, Clock3,
+  Search, UserCheck, UserPlus, Users,
 } from 'lucide-react'
-import { supabase } from '../../lib/supabase'
 
 interface Props {
   teamMembers: User[]
   tasks: Task[]
   onAssign: () => void
-  onUpdate?: () => void
 }
 
 const DEPT_LABELS: Record<string, string> = {
@@ -26,16 +24,10 @@ function startOfToday() {
   return date
 }
 
-export default function TeamCapacity({ teamMembers, tasks, onAssign, onUpdate }: Props) {
+export default function TeamCapacity({ teamMembers, tasks, onAssign }: Props) {
   const [search, setSearch] = useState('')
   const [department, setDepartment] = useState<'all' | Department>('all')
   const [statusFilter, setStatusFilter] = useState('all')
-  const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [confirmingId, setConfirmingId] = useState<string | null>(null)
-  const [updatingId, setUpdatingId] = useState<string | null>(null)
-  const [removingId, setRemovingId] = useState<string | null>(null)
-  const [reassignTarget, setReassignTarget] = useState('')
-  const [removeError, setRemoveError] = useState('')
 
   const today = startOfToday()
   const weekEnd = new Date(today)
@@ -93,37 +85,6 @@ export default function TeamCapacity({ teamMembers, tasks, onAssign, onUpdate }:
     overdue: members.reduce((sum, m) => sum + m.overdue.length, 0),
   }
 
-  async function makeAdmin(memberId: string) {
-    setUpdatingId(memberId)
-    await supabase.from('users').update({ role: 'admin' }).eq('id', memberId)
-    setConfirmingId(null)
-    setUpdatingId(null)
-    onUpdate?.()
-  }
-
-  function startRemove(memberId: string) {
-    setRemovingId(memberId)
-    setReassignTarget('')
-    setRemoveError('')
-  }
-
-  async function confirmRemove(memberId: string) {
-    const pending = activeTasksOf(memberId)
-    if (pending.length > 0 && !reassignTarget) {
-      setRemoveError('Selecciona a quién reasignar sus tareas pendientes')
-      return
-    }
-    setUpdatingId(memberId)
-    if (pending.length > 0) {
-      await supabase.from('tasks').update({ assigned_to: reassignTarget })
-        .eq('assigned_to', memberId).neq('status', 'completada')
-    }
-    await supabase.from('users').update({ active: false }).eq('id', memberId)
-    setRemovingId(null)
-    setUpdatingId(null)
-    onUpdate?.()
-  }
-
   const summary = [
     { label: 'Disponibles', value: totals.available, help: 'Pueden recibir trabajo', icon: UserCheck, tone: 'green' },
     { label: 'Carga equilibrada', value: totals.balanced, help: 'Carga estable esta semana', icon: Users, tone: 'blue' },
@@ -166,7 +127,7 @@ export default function TeamCapacity({ teamMembers, tasks, onAssign, onUpdate }:
                 {member.avatar_url ? <img src={member.avatar_url} alt="" className="h-12 w-12 rounded-full object-cover ring-2 ring-white shadow" /> : <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-violet-500 font-bold text-white">{member.full_name.charAt(0)}</div>}
                 <div className="min-w-0"><p className="truncate font-bold text-gray-900">{member.full_name}</p><p className="text-xs text-gray-500">{member.department ? DEPT_LABELS[member.department] : 'Sin departamento'}</p><span className={`team-load-badge team-load-badge--${state.color}`}>● {state.label}</span></div>
               </div>
-              {member.role === 'admin' && <span className="inline-flex items-center gap-1 rounded-full bg-purple-50 px-2 py-1 text-[10px] font-bold text-purple-700"><ShieldCheck size={11} /> Admin</span>}
+              {member.role === 'admin' && <span className="rounded-full bg-purple-50 px-2 py-1 text-[10px] font-bold text-purple-700">Admin</span>}
             </div>
 
             <div className="mt-5">
@@ -182,13 +143,7 @@ export default function TeamCapacity({ teamMembers, tasks, onAssign, onUpdate }:
               return <div key={task.id} className="flex items-center gap-2 rounded-lg border border-gray-100 px-3 py-2 text-xs"><span className={`h-2 w-2 shrink-0 rounded-full ${task.priority === 'critica' ? 'bg-red-500' : task.priority === 'alta' ? 'bg-orange-500' : task.priority === 'media' ? 'bg-amber-400' : 'bg-green-500'}`} /><span className="min-w-0 flex-1 truncate font-medium text-gray-700" title={task.title}>{task.title}</span><span className={late ? 'font-semibold text-red-600' : 'text-gray-400'}>{task.commitment_date ? new Date(`${task.commitment_date}T12:00:00`).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }) : 'Sin fecha'}</span></div>
             }) : <div className="flex h-20 items-center justify-center gap-2 rounded-xl bg-green-50 text-sm text-green-700"><CheckCircle2 size={16} /> Sin tareas activas</div>}</div>
 
-            <div className="mt-4 flex gap-2"><button onClick={() => setExpandedId(expandedId === member.id ? null : member.id)} className="team-load-secondary flex-1">Administrar <ChevronDown size={15} className={expandedId === member.id ? 'rotate-180 transition' : 'transition'} /></button><button onClick={onAssign} className="team-load-primary flex-1"><UserPlus size={15} /> Asignar tarea</button></div>
-
-            {expandedId === member.id && <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3">
-              <p className="mb-2 text-xs font-semibold text-gray-600">Administración de la cuenta</p>
-              <div className="flex flex-wrap gap-2">{member.role !== 'admin' && (confirmingId === member.id ? <><button onClick={() => makeAdmin(member.id)} disabled={updatingId === member.id} className="team-load-admin-action">Confirmar administrador</button><button onClick={() => setConfirmingId(null)} className="team-load-secondary">Cancelar</button></> : <button onClick={() => setConfirmingId(member.id)} className="team-load-secondary"><Shield size={14} /> Hacer administrador</button>)}<button onClick={() => startRemove(member.id)} className="team-load-danger"><UserX size={14} /> Eliminar del equipo</button></div>
-              {removingId === member.id && <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3"><p className="text-xs text-red-700">{active.length ? `Reasigna primero sus ${active.length} tareas activas.` : 'Se desactivará su acceso; el historial se conservará.'}</p>{active.length > 0 && <select value={reassignTarget} onChange={e => { setReassignTarget(e.target.value); setRemoveError('') }} className="team-load-input mt-2"><option value="">Selecciona una persona</option>{teamMembers.filter(m => m.id !== member.id).map(m => <option key={m.id} value={m.id}>{m.full_name}</option>)}</select>}{removeError && <p className="mt-1 text-xs text-red-600">{removeError}</p>}<div className="mt-2 flex gap-2"><button onClick={() => confirmRemove(member.id)} disabled={updatingId === member.id} className="team-load-danger">{updatingId === member.id ? 'Procesando...' : 'Confirmar'}</button><button onClick={() => setRemovingId(null)} className="team-load-secondary">Cancelar</button></div></div>}
-            </div>}
+            <button onClick={onAssign} className="team-load-primary mt-4 w-full"><UserPlus size={15} /> Asignar tarea a {member.full_name.split(' ')[0]}</button>
           </article>
         })}
       </div>

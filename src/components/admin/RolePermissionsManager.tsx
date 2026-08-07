@@ -13,6 +13,7 @@ const SECTIONS: Record<Tab, Section[]> = {
   admin: [
     ['overview', 'Proyectos', 'Consultar y administrar proyectos'],
     ['team', 'Carga del equipo', 'Distribuir trabajo y revisar disponibilidad'],
+    ['team_tasks', 'Tareas del equipo', 'Completar y eliminar tareas de cualquier integrante'],
     ['calendar', 'Calendario general', 'Consultar fechas de todo el equipo'],
     ['performance', 'Rendimiento', 'Acceder a métricas del equipo'],
     ['mytasks', 'Mis tareas', 'Trabajar en sus tareas'],

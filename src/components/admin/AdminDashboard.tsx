@@ -26,6 +26,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Workflow,
+  ListChecks,
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import type { Task, Project, User, Client } from '../../types'
@@ -33,6 +34,7 @@ import Logo from '../shared/Logo'
 import TopBarActions from '../shared/TopBarActions'
 import ProjectDetail from './ProjectDetail'
 import TeamCapacity from './TeamCapacity'
+import TeamTasksManager from './TeamTasksManager'
 import TeamCalendar from './TeamCalendar'
 import TeamPerformance from './TeamPerformance'
 import CreateTaskModal from './CreateTaskModal'
@@ -58,6 +60,7 @@ type View =
   | 'overview'
   | 'project'
   | 'team'
+  | 'team_tasks'
   | 'calendar'
   | 'performance'
   | 'mytasks'
@@ -85,6 +88,7 @@ const STATUS_FILTER_LABELS: { value: StatusFilter; label: string }[] = [
 const ADMIN_NAV_ITEMS = [
   { id: 'overview', label: 'Proyectos', icon: FolderKanban },
   { id: 'team', label: 'Carga del equipo', icon: Users },
+  { id: 'team_tasks', label: 'Tareas del equipo', icon: ListChecks },
   { id: 'calendar', label: 'Calendario', icon: Calendar },
   { id: 'performance', label: 'Rendimiento', icon: TrendingUp },
   { id: 'mytasks', label: 'Mis tareas', icon: ClipboardList },
@@ -297,7 +301,7 @@ export default function AdminDashboard() {
   const navGroups = [
     {
       label: 'Operación',
-      ids: ['overview', 'team', 'calendar', 'performance'],
+      ids: ['overview', 'team', 'team_tasks', 'calendar', 'performance'],
     },
     { label: 'Trabajo', ids: ['mytasks', 'roadmap', 'requests'] },
     {
@@ -630,7 +634,10 @@ export default function AdminDashboard() {
             )}
 
             {/* Vista capacidad del equipo */}
-            {view === 'team' && <TeamCapacity teamMembers={teamMembers} tasks={tasks} onAssign={() => setView('create')} onUpdate={fetchAll} />}
+            {view === 'team' && <TeamCapacity teamMembers={teamMembers} tasks={tasks} onAssign={() => setView('create')} />}
+
+            {/* Vista de administraciÃ³n directa de tareas del equipo */}
+            {view === 'team_tasks' && <TeamTasksManager teamMembers={teamMembers} tasks={tasks} onTasksChange={fetchAll} />}
 
             {/* Vista calendario */}
             {view === 'calendar' && <TeamCalendar teamMembers={teamMembers} tasks={tasks} onlineIds={onlineIds} onTasksChange={fetchAll} />}

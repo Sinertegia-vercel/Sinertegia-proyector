@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useCallback, useEffect, useState, useRef } from 'react'
 import { Bell, CheckCheck, Check, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -20,9 +20,20 @@ export default function NotificationBell() {
   const [filter, setFilter] = useState<'todas' | 'no_leidas'>('todas')
   const ref = useRef<HTMLDivElement>(null)
 
+  const fetchNotifications = useCallback(async () => {
+    if (!user) return
+    const { data } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(20)
+    setNotifications(data || [])
+  }, [user])
+
   useEffect(() => {
     if (user) {
-      fetchNotifications()
+      const initialFetch = window.setTimeout(() => { void fetchNotifications() }, 0)
       const channel = supabase
         .channel(`notifications-${user.id}`)
         .on('postgres_changes', {
@@ -32,9 +43,9 @@ export default function NotificationBell() {
           filter: `user_id=eq.${user.id}`,
         }, () => fetchNotifications())
         .subscribe()
-      return () => { supabase.removeChannel(channel) }
+      return () => { window.clearTimeout(initialFetch); supabase.removeChannel(channel) }
     }
-  }, [user])
+  }, [user, fetchNotifications])
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -43,16 +54,6 @@ export default function NotificationBell() {
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
-
-  async function fetchNotifications() {
-    const { data } = await supabase
-      .from('notifications')
-      .select('*')
-      .eq('user_id', user!.id)
-      .order('created_at', { ascending: false })
-      .limit(20)
-    setNotifications(data || [])
-  }
 
   async function markAllRead() {
     await supabase.from('notifications').update({ read: true }).eq('user_id', user!.id).eq('read', false)
@@ -71,16 +72,23 @@ export default function NotificationBell() {
     await supabase.from('notifications').delete().eq('id', id)
   }
 
-  async function markRead(id: string, taskId?: string, title?: string) {
-    await supabase.from('notifications').update({ read: true }).eq('id', id)
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n))
-    if (taskId) {
+  function taskTitleFromMessage(message: string) {
+    return message.match(/["“]([^"”]+)["”]/)?.[1]?.trim()
+  }
+
+  async function openNotification(notification: Notification) {
+    await supabase.from('notifications').update({ read: true }).eq('id', notification.id)
+    setNotifications(prev => prev.map(n => n.id === notification.id ? { ...n, read: true } : n))
+    if (notification.task_id || notification.type === 'task' || notification.type === 'review' || notification.type === 'approval' || notification.type === 'change_request') {
       setOpen(false)
-      window.dispatchEvent(new CustomEvent('open-task', { detail: { taskId } }))
-    } else if (title?.includes('Chat del Equipo')) {
+      window.dispatchEvent(new CustomEvent('open-task', { detail: {
+        taskId: notification.task_id,
+        taskTitle: taskTitleFromMessage(notification.message),
+      } }))
+    } else if (notification.title?.includes('Chat del Equipo')) {
       setOpen(false)
       window.dispatchEvent(new CustomEvent('open-chat', { detail: { room: 'team' } }))
-    } else if (title?.includes('en el chat de')) {
+    } else if (notification.title?.includes('en el chat de')) {
       setOpen(false)
       window.dispatchEvent(new CustomEvent('open-chat', { detail: { room: 'client' } }))
     }
@@ -150,7 +158,7 @@ export default function NotificationBell() {
               </div>
             )}
             {visibleNotifications.map(n => (
-              <div key={n.id} onClick={() => markRead(n.id, n.task_id, n.title)}
+              <div key={n.id} onClick={() => openNotification(n)}
                 className={`group px-4 py-3 border-b border-gray-50 cursor-pointer hover:bg-gray-50 transition ${!n.read ? 'bg-blue-50' : ''}`}>
                 <div className="flex items-start gap-2">
                   <span className="text-base shrink-0 mt-0.5">{typeIcon[n.type] || '🔔'}</span>
@@ -160,6 +168,11 @@ export default function NotificationBell() {
                     <p className="text-xs text-gray-400 mt-1">
                       {new Date(n.created_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                     </p>
+                    {(n.task_id || n.type === 'task' || n.type === 'review') && (
+                      <span className="mt-2 inline-flex items-center rounded-md bg-blue-600 px-2.5 py-1 text-[11px] font-semibold text-white">
+                        Abrir tarea →
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     {!n.read && (

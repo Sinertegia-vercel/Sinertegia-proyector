@@ -52,6 +52,7 @@ export default function TeamDashboard({ embedded = false }: Props) {
   const [teamMembers, setTeamMembers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
+  const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null)
   const [showCreateTask, setShowCreateTask] = useState(false)
   const [filter, setFilter] = useState<'todas' | 'pendiente' | 'en_progreso' | 'completada'>('todas')
   const [clientFilter, setClientFilter] = useState<string>('todos')
@@ -95,20 +96,36 @@ export default function TeamDashboard({ embedded = false }: Props) {
   useEffect(() => {
     async function handleOpenTask(e: Event) {
       const taskId = (e as CustomEvent).detail?.taskId
-      if (!taskId) return
-      const { data } = await supabase
+      const taskTitle = (e as CustomEvent).detail?.taskTitle
+      setTeamView('tasks')
+      setFilter('todas')
+      setClientFilter('todos')
+      setPriorityFilter('todos')
+
+      let query = supabase
         .from('tasks')
         .select('*, project:projects(*, client:clients(*)), links:task_links(*), comments:task_comments(content, created_at)')
-        .eq('id', taskId)
-        .single()
+      if (taskId) query = query.eq('id', taskId)
+      else if (taskTitle) query = query.eq('assigned_to', user!.id).ilike('title', taskTitle)
+      else return
+
+      const { data } = await query.order('created_at', { ascending: false }).limit(1).maybeSingle()
       if (data) {
-        setTeamView('tasks')
-        setSelectedTask(data as any)
+        setFocusedTaskId(data.id)
+        setSelectedTask(data as Task)
       }
     }
     window.addEventListener('open-task', handleOpenTask)
     return () => window.removeEventListener('open-task', handleOpenTask)
-  }, [])
+  }, [user])
+
+  useEffect(() => {
+    if (teamView !== 'tasks' || !focusedTaskId) return
+    const timer = window.setTimeout(() => {
+      document.querySelector(`[data-task-id="${focusedTaskId}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 120)
+    return () => window.clearTimeout(timer)
+  }, [teamView, focusedTaskId])
 
   useEffect(() => {
     const openProfile = () => setTeamView('profile')
@@ -450,7 +467,8 @@ export default function TeamDashboard({ embedded = false }: Props) {
             {filtered.map(task => (
               <tr
                 key={task.id}
-                className={`hover:bg-gray-50 cursor-pointer transition ${isOverdue(task) ? 'bg-red-50' : ''}`}
+                data-task-id={task.id}
+                className={`hover:bg-gray-50 cursor-pointer transition ${focusedTaskId === task.id ? 'notification-task-focus' : isOverdue(task) ? 'bg-red-50' : ''}`}
                 onClick={() => setSelectedTask(task)}
               >
                 <td className="px-4 py-3 max-w-[260px]">
