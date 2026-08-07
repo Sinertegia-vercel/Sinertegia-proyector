@@ -620,11 +620,11 @@ export default function TeamDashboard({ embedded = false }: Props) {
   // ── Vista embebida dentro del Admin ("Mis tareas"): se queda igual que antes ──
   if (embedded) {
     return (
-      <div className="p-6 max-w-6xl mx-auto">
+      <div className="p-6 lg:p-8 max-w-[1500px] mx-auto">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-xl font-bold text-gray-900">Mi espacio</h2>
-            <p className="text-sm text-gray-500">Hola {user?.full_name}</p>
+            <h2 className="text-2xl font-bold text-gray-900">Mis tareas</h2>
+            <p className="text-sm text-gray-500">Consulta y trabaja en las actividades que tienes asignadas.</p>
           </div>
           <button
             onClick={() => setShowCreateTask(true)}
@@ -636,40 +636,54 @@ export default function TeamDashboard({ embedded = false }: Props) {
 
         {reviewBanners}
 
-        <div className="flex gap-2 mb-6 border-b border-gray-200 overflow-x-auto">
-          {visibleNavItems.map(({ id, label, icon: Icon }) => (
-            <button key={id} onClick={() => setTeamView(id)}
-              className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition whitespace-nowrap ${teamView === id ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-              <Icon size={15} /> {label}
-            </button>
-          ))}
-        </div>
-
-        {otherViews}
-
-        {teamView === 'tasks' && (<>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+        <>
+          <div className="v2-stats-row">
             {[
-              { label: 'Total', value: stats.total, icon: ClipboardList, bg: 'bg-purple-100', color: 'text-purple-600' },
-              { label: 'Pendientes', value: stats.pendiente, icon: Clock, bg: 'bg-orange-100', color: 'text-orange-600' },
-              { label: 'En progreso', value: stats.en_progreso, icon: Loader2, bg: 'bg-blue-100', color: 'text-blue-600' },
-              { label: 'Completadas', value: stats.completada, icon: CheckCircle, bg: 'bg-green-100', color: 'text-green-600' },
-              { label: 'Vencidas', value: stats.vencidas, icon: XCircle, bg: 'bg-red-100', color: 'text-red-600' },
+              { label: 'Total de tareas', value: stats.total, icon: ClipboardList, bg: '#EEE9FE', color: '#7C3AED' },
+              { label: 'Pendientes', value: stats.pendiente, icon: Clock, bg: '#FEF0DE', color: '#EA580C' },
+              { label: 'En progreso', value: stats.en_progreso, icon: Loader2, bg: '#E8EEFE', color: '#2757EB' },
+              { label: 'Completadas', value: stats.completada, icon: CheckCircle, bg: '#E4F7F0', color: '#0C8A66' },
+              { label: 'Vencidas', value: stats.vencidas, icon: XCircle, bg: '#FCE4E8', color: '#E0304F' },
             ].map(({ label, value, icon: Icon, bg, color }) => (
-              <div key={label} className="bg-white border border-gray-200 rounded-2xl p-4 flex items-center gap-3 shadow-sm">
-                <div className={`w-11 h-11 rounded-full flex items-center justify-center shrink-0 ${bg}`}>
-                  <Icon size={18} className={color} />
+              <div key={label} className="v2-stat-card">
+                <div className="v2-stat-icon" style={{ background: bg }}>
+                  <Icon size={17} color={color} />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-2xl font-bold text-gray-900 leading-tight">{value}</p>
-                  <p className="text-xs text-gray-500 truncate">{label}</p>
+                  <p className="v2-stat-num">{value}</p>
+                  <p className="v2-stat-label">{label} Â· {stats.total > 0 ? Math.round((value / stats.total) * 100) : 0}%</p>
                 </div>
               </div>
             ))}
           </div>
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6 items-stretch">
+            <div className="lg:col-span-2 v2-surface flex flex-col min-h-[280px]">
+              <p className="text-sm font-bold text-gray-800 mb-2 display">Resumen de progreso</p>
+              <ResponsiveContainer width="100%" height={180}>
+                <AreaChart data={weeklyProgress}>
+                  <defs><linearGradient id="adminProgressFill" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#2757EB" stopOpacity={0.35} /><stop offset="95%" stopColor="#2757EB" stopOpacity={0} /></linearGradient></defs>
+                  <XAxis dataKey="day" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} width={28} allowDecimals={false} />
+                  <Tooltip formatter={(value) => [value, 'Completadas']} />
+                  <Area type="monotone" dataKey="completadas" stroke="#2757EB" strokeWidth={2} fill="url(#adminProgressFill)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="v2-surface flex flex-col min-h-[280px]">
+              <p className="text-sm font-bold text-gray-800 mb-2 display">Tareas por prioridad</p>
+              {priorityData.length === 0 ? <p className="text-xs text-gray-400 flex-1 flex items-center justify-center">{'Sin tareas a\u00fan'}</p> : <>
+                <ResponsiveContainer width="100%" height={130}><PieChart><Pie data={priorityData} dataKey="value" nameKey="name" innerRadius={42} outerRadius={62} paddingAngle={2}>{priorityData.map(item => <Cell key={item.name} fill={item.color} />)}</Pie><Tooltip /></PieChart></ResponsiveContainer>
+                <div className="flex flex-wrap gap-2.5 justify-center mt-2">{priorityData.map(item => <span key={item.name} className="flex items-center gap-1 text-[11px] text-gray-500"><span className="w-2 h-2 rounded-full" style={{ background: item.color }} /> {item.name} ({item.value})</span>)}</div>
+              </>}
+            </div>
+            <div className="v2-surface flex flex-col min-h-[280px]">
+              <p className="text-sm font-bold text-gray-800 mb-3 display">{'Pr\u00f3ximas entregas'}</p>
+              {upcoming.length === 0 ? <p className="text-xs text-gray-400 flex-1 flex items-center justify-center text-center">{'No tienes entregas pr\u00f3ximas'}</p> : <div className="space-y-2.5 flex-1">{upcoming.map(task => <button type="button" key={task.id} className="flex w-full items-center gap-2.5 text-left" onClick={() => setSelectedTask(task)}><div className="w-8 h-8 rounded-lg bg-purple-50 flex items-center justify-center shrink-0"><CalendarDays size={14} className="text-purple-500" /></div><div className="min-w-0"><p className="text-xs text-gray-400">{new Date(`${task.commitment_date}T00:00:00`).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}</p><p className="text-sm text-gray-700 truncate">{task.title}</p></div></button>)}</div>}
+            </div>
+          </div>
           {filterPills}
           {taskTable}
-        </>)}
+        </>
 
         {taskModals}
       </div>
