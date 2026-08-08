@@ -164,8 +164,13 @@ export default function TeamPerformance({ teamMembers, tasks }: Props) {
 
   function getMemberKPIs(member: User) {
     const memberId = member.id
-    const weeklyHours = Object.values(resolvedWorkSchedule(member)).reduce((total, day) => total + (day.enabled ? day.end - day.start : 0), 0)
+    const workSchedule = resolvedWorkSchedule(member)
+    const enabledDays = Object.values(workSchedule).filter(day => day.enabled)
+    const weeklyHours = enabledDays.reduce((total, day) => total + (day.end - day.start), 0)
     const expectedHours = period === 'semana' ? weeklyHours : Math.round(weeklyHours * 4.33)
+    const scheduleLabel = enabledDays.length
+      ? `${enabledDays.length} días · ${weeklyHours}h/semana`
+      : 'Sin jornada asignada'
 
     const memberTasks = tasks.filter(t => t.assigned_to === memberId)
     const completed = memberTasks.filter(t => t.status === 'completada')
@@ -208,10 +213,10 @@ export default function TeamPerformance({ teamMembers, tasks }: Props) {
       (noRetrabajoRate * 0.25) +
       (Math.min(delivered * 10, 100) * 0.2) +
       (avgRating * 20 * 0.2) +
-      (Math.min(totalHours / expectedHours * 100, 100) * 0.15)
+      ((expectedHours > 0 ? Math.min(totalHours / expectedHours * 100, 100) : 0) * 0.15)
     )
 
-    return { regularMins, overtimeMins, totalHours, onTimeRate, delivered, noRetrabajoRate, avgRating, score, sessionCount: memberSessions.length, startHour, endHour, dailyHours }
+    return { regularMins, overtimeMins, totalHours, onTimeRate, delivered, noRetrabajoRate, avgRating, score, sessionCount: memberSessions.length, scheduleLabel }
   }
 
   const allKPIs = teamMembers.map(m => ({ member: m, kpis: getMemberKPIs(m) }))
@@ -486,7 +491,7 @@ export default function TeamPerformance({ teamMembers, tasks }: Props) {
 
               {/* Ubicaciones */}
               <div className="pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-gray-400">
-                <span>🕘 {kpis.startHour}:00 – {kpis.endHour}:00 ({kpis.dailyHours}h/día)</span>
+                <span>🕘 {kpis.scheduleLabel}</span>
                 {kpis.sessionCount > 0 && <span className="flex items-center gap-1"><Building2 size={11} />{kpis.sessionCount} ses.</span>}
               </div>
             </div>

@@ -290,7 +290,11 @@ export default function AdminDashboard() {
     return urgency(b.id) - urgency(a.id)
   })
 
-  const permittedAdminItems = user?.is_super_admin ? ADMIN_NAV_ITEMS : ADMIN_NAV_ITEMS.filter((item) => item.id !== 'permisos' && adminPermissions[item.id] !== false)
+  // Rendimiento forma parte de la operación base de cualquier administrador.
+  // No debe desaparecer por permisos heredados o registros antiguos.
+  const permittedAdminItems = user?.is_super_admin
+    ? ADMIN_NAV_ITEMS
+    : ADMIN_NAV_ITEMS.filter((item) => item.id === 'performance' || (item.id !== 'permisos' && adminPermissions[item.id] !== false))
   const navItems = [
     ...permittedAdminItems.map((item) => ({
       ...item,
