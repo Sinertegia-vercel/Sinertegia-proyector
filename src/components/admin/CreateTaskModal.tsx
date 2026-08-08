@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link2, Plus, Trash2, X } from 'lucide-react'
+import { FileUp, Link2, Plus, Trash2, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import type { Project, User, Priority, Department } from '../../types'
@@ -44,6 +44,7 @@ export default function CreateTaskModal({ projects, teamMembers, defaultProjectI
   const [templateType, setTemplateType] = useState<'vsl' | 'webinar'>('vsl')
   const [referenceLinks, setReferenceLinks] = useState<Array<{ label: string; url: string }>>([])
   const [linkDraft, setLinkDraft] = useState({ label: '', url: '' })
+  const [pendingFiles, setPendingFiles] = useState<File[]>([])
 
   function addReferenceLink() {
     const url = linkDraft.url.trim()
@@ -59,6 +60,17 @@ export default function CreateTaskModal({ projects, teamMembers, defaultProjectI
       url,
     }])
     setLinkDraft({ label: '', url: '' })
+    setError('')
+  }
+
+  function addFiles(files: FileList | null) {
+    if (!files) return
+    const selected = Array.from(files)
+    if (selected.some(file => file.size > 20 * 1024 * 1024)) {
+      setError('Cada archivo debe pesar máximo 20 MB')
+      return
+    }
+    setPendingFiles(current => [...current, ...selected])
     setError('')
   }
 
@@ -92,6 +104,24 @@ export default function CreateTaskModal({ projects, teamMembers, defaultProjectI
       )
       if (linksError) {
         setError('La tarea se creó, pero no se pudieron guardar sus links. Abre la tarea para agregarlos.')
+        setSaving(false)
+        return
+      }
+    }
+
+    for (const file of pendingFiles) {
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, '_')
+      const path = `task-deliverables/${createdTask.id}/${Date.now()}_${safeName}`
+      const { error: uploadError } = await supabase.storage.from('chat-files').upload(path, file, { contentType: file.type || undefined })
+      if (uploadError) {
+        setError(`La tarea se creó, pero no se pudo subir ${file.name}. Abre la tarea para intentarlo nuevamente.`)
+        setSaving(false)
+        return
+      }
+      const { data: { publicUrl } } = supabase.storage.from('chat-files').getPublicUrl(path)
+      const { error: fileLinkError } = await supabase.from('task_links').insert({ task_id: createdTask.id, label: file.name, url: publicUrl })
+      if (fileLinkError) {
+        setError(`El archivo ${file.name} subió, pero no pudo vincularse a la tarea.`)
         setSaving(false)
         return
       }
@@ -182,14 +212,16 @@ export default function CreateTaskModal({ projects, teamMembers, defaultProjectI
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">Links de referencia</label>
-            <p className="mb-2 text-xs text-gray-400">Agrega Drive, documentos, videos, diseños o cualquier material necesario para realizar la tarea.</p>
+            <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-gray-500">Entregables</label>
             <div className="grid gap-2 sm:grid-cols-[minmax(0,.8fr)_minmax(0,1.4fr)_auto]">
-              <input value={linkDraft.label} onChange={event => setLinkDraft(current => ({ ...current, label: event.target.value }))} placeholder="Nombre del link" className="rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+              <input value={linkDraft.label} onChange={event => setLinkDraft(current => ({ ...current, label: event.target.value }))} placeholder="Nombre (opcional)" className="rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
               <input type="url" value={linkDraft.url} onChange={event => setLinkDraft(current => ({ ...current, url: event.target.value }))} placeholder="https://..." className="rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
               <button type="button" onClick={addReferenceLink} disabled={!linkDraft.url.trim()} className="grid h-10 w-10 place-items-center rounded-lg bg-blue-600 text-white disabled:opacity-40" title="Agregar link"><Plus size={18} /></button>
             </div>
             {referenceLinks.length > 0 && <div className="mt-2 space-y-2">{referenceLinks.map((link, index) => <div key={`${link.url}-${index}`} className="flex items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2"><Link2 size={14} className="shrink-0 text-blue-600" /><div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold text-blue-800">{link.label}</p><p className="truncate text-[11px] text-blue-500">{link.url}</p></div><button type="button" onClick={() => setReferenceLinks(current => current.filter((_, itemIndex) => itemIndex !== index))} className="text-gray-400 hover:text-red-500" title="Quitar link"><Trash2 size={14} /></button></div>)}</div>}
+            <input id="new-task-deliverables" type="file" multiple className="hidden" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.html,.htm,.zip,.mp4,.mov" onChange={event => { addFiles(event.target.files); event.target.value = '' }} />
+            <label htmlFor="new-task-deliverables" className="mt-2 flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-gray-300 px-3 py-3 text-sm text-gray-500 transition hover:border-blue-400 hover:bg-blue-50 hover:text-blue-600"><FileUp size={16} /> Subir archivo (imagen, PDF, Word, .html, etc.)</label>
+            {pendingFiles.length > 0 && <div className="mt-2 space-y-2">{pendingFiles.map((file, index) => <div key={`${file.name}-${file.size}-${index}`} className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2"><FileUp size={14} className="shrink-0 text-gray-500" /><span className="min-w-0 flex-1 truncate text-xs font-medium text-gray-700">{file.name}</span><button type="button" onClick={() => setPendingFiles(current => current.filter((_, itemIndex) => itemIndex !== index))} className="text-gray-400 hover:text-red-500" title="Quitar archivo"><Trash2 size={14} /></button></div>)}</div>}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
