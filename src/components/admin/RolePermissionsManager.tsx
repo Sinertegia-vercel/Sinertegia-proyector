@@ -255,6 +255,32 @@ export default function RolePermissionsManager() {
     setSaving('')
   }
 
+  async function returnToTeam() {
+    if (!selected?.userId || selected.role !== 'admin' || selected.isSuperAdmin || selected.userId === currentUser?.id) return
+    if (!window.confirm(`¿Regresar a ${selected.name} al Equipo?\n\nConservará sus tareas, historial y archivos. Dejará de tener acceso administrativo.`)) return
+    setSaving('return-team')
+    setError('')
+    const { data: updated, error: updateError } = await supabase
+      .from('users')
+      .update({ role: 'team', active: true })
+      .eq('id', selected.userId)
+      .eq('role', 'admin')
+      .select('id')
+      .maybeSingle()
+    if (updateError || !updated) {
+      setError(updateError?.message ? `No se pudo regresar al Equipo: ${updateError.message}` : 'No se pudo cambiar el rol de esta persona.')
+      setSaving('')
+      return
+    }
+    await supabase.from('user_permissions').delete().eq('user_id', selected.userId)
+    const userId = selected.userId
+    await load()
+    setTab('team')
+    setSelectedId(userId)
+    setSearch('')
+    setSaving('')
+  }
+
   async function createDepartment() {
     const name = newDepartment.trim()
     if (!name) return
@@ -274,14 +300,15 @@ export default function RolePermissionsManager() {
     setSaving('')
   }
 
-  async function deactivate() {
+  async function toggleAccess() {
     if (!selected || selected.isSuperAdmin || selected.userId === currentUser?.id) return
-    if (!window.confirm(`¿Desactivar el acceso de ${selected.name}? El historial se conservará.`)) return
+    const nextActive = !selected.active
+    if (!window.confirm(nextActive ? `¿Reactivar el acceso de ${selected.name}?` : `¿Desactivar el acceso de ${selected.name}? El historial se conservará.`)) return
     setSaving('delete')
     if (selected.role === 'client') {
-      await supabase.from('clients').update({ active: false }).eq('id', selected.id)
-      if (selected.userId) await supabase.from('users').update({ active: false }).eq('id', selected.userId)
-    } else if (selected.userId) await supabase.from('users').update({ active: false }).eq('id', selected.userId)
+      await supabase.from('clients').update({ active: nextActive }).eq('id', selected.id)
+      if (selected.userId) await supabase.from('users').update({ active: nextActive }).eq('id', selected.userId)
+    } else if (selected.userId) await supabase.from('users').update({ active: nextActive }).eq('id', selected.userId)
     await load()
     setSaving('')
   }
@@ -546,12 +573,21 @@ export default function RolePermissionsManager() {
                         {saving === 'promote-admin' ? <LoaderCircle className="animate-spin" size={14} /> : <ShieldCheck size={14} />} Asignar administrador
                       </button>
                     )}
+                    {selected.role === 'admin' && (
+                      <button
+                        onClick={returnToTeam}
+                        disabled={!!saving}
+                        className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {saving === 'return-team' ? <LoaderCircle className="animate-spin" size={14} /> : <UserX size={14} />} Regresar a Equipo
+                      </button>
+                    )}
                     <button
-                      onClick={deactivate}
-                      disabled={saving === 'delete' || !selected.active}
+                      onClick={toggleAccess}
+                      disabled={saving === 'delete'}
                       className="flex items-center gap-2 rounded-lg border border-amber-200 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      <UserX size={14} /> {selected.active ? 'Desactivar acceso' : 'Acceso desactivado'}
+                      {saving === 'delete' ? <LoaderCircle className="animate-spin" size={14} /> : <UserX size={14} />} {selected.active ? 'Desactivar acceso' : 'Reactivar acceso'}
                     </button>
                     <button
                       onClick={prepareRemoval}

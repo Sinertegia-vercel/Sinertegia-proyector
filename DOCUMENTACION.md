@@ -241,3 +241,4 @@ No hace falta tocar nada en Vercel para esto — la conexión GitHub↔Vercel ya
 - En el menú lateral, **Mi perfil** y **Cerrar sesión** permanecen anclados al fondo de la pantalla; si el menú administrativo supera la altura disponible, se conservan al final del desplazamiento lateral.
 - **Rendimiento** permanece visible para administradores y superadministradores como parte de la operación base, con el scorecard previo de horas, puntualidad, entregas, retrabajo y calificación del cliente.
 - La alta de integrantes se concentra en **Usuarios y permisos**; el scorecard de **Rendimiento** ya no muestra el botón duplicado **Agregar integrante**.
+- En **Usuarios y permisos**, un administrador puede volver a **Equipo** sin perder tareas ni historial. **Desactivar acceso** y **cambiar de rol** son acciones separadas, y una cuenta desactivada puede reactivarse desde el mismo directorio.
