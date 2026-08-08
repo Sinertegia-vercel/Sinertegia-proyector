@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
-import { TrendingUp, TrendingDown, Clock, Building2, Star, ChevronLeft, ChevronRight, UserPlus, X, Copy, Check } from 'lucide-react'
+import { TrendingUp, TrendingDown, Clock, Building2, Star, ChevronLeft, ChevronRight, X, Copy, Check } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import type { Task, User, Department } from '../../types'
 import UserAvatar from '../shared/UserAvatar'
@@ -29,12 +29,9 @@ const DEPT_LABELS: Record<string, string> = {
 }
 
 const DEPARTMENTS: { value: Department; label: string }[] = [
-  { value: 'edicion', label: 'Edición' },
-  { value: 'grabacion', label: 'Grabación' },
-  { value: 'diseno', label: 'Diseño' },
-  { value: 'copy', label: 'Copy' },
-  { value: 'webmaster', label: 'Webmaster' },
-  { value: 'trafficker', label: 'Trafficker' },
+  { value: 'edicion', label: 'Edición' }, { value: 'grabacion', label: 'Grabación' },
+  { value: 'diseno', label: 'Diseño' }, { value: 'copy', label: 'Copy' },
+  { value: 'webmaster', label: 'Webmaster' }, { value: 'trafficker', label: 'Trafficker' },
   { value: 'lider', label: 'Líder de Proyecto' },
 ]
 
@@ -80,10 +77,8 @@ export default function TeamPerformance({ teamMembers, tasks }: Props) {
   const [ratings, setRatings] = useState<RatingRow[]>([])
   const [period, setPeriod] = useState<'semana' | 'mes'>('semana')
   const [weekStart, setWeekStart] = useState<Date>(() => getMondayOf(new Date()))
-  const [showInviteModal, setShowInviteModal] = useState(false)
-  const [inviteForm, setInviteForm] = useState<{ email: string; full_name: string; role: 'team' | 'admin'; department: Department | '' }>(
-    { email: '', full_name: '', role: 'team', department: '' }
-  )
+  const [showInviteModal] = useState(false)
+  const [inviteForm, setInviteForm] = useState<{ email: string; full_name: string; role: 'team' | 'admin'; department: Department | '' }>({ email: '', full_name: '', role: 'team', department: '' })
   const [inviteSaving, setInviteSaving] = useState(false)
   const [inviteError, setInviteError] = useState('')
   const [inviteLink, setInviteLink] = useState('')
@@ -92,36 +87,19 @@ export default function TeamPerformance({ teamMembers, tasks }: Props) {
   async function generateTeamInvite(e: React.FormEvent) {
     e.preventDefault()
     if (!inviteForm.email.trim()) return
-    setInviteSaving(true)
-    setInviteError('')
-    const { data, error } = await supabase.from('team_invitations').insert({
-      email: inviteForm.email.trim(),
-      full_name: inviteForm.full_name.trim() || null,
-      role: inviteForm.role,
-      department: inviteForm.department || null,
-    }).select('id').single()
-    if (error || !data) {
-      setInviteError('No se pudo generar la invitación: ' + (error?.message || ''))
-      setInviteSaving(false)
-      return
-    }
-    setInviteLink(`https://agencia.sinertegia.com?team_invite=${data.id}`)
-    setInviteSaving(false)
+    setInviteSaving(true); setInviteError('')
+    const { data, error } = await supabase.from('team_invitations').insert({ email: inviteForm.email.trim(), full_name: inviteForm.full_name.trim() || null, role: inviteForm.role, department: inviteForm.department || null }).select('id').single()
+    if (error || !data) { setInviteError('No se pudo generar la invitación: ' + (error?.message || '')); setInviteSaving(false); return }
+    setInviteLink(`https://agencia.sinertegia.com?team_invite=${data.id}`); setInviteSaving(false)
   }
 
   function copyInviteLink() {
-    navigator.clipboard.writeText(inviteLink)
-    setLinkCopied(true)
-    setTimeout(() => setLinkCopied(false), 2000)
+    navigator.clipboard.writeText(inviteLink); setLinkCopied(true); setTimeout(() => setLinkCopied(false), 2000)
   }
 
   function closeInviteModal() {
-    setShowInviteModal(false)
-    setInviteForm({ email: '', full_name: '', role: 'team', department: '' })
-    setInviteLink('')
-    setInviteError('')
+    setInviteForm({ email: '', full_name: '', role: 'team', department: '' }); setInviteLink(''); setInviteError('')
   }
-
   useEffect(() => {
     fetchSessions()
     fetchRatings()
@@ -246,10 +224,6 @@ export default function TeamPerformance({ teamMembers, tasks }: Props) {
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <h3 className="font-bold text-gray-800 text-lg">Scorecard del equipo</h3>
         <div className="flex items-center gap-2">
-          <button onClick={() => setShowInviteModal(true)}
-            className="flex items-center gap-1.5 text-xs font-semibold text-white bg-gradient-to-r from-blue-700 to-red-600 px-3 py-2 rounded-lg hover:opacity-90 transition">
-            <UserPlus size={14} /> Agregar integrante
-          </button>
           {/* Toggle semana/mes */}
           <div className="flex rounded-lg overflow-hidden border border-gray-200">
             {(['semana', 'mes'] as const).map(p => (
