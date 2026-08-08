@@ -163,8 +163,8 @@ export default function TeamPerformance({ teamMembers, tasks }: Props) {
 
   function getMemberKPIs(member: User) {
     const memberId = member.id
-    const startHour = 9
-    const endHour = 18
+    const startHour = member.work_start ?? 9
+    const endHour = member.work_end ?? 18
     const dailyHours = endHour - startHour
     const expectedHours = period === 'semana' ? dailyHours * 5 : dailyHours * 22
 

@@ -33,10 +33,11 @@ const WorkSessionContext = createContext<WorkSessionContextType>({
   elapsedMinutes: 0, isInOvertime: false,
 })
 
-function getScheduleHours(_user: User, date = new Date()) {
+function getScheduleHours(user: User, date = new Date()) {
+  if (date.getDay() === 6) return { start: 9, end: 14 }
   return {
-    start: 9,
-    end: date.getDay() === 6 ? 14 : 18,
+    start: user.work_start ?? 9,
+    end: user.work_end ?? 18,
   }
 }
 
