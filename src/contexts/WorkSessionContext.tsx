@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useState, useRef } f
 import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
 import type { User } from '../types'
+import { scheduleForDate } from '../lib/workSchedule'
 
 export interface WorkSession {
   id: string
@@ -34,11 +35,7 @@ const WorkSessionContext = createContext<WorkSessionContextType>({
 })
 
 function getScheduleHours(user: User, date = new Date()) {
-  if (date.getDay() === 6) return { start: 9, end: 14 }
-  return {
-    start: user.work_start ?? 9,
-    end: user.work_end ?? 18,
-  }
+  return scheduleForDate(user, date)
 }
 
 function getLocalDateKey(date = new Date()) {
@@ -57,6 +54,9 @@ function calcMinutes(startedAt: string, endedAt: string, user: User) {
   const start = new Date(startedAt)
   const end = new Date(endedAt)
   const schedule = getScheduleHours(user, start)
+  if (!schedule.enabled) {
+    return { regular_minutes: 0, overtime_minutes: Math.max(0, Math.round((end.getTime() - start.getTime()) / 60000)) }
+  }
   const schedEnd = new Date(start)
   schedEnd.setHours(schedule.end, 0, 0, 0)
   const schedStart = new Date(start)
@@ -82,8 +82,8 @@ export function WorkSessionProvider({ children }: { children: React.ReactNode })
   const [elapsedMinutes, setElapsedMinutes] = useState(0)
   const overtimeAlerted = useRef(false)
 
-  const schedule = user ? getScheduleHours(user) : { start: 9, end: 18 }
-  const isInOvertime = new Date().getHours() >= schedule.end
+  const schedule = user ? getScheduleHours(user) : { enabled: true, start: 9, end: 18 }
+  const isInOvertime = !schedule.enabled || new Date().getHours() >= schedule.end
 
   const loadTodaySession = useCallback(async () => {
     if (!user || user.role === 'client') return
@@ -113,7 +113,9 @@ export function WorkSessionProvider({ children }: { children: React.ReactNode })
     await Promise.all(staleSessions.map(async session => {
       const startedAt = new Date(session.started_at)
       const scheduledEnd = new Date(startedAt)
-      scheduledEnd.setHours(getScheduleHours(user, startedAt).end, 0, 0, 0)
+      const staleSchedule = getScheduleHours(user, startedAt)
+      if (staleSchedule.enabled) scheduledEnd.setHours(staleSchedule.end, 0, 0, 0)
+      else scheduledEnd.setTime(startedAt.getTime())
       const endedAt = scheduledEnd.toISOString()
       const mins = calcMinutes(session.started_at, endedAt, user)
       await supabase.from('work_sessions').update({ ended_at: endedAt, ...mins }).eq('id', session.id)
@@ -146,8 +148,9 @@ export function WorkSessionProvider({ children }: { children: React.ReactNode })
       setElapsedMinutes(Math.max(0, Math.floor((Date.now() - start.getTime()) / 60000)))
 
       const now = new Date()
-      const endHour = user ? getScheduleHours(user, now).end : 18
-      if (now.getHours() === endHour && now.getMinutes() === 0 && !overtimeAlerted.current) {
+      const todaySchedule = user ? getScheduleHours(user, now) : { enabled: true, start: 9, end: 18 }
+      const reachedOvertime = !todaySchedule.enabled || (now.getHours() === todaySchedule.end && now.getMinutes() === 0)
+      if (reachedOvertime && !overtimeAlerted.current) {
         overtimeAlerted.current = true
         setShowOvertimeModal(true)
       }

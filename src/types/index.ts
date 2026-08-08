@@ -1,5 +1,8 @@
 export type Role = 'admin' | 'team' | 'client'
 
+export interface WorkDaySchedule { enabled: boolean; start: number; end: number }
+export type WorkSchedule = Record<string, WorkDaySchedule>
+
 export interface ChatRoom {
   id: string
   type: 'team' | 'client'
@@ -53,6 +56,7 @@ export interface User {
   created_at: string
   work_start?: number
   work_end?: number
+  work_schedule?: WorkSchedule
   active?: boolean
   is_super_admin?: boolean
   directory_hidden?: boolean

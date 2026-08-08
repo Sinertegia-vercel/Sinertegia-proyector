@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { Check, Clock3, Copy, KeyRound, LoaderCircle, Mail, Plus, Search, ShieldCheck, Trash2, UserX, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import type { Client, User } from '../../types'
+import type { Client, User, WorkSchedule } from '../../types'
 import UserAvatar from '../shared/UserAvatar'
+import { defaultWorkSchedule, formatHour, resolvedWorkSchedule, WEEK_DAYS } from '../../lib/workSchedule'
 
 type Tab = 'client' | 'team' | 'admin'
 type Section = { key: string; label: string; description: string }
@@ -207,19 +208,15 @@ export default function RolePermissionsManager() {
     setSaving('')
   }
 
-  async function updateWorkSchedule(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
+  async function updateWorkSchedule(schedule: WorkSchedule) {
     if (!selected?.userId || selected.role !== 'team') return
-    const data = new FormData(event.currentTarget)
-    const start = Number(data.get('work_start'))
-    const end = Number(data.get('work_end'))
-    if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end > 23 || end <= start) {
-      setError('La hora de salida debe ser posterior a la hora de entrada.')
+    if (Object.values(schedule).some(day => day.enabled && (day.end <= day.start || day.start < 0 || day.end > 23))) {
+      setError('En cada día activo, la hora de salida debe ser posterior a la entrada.')
       return
     }
     setSaving('work-schedule')
     setError('')
-    const { error: saveError } = await supabase.from('users').update({ work_start: start, work_end: end }).eq('id', selected.userId)
+    const { error: saveError } = await supabase.from('users').update({ work_schedule: schedule }).eq('id', selected.userId)
     if (saveError) setError('No se pudo guardar la jornada laboral de esta persona.')
     else await load()
     setSaving('')
@@ -579,15 +576,7 @@ export default function RolePermissionsManager() {
                     <button type="button" onClick={() => setDepartmentOpen(true)} className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-3 py-2.5 text-xs font-bold text-blue-600 hover:bg-blue-50"><Plus size={14} /> Nuevo departamento</button>
                   </div>
                   <p className="mt-2 text-xs text-indigo-600">La lista de Equipo se ordena automáticamente por estos departamentos.</p>
-                  <form key={`${selected.userId}-${users.find(user => user.id === selected.userId)?.work_start}-${users.find(user => user.id === selected.userId)?.work_end}`} onSubmit={updateWorkSchedule} className="mt-4 border-t border-indigo-100 pt-4">
-                    <div className="mb-2 flex items-center gap-2 text-sm font-bold text-gray-800"><Clock3 size={16} className="text-blue-600" /> Jornada laboral de lunes a viernes</div>
-                    <div className="flex flex-wrap items-end gap-3">
-                      <label className="min-w-[140px] flex-1 text-xs font-bold text-gray-700">Hora de entrada<select name="work_start" defaultValue={users.find(user => user.id === selected.userId)?.work_start ?? 9} className="mt-1.5 w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm font-medium outline-none focus:border-blue-500">{Array.from({ length: 24 }, (_, hour) => <option key={hour} value={hour}>{String(hour).padStart(2, '0')}:00</option>)}</select></label>
-                      <label className="min-w-[140px] flex-1 text-xs font-bold text-gray-700">Hora de salida<select name="work_end" defaultValue={users.find(user => user.id === selected.userId)?.work_end ?? 18} className="mt-1.5 w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm font-medium outline-none focus:border-blue-500">{Array.from({ length: 24 }, (_, hour) => <option key={hour} value={hour}>{String(hour).padStart(2, '0')}:00</option>)}</select></label>
-                      <button type="submit" disabled={saving === 'work-schedule'} className="flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50">{saving === 'work-schedule' && <LoaderCircle size={14} className="animate-spin" />} Guardar horario</button>
-                    </div>
-                    <p className="mt-2 text-xs text-indigo-600">El sábado se mantiene de 09:00 a 14:00. Al finalizar la jornada, el tiempo adicional se registra como horas extra.</p>
-                  </form>
+                  <WeeklyScheduleEditor key={`${selected.userId}-${JSON.stringify(users.find(user => user.id === selected.userId)?.work_schedule)}`} user={users.find(user => user.id === selected.userId)} saving={saving === 'work-schedule'} onSave={updateWorkSchedule} />
                 </div>
               )}
               {!selected.userId ? (
@@ -843,4 +832,30 @@ export default function RolePermissionsManager() {
       )}
     </div>
   )
+}
+
+function WeeklyScheduleEditor({ user, saving, onSave }: { user?: User; saving: boolean; onSave: (schedule: WorkSchedule) => Promise<void> }) {
+  const [schedule, setSchedule] = useState<WorkSchedule>(() => user ? resolvedWorkSchedule(user) : defaultWorkSchedule())
+  const hours = Array.from({ length: 24 }, (_, hour) => hour)
+
+  function updateDay(day: string, patch: Partial<WorkSchedule[string]>) {
+    setSchedule(current => ({ ...current, [day]: { ...current[day], ...patch } }))
+  }
+
+  return <div className="mt-4 border-t border-indigo-100 pt-4">
+    <div className="mb-1 flex items-center gap-2 text-sm font-bold text-gray-800"><Clock3 size={16} className="text-blue-600" /> Jornada laboral semanal</div>
+    <p className="mb-3 text-xs text-indigo-600">Activa los días laborables y define una entrada y salida diferente para cada uno.</p>
+    <div className="space-y-2">
+      {WEEK_DAYS.map(day => {
+        const value = schedule[day.key]
+        return <div key={day.key} className={`grid items-center gap-2 rounded-lg border px-3 py-2 sm:grid-cols-[120px_1fr_1fr] ${value.enabled ? 'border-blue-100 bg-white' : 'border-gray-200 bg-gray-50'}`}>
+          <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-gray-700"><input type="checkbox" checked={value.enabled} onChange={event => updateDay(day.key, { enabled: event.target.checked })} className="h-4 w-4 accent-blue-600" />{day.label}</label>
+          <label className="text-[11px] font-semibold text-gray-500">Entrada<select value={value.start} disabled={!value.enabled} onChange={event => updateDay(day.key, { start: Number(event.target.value) })} className="mt-1 w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-xs disabled:opacity-50">{hours.map(hour => <option key={hour} value={hour}>{formatHour(hour)}</option>)}</select></label>
+          <label className="text-[11px] font-semibold text-gray-500">Salida<select value={value.end} disabled={!value.enabled} onChange={event => updateDay(day.key, { end: Number(event.target.value) })} className="mt-1 w-full rounded-md border border-gray-300 bg-white px-2 py-1.5 text-xs disabled:opacity-50">{hours.map(hour => <option key={hour} value={hour}>{formatHour(hour)}</option>)}</select></label>
+        </div>
+      })}
+    </div>
+    <button type="button" onClick={() => void onSave(schedule)} disabled={saving} className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50">{saving && <LoaderCircle size={14} className="animate-spin" />} Guardar jornada semanal</button>
+    <p className="mt-2 text-xs text-indigo-600">Al terminar la jornada configurada de cada día, el tiempo adicional se registrará como horas extra.</p>
+  </div>
 }

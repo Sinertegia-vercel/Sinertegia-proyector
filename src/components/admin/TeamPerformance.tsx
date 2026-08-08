@@ -3,6 +3,7 @@ import { TrendingUp, TrendingDown, Clock, Building2, Star, ChevronLeft, ChevronR
 import { supabase } from '../../lib/supabase'
 import type { Task, User, Department } from '../../types'
 import UserAvatar from '../shared/UserAvatar'
+import { resolvedWorkSchedule, scheduleForDate } from '../../lib/workSchedule'
 
 interface Props {
   teamMembers: User[]
@@ -163,10 +164,8 @@ export default function TeamPerformance({ teamMembers, tasks }: Props) {
 
   function getMemberKPIs(member: User) {
     const memberId = member.id
-    const startHour = member.work_start ?? 9
-    const endHour = member.work_end ?? 18
-    const dailyHours = endHour - startHour
-    const expectedHours = period === 'semana' ? dailyHours * 5 : dailyHours * 22
+    const weeklyHours = Object.values(resolvedWorkSchedule(member)).reduce((total, day) => total + (day.enabled ? day.end - day.start : 0), 0)
+    const expectedHours = period === 'semana' ? weeklyHours : Math.round(weeklyHours * 4.33)
 
     const memberTasks = tasks.filter(t => t.assigned_to === memberId)
     const completed = memberTasks.filter(t => t.status === 'completada')
@@ -180,9 +179,11 @@ export default function TeamPerformance({ teamMembers, tasks }: Props) {
     // 2. Conectadas a tiempo según horario individual (gracia de 5 min)
     const onTime = memberSessions.filter(s => {
       const d = new Date(s.started_at)
+      const daySchedule = scheduleForDate(member, d)
+      if (!daySchedule.enabled) return false
       const h = d.getHours()
       const m = d.getMinutes()
-      return h < startHour || (h === startHour && m <= 5)
+      return h < daySchedule.start || (h === daySchedule.start && m <= 5)
     })
     const onTimeRate = memberSessions.length > 0
       ? Math.round((onTime.length / memberSessions.length) * 100) : 0
