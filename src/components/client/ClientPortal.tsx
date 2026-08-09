@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { ExternalLink, Send, Camera, Loader2, PlusCircle, CheckCircle, X, ChevronDown, CheckCheck, ClipboardList, LayoutGrid, CalendarDays, Map, MessageCircle, Link2, Clock3, Eye, Sparkles } from 'lucide-react'
+import { ExternalLink, Send, Camera, Loader2, PlusCircle, CheckCircle, X, ChevronDown, CheckCheck, ClipboardList, LayoutGrid, CalendarDays, Map, MessageCircle, Link2, Clock3, Eye, Sparkles, UserRound, LogOut } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import type { Task, Project, Client } from '../../types'
@@ -13,10 +13,11 @@ import RequestTaskModal from './RequestTaskModal'
 import Logo from '../shared/Logo'
 import TopBarActions from '../shared/TopBarActions'
 import StarRating from './StarRating'
+import UserProfile from '../shared/UserProfile'
 import { DEPT_LABELS, DEPT_COLORS, DEPT_ORDER } from '../../data/projectTemplates'
 import '../../styles/DashboardV2.css'
 
-type Tab = 'mistareas' | 'progreso' | 'area' | 'calendario' | 'roadmap' | 'chat' | 'entregables'
+type Tab = 'mistareas' | 'progreso' | 'area' | 'calendario' | 'roadmap' | 'chat' | 'entregables' | 'profile'
 
 const CLIENT_NAV_ITEMS = [
   { id: 'mistareas' as Tab, label: 'Mis tareas', icon: CheckCheck },
@@ -91,6 +92,12 @@ export default function ClientPortal() {
     }
     window.addEventListener('open-chat', handleOpenChat)
     return () => window.removeEventListener('open-chat', handleOpenChat)
+  }, [])
+
+  useEffect(() => {
+    const handleOpenProfile = () => setActiveTab('profile')
+    window.addEventListener('open-profile', handleOpenProfile)
+    return () => window.removeEventListener('open-profile', handleOpenProfile)
   }, [])
 
   async function fetchData() {
@@ -283,6 +290,14 @@ export default function ClientPortal() {
               {label}
             </button>
           ))}
+          <div className="mt-auto border-t border-white/10 pt-3">
+            <button type="button" onClick={() => setActiveTab('profile')} className={`v2-profile-link ${activeTab === 'profile' ? 'active' : ''}`}>
+              <UserRound size={17} /><span>Mi perfil</span>
+            </button>
+            <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('request-logout'))} className="v2-logout-link">
+              <LogOut size={17} /><span>Cerrar sesión</span>
+            </button>
+          </div>
         </aside>
 
         <div className="v2-main bg-[#f5f7fb]" style={{ position: 'relative' }}>
@@ -313,18 +328,12 @@ export default function ClientPortal() {
       )}
 
       {/* Progress card */}
-      {selectedProject && (
+      {selectedProject && activeTab === 'mistareas' && (
         <>
-          <section className="relative mb-5 min-h-[240px] overflow-hidden rounded-3xl text-white shadow-[0_18px_50px_rgba(21,45,110,0.20)]">
-            {coverImage ? (
-              <img src={coverImage} alt={`Portada de ${selectedProject.name}`} className="absolute inset-0 h-full w-full object-cover object-center" />
-            ) : (
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-700" />
-            )}
-            <div className="absolute inset-0 bg-[linear-gradient(100deg,rgba(10,25,72,.94)_0%,rgba(25,65,175,.82)_52%,rgba(76,29,149,.48)_100%)]" />
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,white,transparent_32%)] opacity-20" />
+          <section className="relative mb-5 min-h-[220px] overflow-hidden rounded-3xl bg-gradient-to-br from-[#0d2258] via-[#153c9d] to-[#5b35a8] text-white shadow-[0_18px_50px_rgba(21,45,110,0.18)]">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_78%_18%,rgba(255,255,255,.22),transparent_28%)]" />
             <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleCoverUpload} />
-            <div className="relative z-10 flex min-h-[240px] flex-col justify-between p-6 md:p-8">
+            <div className="relative z-10 flex min-h-[220px] flex-col justify-between p-6 pr-6 md:p-8 md:pr-[230px]">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold backdrop-blur-md">
@@ -333,12 +342,10 @@ export default function ClientPortal() {
                   <p className="text-sm font-semibold uppercase tracking-[.14em] text-blue-100">{selectedProject.name}</p>
                   <h1 className="mt-1 text-2xl font-bold md:text-3xl">Hola, {user?.full_name?.split(' ')[0] || 'bienvenido'}</h1>
                   <p className="mt-2 max-w-xl text-sm text-blue-100 md:text-base">Consulta avances, entregas y conversaciones con tu equipo desde un solo lugar.</p>
+                  <button onClick={() => fileInputRef.current?.click()} disabled={uploadingCover} className="mt-3 flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-xs font-semibold md:hidden">
+                    {uploadingCover ? <Loader2 size={13} className="animate-spin" /> : <Camera size={13} />} Cambiar imagen
+                  </button>
                 </div>
-                <button onClick={() => fileInputRef.current?.click()} disabled={uploadingCover}
-                  className="flex shrink-0 items-center gap-2 rounded-xl border border-white/25 bg-black/15 px-3 py-2 text-xs font-semibold text-white backdrop-blur-md transition hover:bg-white/15 disabled:opacity-60">
-                  {uploadingCover ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
-                  {uploadingCover ? (uploadStatus || 'Procesando...') : 'Cambiar portada'}
-                </button>
               </div>
               <div>
                 <div className="mb-2 flex items-end justify-between gap-4">
@@ -350,6 +357,13 @@ export default function ClientPortal() {
                 </div>
               </div>
             </div>
+            <button onClick={() => fileInputRef.current?.click()} disabled={uploadingCover}
+              className="absolute right-6 top-1/2 z-20 hidden h-[160px] w-[170px] -translate-y-1/2 overflow-hidden rounded-2xl border border-white/25 bg-white/10 shadow-2xl transition hover:scale-[1.02] md:block">
+              {coverImage ? <img src={coverImage} alt={`Imagen de ${selectedProject.name}`} className="h-full w-full object-cover" /> : <span className="flex h-full flex-col items-center justify-center gap-2 text-sm"><Camera size={22} /> Agregar imagen</span>}
+              <span className="absolute inset-x-2 bottom-2 flex items-center justify-center gap-1.5 rounded-lg bg-black/55 px-2 py-1.5 text-[11px] font-semibold backdrop-blur-sm">
+                {uploadingCover ? <Loader2 size={12} className="animate-spin" /> : <Camera size={12} />}{uploadingCover ? 'Procesando...' : 'Cambiar imagen'}
+              </span>
+            </button>
           </section>
 
           {coverError && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{coverError}</div>}
@@ -376,7 +390,7 @@ export default function ClientPortal() {
       )}
 
       {/* ── Panel: Actividades por revisar ── */}
-      {pendingReview.length > 0 && (
+      {activeTab === 'mistareas' && pendingReview.length > 0 && (
         <div className="mb-5 bg-orange-50 border border-orange-200 rounded-xl overflow-hidden shadow-sm">
           <button
             onClick={() => setReviewPanelOpen(!reviewPanelOpen)}
@@ -417,7 +431,7 @@ export default function ClientPortal() {
       )}
 
       {/* ── Panel: Tareas ya aprobadas ── */}
-      {clientApproved.length > 0 && (
+      {activeTab === 'mistareas' && clientApproved.length > 0 && (
         <div className="mb-5 bg-green-50 border border-green-200 rounded-xl overflow-hidden shadow-sm">
           <div className="flex items-center justify-between px-5 py-3">
             <div className="flex items-center gap-2">
@@ -846,7 +860,9 @@ export default function ClientPortal() {
 
       {/* ── Tab: Chat con el equipo ── */}
       {activeTab === 'chat' && clientRecord && (
-        <ClientChatRoom client={clientRecord} />
+        <div className="h-[calc(100vh-150px)] min-h-[520px]">
+          <ClientChatRoom client={clientRecord} projectName={selectedProject?.name} />
+        </div>
       )}
       {activeTab === 'chat' && !clientRecord && (
         <div className="text-center py-12 text-gray-400">
@@ -862,6 +878,14 @@ export default function ClientPortal() {
         <div className="text-center py-12 text-gray-400">
           <p className="text-sm">No se encontró tu perfil de cliente.</p>
         </div>
+      )}
+
+      {activeTab === 'profile' && (
+        <UserProfile
+          embedded
+          onChangePhoto={() => window.dispatchEvent(new CustomEvent('change-profile-photo'))}
+          onChangePassword={() => window.dispatchEvent(new CustomEvent('change-profile-password'))}
+        />
       )}
 
           </div>{/* fin v2-content */}

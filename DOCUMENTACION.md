@@ -248,3 +248,6 @@ No hace falta tocar nada en Vercel para esto — la conexión GitHub↔Vercel ya
 - La portada integra saludo, nombre del proyecto, avance general y el control para cambiar la imagen.
 - Se añadió un resumen útil para el cliente con tareas activas, actividades por revisar, tareas completadas y próxima entrega.
 - El calendario, la hoja de ruta, el chat, los entregables y las solicitudes mantienen su funcionamiento; únicamente se reorganizó su presentación sobre un fondo limpio y consistente.
+- La portada completa y sus indicadores aparecen únicamente en la vista principal; las herramientas como chat, calendario, hoja de ruta y entregables aprovechan toda la altura disponible.
+- La fotografía se muestra como una tarjeta visual dentro de la portada, evitando usarla como fondo y conservando el control para reemplazarla.
+- El cliente cuenta con accesos persistentes a **Mi perfil** y **Cerrar sesión** al final de su menú lateral.
