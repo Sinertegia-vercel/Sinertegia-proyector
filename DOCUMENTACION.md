@@ -253,3 +253,9 @@ No hace falta tocar nada en Vercel para esto — la conexión GitHub↔Vercel ya
 - El cliente cuenta con accesos persistentes a **Mi perfil** y **Cerrar sesión** al final de su menú lateral.
 - El control para reemplazar la imagen de portada se presenta únicamente como un botón circular con cámara sobre la fotografía.
 - El perfil adapta su contenido al rol: los clientes solo ven datos personales, seguridad y apariencia; no se muestran jornada, departamento, horario, información laboral ni métricas de desempeño.
+### Chat con clientes en tiempo real y responsive
+
+- Los mensajes se actualizan por Supabase Realtime y cuentan con sincronización de respaldo cada 2.5 segundos, además de actualizarse al recuperar el foco de la pestaña.
+- La bandeja de conversaciones actualiza actividad y no leídos sin recargar la página.
+- En pantallas angostas la lista y la conversación usan navegación de una sola vista, evitando apilar y comprimir ambos paneles.
+- El lienzo, burbujas, encabezado, menús e input del chat tienen estilos específicos para tema oscuro.

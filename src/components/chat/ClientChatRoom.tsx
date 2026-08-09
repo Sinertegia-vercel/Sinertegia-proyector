@@ -57,6 +57,7 @@ export default function ClientChatRoom({ client, projectName, onConvertToTask }:
   const [loading, setLoading] = useState(true)
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const messageSnapshotRef = useRef('')
 
   const isTeamOrAdmin = user?.role === 'admin' || user?.role === 'team'
 
@@ -77,7 +78,20 @@ export default function ClientChatRoom({ client, projectName, onConvertToTask }:
         filter: `room_id=eq.${roomId}`,
       }, () => fetchMessages(roomId))
       .subscribe()
-    return () => { supabase.removeChannel(channel) }
+
+    // Realtime es la vía principal. Esta sincronización corta cubre pestañas
+    // suspendidas o proyectos donde la publicación de Realtime tarde en llegar.
+    const sync = () => { if (document.visibilityState === 'visible') fetchMessages(roomId) }
+    const interval = window.setInterval(sync, 2500)
+    window.addEventListener('focus', sync)
+    document.addEventListener('visibilitychange', sync)
+
+    return () => {
+      window.clearInterval(interval)
+      window.removeEventListener('focus', sync)
+      document.removeEventListener('visibilitychange', sync)
+      supabase.removeChannel(channel)
+    }
   }, [roomId])
 
   useEffect(() => {
@@ -108,7 +122,19 @@ export default function ClientChatRoom({ client, projectName, onConvertToTask }:
       .eq('room_id', id)
       .order('created_at', { ascending: true })
       .limit(100)
-    setMessages((data as ChatMessage[]) || [])
+    const next = (data as ChatMessage[]) || []
+    const snapshot = JSON.stringify(next.map(message => [
+      message.id,
+      message.content,
+      message.file_url,
+      message.converted_to_task,
+      message.deleted_for_everyone,
+      message.deleted_for,
+    ]))
+    if (snapshot !== messageSnapshotRef.current) {
+      messageSnapshotRef.current = snapshot
+      setMessages(next)
+    }
   }
 
   async function sendMessage() {
@@ -196,9 +222,9 @@ export default function ClientChatRoom({ client, projectName, onConvertToTask }:
   const visibleMessages = messages.filter(m => !(m.deleted_for || []).includes(user?.id || ''))
 
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+    <div className="client-chat-room flex h-full flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
       {/* Header */}
-      <div className="flex items-center gap-3 border-b border-gray-100 bg-white px-4 py-3">
+      <div className="client-chat-header flex items-center gap-3 border-b border-gray-100 bg-white px-4 py-3">
         <UserAvatar name={client.name} avatarUrl={client.avatar_url} size={34} />
         <div className="min-w-0"><h3 className="truncate text-sm font-semibold text-gray-900">{client.name}</h3>
         <p className="truncate text-xs text-gray-400">{client.company} · Chat con el equipo</p>
@@ -207,7 +233,7 @@ export default function ClientChatRoom({ client, projectName, onConvertToTask }:
       </div>
 
       {/* Messages */}
-      <div className="flex-1 space-y-3 overflow-y-auto bg-[#f8f9fc] p-4">
+      <div className="client-chat-messages flex-1 space-y-3 overflow-y-auto bg-[#f8f9fc] p-4">
         {visibleMessages.length === 0 && (
           <div className="text-center text-gray-400 py-8">
             <p className="text-sm">No hay mensajes aún.</p>
@@ -241,7 +267,7 @@ export default function ClientChatRoom({ client, projectName, onConvertToTask }:
                 ) : (
                   <>
                     {msg.content && (
-                      <div className={`px-3 py-2 rounded-xl text-sm ${isMe ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white text-gray-800 rounded-tl-none border border-gray-200'}`}>
+                      <div className={`client-chat-bubble px-3 py-2 rounded-xl text-sm ${isMe ? 'client-chat-bubble-me bg-blue-600 text-white rounded-tr-none' : 'bg-white text-gray-800 rounded-tl-none border border-gray-200'}`}>
                         {renderWithMentions(msg.content, chatUsers.map(u => u.full_name))}
                         {msg.converted_to_task && (
                           <span className="ml-2 inline-flex items-center gap-1 text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full">
@@ -289,7 +315,7 @@ export default function ClientChatRoom({ client, projectName, onConvertToTask }:
                       {openMenuId === msg.id && (
                         <>
                           <div className="fixed inset-0 z-10" onClick={() => setOpenMenuId(null)} />
-                          <div className={`absolute z-20 top-5 ${isMe ? 'right-0' : 'left-0'} bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[160px]`}>
+                          <div className={`client-chat-menu absolute z-20 top-5 ${isMe ? 'right-0' : 'left-0'} bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[160px]`}>
                             <button type="button" onClick={() => deleteForMe(msg)}
                               className="w-full flex items-center gap-2 text-left px-3 py-2 text-xs text-gray-600 hover:bg-gray-50">
                               <Trash2 size={12} /> Borrar para mí
@@ -314,7 +340,7 @@ export default function ClientChatRoom({ client, projectName, onConvertToTask }:
       </div>
 
       {/* Input */}
-      <div className="border-t border-gray-100 p-3 bg-white">
+      <div className="client-chat-composer border-t border-gray-100 p-3 bg-white">
         <MentionInput
           value={newMessage}
           onChange={setNewMessage}

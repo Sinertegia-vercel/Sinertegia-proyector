@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronDown, LoaderCircle, MessageCircle, Search } from 'lucide-react'
+import { ArrowLeft, ChevronDown, LoaderCircle, MessageCircle, Search } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import type { Client, Project, User } from '../../types'
@@ -139,7 +139,14 @@ export default function ClientChatsHub({ initialClients }: Props) {
     const channel = supabase.channel(`client-hub-${user.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages' }, () => refreshSummaries(clients))
       .subscribe()
-    return () => { supabase.removeChannel(channel) }
+    const sync = () => { if (document.visibilityState === 'visible') refreshSummaries(clients) }
+    const interval = window.setInterval(sync, 5000)
+    window.addEventListener('focus', sync)
+    return () => {
+      window.clearInterval(interval)
+      window.removeEventListener('focus', sync)
+      supabase.removeChannel(channel)
+    }
     // La suscripción se recrea al cambiar la lista visible de clientes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clients, user])
@@ -179,9 +186,9 @@ export default function ClientChatsHub({ initialClients }: Props) {
         <p className="mt-1 text-xs text-gray-500">Comunicación directa y organizada con tus clientes.</p>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-        <div className="grid min-h-[650px] grid-cols-1 lg:grid-cols-[330px_minmax(0,1fr)]">
-          <aside className="flex min-h-0 flex-col border-b border-gray-200 lg:border-b-0 lg:border-r">
+      <div className="client-chats-shell overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <div className={`client-chats-layout grid min-h-[650px] grid-cols-[330px_minmax(0,1fr)] ${selectedClient ? 'has-selection' : ''}`}>
+          <aside className="client-chats-list flex min-h-0 flex-col border-r border-gray-200">
             <div className="border-b border-gray-100 p-3">
               <div className="mb-3 flex gap-1 border-b border-gray-100">
                 {([['all', 'Todos'], ['waiting', 'Sin responder'], ['unread', 'No leídos']] as const).map(([value, label]) => (
@@ -216,7 +223,8 @@ export default function ClientChatsHub({ initialClients }: Props) {
             <div className="border-t border-gray-100 px-4 py-3 text-[10px] text-gray-400">Mostrando {visibleClients.length} de {clients.length} conversaciones</div>
           </aside>
 
-          <main className="min-h-[650px] bg-gray-50/60 p-3">
+          <main className="client-chats-panel min-h-[650px] bg-gray-50/60 p-3">
+            {selectedClient && <button type="button" onClick={() => setSelectedClient(null)} className="client-chats-back mb-3 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700"><ArrowLeft size={14} /> Conversaciones</button>}
             {selectedClient ? <ClientChatRoom client={selectedClient} projectName={selectedProject?.name} onConvertToTask={(content, messageId) => setConvertTask({ content, messageId })} /> : <div className="flex h-full items-center justify-center text-sm text-gray-400">Selecciona un cliente para ver el chat</div>}
           </main>
         </div>

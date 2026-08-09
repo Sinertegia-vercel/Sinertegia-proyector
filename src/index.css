@@ -151,3 +151,32 @@ body {
 .notification-task-focus td:first-child::after{content:'Tarea asignada';display:inline-flex;margin-left:10px;border-radius:999px;background:#2563eb;padding:3px 8px;color:#fff;font-size:10px;font-weight:700;vertical-align:middle}
 .ui-dark .notification-task-focus{background:#18345f!important;box-shadow:inset 4px 0 #60a5fa, inset 0 0 0 1px #3b82f6!important}
 @keyframes notification-task-pulse{0%,100%{filter:none}50%{filter:brightness(1.12)}}
+
+/* Chat con clientes: tema oscuro consistente y navegación responsive. */
+.client-chats-back{display:none}
+.ui-dark .client-chats-shell,
+.ui-dark .client-chat-room,
+.ui-dark .client-chat-header,
+.ui-dark .client-chat-composer,
+.ui-dark .client-chat-menu{background:#172033!important;border-color:#354258!important}
+.ui-dark .client-chat-messages{background:#0f172a!important}
+.ui-dark .client-chat-bubble:not(.client-chat-bubble-me){background:#243047!important;border-color:#3d4b61!important;color:#f1f5f9!important}
+.ui-dark .client-chats-list{background:#172033;border-color:#354258}
+.ui-dark .client-chats-panel{background:#111a2b!important}
+.ui-dark .client-chats-back{background:#172033!important;border-color:#45536b!important;color:#e2e8f0!important}
+
+@media(max-width:1100px){
+  .client-chats-layout{grid-template-columns:minmax(0,1fr)}
+  .client-chats-layout.has-selection .client-chats-list{display:none}
+  .client-chats-layout:not(.has-selection) .client-chats-panel{display:none}
+  .client-chats-back{display:flex}
+  .client-chats-panel{min-height:calc(100dvh - 190px)}
+  .client-chat-room{min-height:calc(100dvh - 250px)}
+}
+
+@media(max-width:640px){
+  .client-chats-panel{padding:8px}
+  .client-chat-header{align-items:flex-start;flex-wrap:wrap}
+  .client-chat-header>span{margin-left:44px;max-width:calc(100% - 44px)}
+  .client-chat-messages{padding:12px}
+}
