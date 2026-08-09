@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { ExternalLink, Send, Camera, Loader2, PlusCircle, CheckCircle, X, ChevronDown, CheckCheck, ClipboardList, LayoutGrid, CalendarDays, Map, MessageCircle, Link2 } from 'lucide-react'
+import { ExternalLink, Send, Camera, Loader2, PlusCircle, CheckCircle, X, ChevronDown, CheckCheck, ClipboardList, LayoutGrid, CalendarDays, Map, MessageCircle, Link2, Clock3, Eye, Sparkles } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import type { Task, Project, Client } from '../../types'
@@ -247,6 +247,12 @@ export default function ClientPortal() {
   const projectTasks = tasks.filter(t => t.project_id === selectedProject?.id)
   const completed = projectTasks.filter(t => t.status === 'completada').length
   const pct = projectTasks.length ? (completed / projectTasks.length) * 100 : 0
+  const activeTasks = projectTasks.filter(t => t.status !== 'completada')
+  const today = new Date().toISOString().slice(0, 10)
+  const datedActiveTasks = activeTasks
+    .filter(t => t.commitment_date && t.commitment_date >= today)
+    .sort((a, b) => String(a.commitment_date).localeCompare(String(b.commitment_date)))
+  const nextDelivery = datedActiveTasks[0]?.commitment_date
 
   // Tareas con entregables disponibles que el cliente aún no ha revisado
   const pendingReview = tasks.filter(t =>
@@ -279,50 +285,7 @@ export default function ClientPortal() {
           ))}
         </aside>
 
-        <div className="v2-main" style={{ position: 'relative' }}>
-          {/* ── Panel: foto del cliente tal como es (detrás del contenido, no de la sidebar) ── */}
-          {coverImage && (
-            <div
-              className="fixed pointer-events-none overflow-hidden"
-              style={{ left: 248, width: '380px', top: 0, bottom: 0, zIndex: 1 }}
-            >
-              <img
-                src={coverImage}
-                alt=""
-                className="absolute inset-0 w-full h-full object-cover object-top"
-              />
-              <div className="absolute inset-0" style={{
-                background: 'linear-gradient(to right, transparent 45%, rgba(255,255,255,0.6) 70%, white 100%)',
-              }} />
-            </div>
-          )}
-
-          {/* ── Botón para subir / cambiar foto (cliente) ── */}
-          <div className="fixed z-30" style={{ left: 262, bottom: 24 }}>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleCoverUpload}
-            />
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploadingCover}
-              className="flex items-center gap-1.5 bg-white/90 hover:bg-white border border-gray-200 shadow-lg rounded-full px-3 py-2 text-xs text-gray-600 transition backdrop-blur-sm disabled:opacity-60"
-            >
-              {uploadingCover
-                ? <><Loader2 size={13} className="animate-spin" /> {uploadStatus || 'Procesando...'}</>
-                : <><Camera size={13} /> {coverImage ? 'Cambiar foto' : 'Subir foto de portada'}</>
-              }
-            </button>
-            {coverError && (
-              <div className="mt-2 bg-red-600 text-white text-xs px-3 py-2 rounded-xl shadow-lg max-w-xs">
-                {coverError}
-              </div>
-            )}
-          </div>
-
+        <div className="v2-main bg-[#f5f7fb]" style={{ position: 'relative' }}>
           <header className="v2-topbar">
             <span className="v2-top-title display">Mi proyecto</span>
             <div className="v2-top-spacer" />
@@ -337,8 +300,6 @@ export default function ClientPortal() {
 
           {/* ── Contenido principal ── */}
           <div className="v2-content" style={{ position: 'relative', zIndex: 10 }}>
-          <p className="text-sm text-gray-500 mb-4">Hola {user?.full_name}, aquí puedes ver el avance de tu proyecto en tiempo real</p>
-
           {/* Selector de proyecto */}
       {projects.length > 1 && (
         <div className="flex gap-2 mb-4 flex-wrap">
@@ -353,17 +314,65 @@ export default function ClientPortal() {
 
       {/* Progress card */}
       {selectedProject && (
-        <div className="bg-gradient-to-r from-blue-800 to-blue-900 rounded-2xl p-6 mb-6 text-white shadow-lg">
-          <p className="text-blue-300 text-sm font-medium mb-1">{selectedProject.name}</p>
-          <h3 className="text-2xl font-bold mb-4">Progreso de tu proyecto</h3>
-          <div className="bg-white/20 rounded-full h-4 mb-2">
-            <div className="bg-white h-4 rounded-full transition-all duration-700" style={{ width: `${Math.round(pct)}%` }} />
-          </div>
-          <div className="flex justify-between text-sm mt-2">
-            <span className="text-blue-200">{completed} de {projectTasks.length} tareas completadas</span>
-            <span className="font-bold text-xl">{Math.round(pct)}%</span>
-          </div>
-        </div>
+        <>
+          <section className="relative mb-5 min-h-[240px] overflow-hidden rounded-3xl text-white shadow-[0_18px_50px_rgba(21,45,110,0.20)]">
+            {coverImage ? (
+              <img src={coverImage} alt={`Portada de ${selectedProject.name}`} className="absolute inset-0 h-full w-full object-cover object-center" />
+            ) : (
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-700 via-indigo-700 to-violet-700" />
+            )}
+            <div className="absolute inset-0 bg-[linear-gradient(100deg,rgba(10,25,72,.94)_0%,rgba(25,65,175,.82)_52%,rgba(76,29,149,.48)_100%)]" />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,white,transparent_32%)] opacity-20" />
+            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleCoverUpload} />
+            <div className="relative z-10 flex min-h-[240px] flex-col justify-between p-6 md:p-8">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold backdrop-blur-md">
+                    <Sparkles size={13} /> Portal de tu proyecto
+                  </div>
+                  <p className="text-sm font-semibold uppercase tracking-[.14em] text-blue-100">{selectedProject.name}</p>
+                  <h1 className="mt-1 text-2xl font-bold md:text-3xl">Hola, {user?.full_name?.split(' ')[0] || 'bienvenido'}</h1>
+                  <p className="mt-2 max-w-xl text-sm text-blue-100 md:text-base">Consulta avances, entregas y conversaciones con tu equipo desde un solo lugar.</p>
+                </div>
+                <button onClick={() => fileInputRef.current?.click()} disabled={uploadingCover}
+                  className="flex shrink-0 items-center gap-2 rounded-xl border border-white/25 bg-black/15 px-3 py-2 text-xs font-semibold text-white backdrop-blur-md transition hover:bg-white/15 disabled:opacity-60">
+                  {uploadingCover ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
+                  {uploadingCover ? (uploadStatus || 'Procesando...') : 'Cambiar portada'}
+                </button>
+              </div>
+              <div>
+                <div className="mb-2 flex items-end justify-between gap-4">
+                  <span className="text-sm text-blue-100">Avance general · {completed} de {projectTasks.length} tareas</span>
+                  <strong className="text-2xl">{Math.round(pct)}%</strong>
+                </div>
+                <div className="h-3 overflow-hidden rounded-full bg-white/20 ring-1 ring-white/10">
+                  <div className="h-full rounded-full bg-gradient-to-r from-cyan-300 to-white transition-all duration-700" style={{ width: `${Math.round(pct)}%` }} />
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {coverError && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{coverError}</div>}
+
+          <section className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600"><ClipboardList size={18} /></div>
+              <p className="text-2xl font-bold text-slate-900">{activeTasks.length}</p><p className="text-xs font-medium text-slate-500">Tareas activas</p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-violet-50 text-violet-600"><Eye size={18} /></div>
+              <p className="text-2xl font-bold text-slate-900">{pendingReview.length}</p><p className="text-xs font-medium text-slate-500">Por revisar</p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600"><CheckCircle size={18} /></div>
+              <p className="text-2xl font-bold text-slate-900">{completed}</p><p className="text-xs font-medium text-slate-500">Completadas</p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 text-amber-600"><Clock3 size={18} /></div>
+              <p className="text-base font-bold text-slate-900">{nextDelivery ? new Date(`${nextDelivery}T00:00:00`).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }) : 'Sin fecha'}</p><p className="text-xs font-medium text-slate-500">Próxima entrega</p>
+            </div>
+          </section>
+        </>
       )}
 
       {/* ── Panel: Actividades por revisar ── */}

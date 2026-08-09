@@ -242,3 +242,9 @@ No hace falta tocar nada en Vercel para esto — la conexión GitHub↔Vercel ya
 - **Rendimiento** permanece visible para administradores y superadministradores como parte de la operación base, con el scorecard previo de horas, puntualidad, entregas, retrabajo y calificación del cliente.
 - La alta de integrantes se concentra en **Usuarios y permisos**; el scorecard de **Rendimiento** ya no muestra el botón duplicado **Agregar integrante**.
 - En **Usuarios y permisos**, un administrador puede volver a **Equipo** sin perder tareas ni historial. **Desactivar acceso** y **cambiar de rol** son acciones separadas, y una cuenta desactivada puede reactivarse desde el mismo directorio.
+# Rediseño visual del portal de cliente (8 de agosto de 2026)
+
+- La fotografía del cliente dejó de ocupar una franja fija detrás de todas las pantallas. Ahora se conserva como portada del proyecto con un degradado que garantiza la legibilidad.
+- La portada integra saludo, nombre del proyecto, avance general y el control para cambiar la imagen.
+- Se añadió un resumen útil para el cliente con tareas activas, actividades por revisar, tareas completadas y próxima entrega.
+- El calendario, la hoja de ruta, el chat, los entregables y las solicitudes mantienen su funcionamiento; únicamente se reorganizó su presentación sobre un fondo limpio y consistente.
