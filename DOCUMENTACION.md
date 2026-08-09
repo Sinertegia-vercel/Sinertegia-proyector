@@ -252,3 +252,4 @@ No hace falta tocar nada en Vercel para esto — la conexión GitHub↔Vercel ya
 - La fotografía se muestra como una tarjeta visual dentro de la portada, evitando usarla como fondo y conservando el control para reemplazarla.
 - El cliente cuenta con accesos persistentes a **Mi perfil** y **Cerrar sesión** al final de su menú lateral.
 - El control para reemplazar la imagen de portada se presenta únicamente como un botón circular con cámara sobre la fotografía.
+- El perfil adapta su contenido al rol: los clientes solo ven datos personales, seguridad y apariencia; no se muestran jornada, departamento, horario, información laboral ni métricas de desempeño.
