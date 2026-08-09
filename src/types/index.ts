@@ -27,6 +27,7 @@ export interface ChatMessage {
   reply_to_id?: string
   is_pinned?: boolean
   reactions?: Record<string, string[]>
+  read_by?: string[]
   sender?: User
 }
 

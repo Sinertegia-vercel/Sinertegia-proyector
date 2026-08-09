@@ -130,10 +130,14 @@ export default function ClientChatRoom({ client, projectName, onConvertToTask }:
       message.converted_to_task,
       message.deleted_for_everyone,
       message.deleted_for,
+      message.read_by,
     ]))
     if (snapshot !== messageSnapshotRef.current) {
       messageSnapshotRef.current = snapshot
       setMessages(next)
+    }
+    if (user && next.some(message => message.sender_id !== user.id && !(message.read_by || []).includes(user.id))) {
+      await supabase.rpc('mark_chat_room_read', { p_room_id: id })
     }
   }
 
@@ -296,6 +300,11 @@ export default function ClientChatRoom({ client, projectName, onConvertToTask }:
                   <span className="text-xs text-gray-300">
                     {new Date(msg.created_at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
                   </span>
+                  {isMe && !msg.deleted_for_everyone && (
+                    <span className={`text-[10px] font-medium ${(msg.read_by || []).length > 0 ? 'text-blue-500' : 'text-gray-400'}`}>
+                      {(msg.read_by || []).length > 0 ? 'Leído' : 'Enviado'}
+                    </span>
+                  )}
                   {/* Botón "Crear tarea" solo para equipo/admin viendo mensajes del cliente */}
                   {isTeamOrAdmin && isClientMsg && !msg.converted_to_task && !msg.deleted_for_everyone && (
                     <button

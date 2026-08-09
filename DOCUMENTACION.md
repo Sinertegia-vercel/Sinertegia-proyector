@@ -259,3 +259,10 @@ No hace falta tocar nada en Vercel para esto — la conexión GitHub↔Vercel ya
 - La bandeja de conversaciones actualiza actividad y no leídos sin recargar la página.
 - En pantallas angostas la lista y la conversación usan navegación de una sola vista, evitando apilar y comprimir ambos paneles.
 - El lienzo, burbujas, encabezado, menús e input del chat tienen estilos específicos para tema oscuro.
+
+### Confirmaciones de lectura del chat
+
+- El chat entre cliente y equipo muestra `Enviado` y cambia a `Leído` cuando la otra parte abre la conversación.
+- El chat general del equipo registra cada lector y muestra sus nombres debajo de los mensajes propios.
+- Las lecturas se sincronizan mediante Supabase Realtime y una comprobación de respaldo mientras la conversación está abierta.
+- Requiere ejecutar `sql/2026-08-08_chat_read_receipts.sql` en Supabase.

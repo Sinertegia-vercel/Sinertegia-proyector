@@ -86,7 +86,16 @@ export default function TeamChat() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages', filter: `room_id=eq.${roomId}` },
         () => fetchMessages(roomId))
       .subscribe()
-    return () => { supabase.removeChannel(channel) }
+    const sync = () => { if (document.visibilityState === 'visible') fetchMessages(roomId) }
+    const interval = window.setInterval(sync, 3000)
+    window.addEventListener('focus', sync)
+    document.addEventListener('visibilitychange', sync)
+    return () => {
+      window.clearInterval(interval)
+      window.removeEventListener('focus', sync)
+      document.removeEventListener('visibilitychange', sync)
+      supabase.removeChannel(channel)
+    }
   }, [roomId])
 
   useEffect(() => {
@@ -123,6 +132,9 @@ export default function TeamChat() {
       .order('created_at', { ascending: true })
       .limit(100)
     setMessages((data as ChatMessage[]) || [])
+    if (user && (data || []).some(message => message.sender_id !== user.id && !((message.read_by as string[] | undefined) || []).includes(user.id))) {
+      await supabase.rpc('mark_chat_room_read', { p_room_id: id })
+    }
   }
 
   async function sendMessage() {
@@ -296,6 +308,7 @@ export default function TeamChat() {
           const repliedMessage = msg.reply_to_id ? messages.find(item => item.id === msg.reply_to_id) : null
           const dateLabel = new Date(msg.created_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'long' })
           const previousDate = index > 0 ? new Date(visibleMessages[index - 1].created_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'long' }) : ''
+          const readers = (msg.read_by || []).map(readerId => chatUsers.find(member => member.id === readerId)?.full_name).filter(Boolean) as string[]
           return (
             <div key={msg.id}>
             {dateLabel !== previousDate && <div className="my-3 flex items-center gap-3"><span className="h-px flex-1 bg-gray-200" /><span className="rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-gray-400 shadow-sm">{dateLabel}</span><span className="h-px flex-1 bg-gray-200" /></div>}
@@ -329,6 +342,11 @@ export default function TeamChat() {
                   <span className="text-xs text-gray-300">
                     {new Date(msg.created_at).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
                   </span>
+                  {isMe && !msg.deleted_for_everyone && (
+                    <span className={`max-w-[240px] truncate text-[10px] font-medium ${readers.length ? 'text-blue-500' : 'text-gray-400'}`} title={readers.join(', ')}>
+                      {readers.length === 0 ? 'Enviado' : `Leído por ${readers.slice(0, 3).join(', ')}${readers.length > 3 ? ` y ${readers.length - 3} más` : ''}`}
+                    </span>
+                  )}
                   {!msg.deleted_for_everyone && (
                     <div className="relative">
                       <button type="button"
