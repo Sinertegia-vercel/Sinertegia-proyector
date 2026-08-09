@@ -360,8 +360,8 @@ export default function ClientPortal() {
             <button onClick={() => fileInputRef.current?.click()} disabled={uploadingCover}
               className="absolute right-6 top-1/2 z-20 hidden h-[160px] w-[170px] -translate-y-1/2 overflow-hidden rounded-2xl border border-white/25 bg-white/10 shadow-2xl transition hover:scale-[1.02] md:block">
               {coverImage ? <img src={coverImage} alt={`Imagen de ${selectedProject.name}`} className="h-full w-full object-cover" /> : <span className="flex h-full flex-col items-center justify-center gap-2 text-sm"><Camera size={22} /> Agregar imagen</span>}
-              <span className="absolute inset-x-2 bottom-2 flex items-center justify-center gap-1.5 rounded-lg bg-black/55 px-2 py-1.5 text-[11px] font-semibold backdrop-blur-sm">
-                {uploadingCover ? <Loader2 size={12} className="animate-spin" /> : <Camera size={12} />}{uploadingCover ? 'Procesando...' : 'Cambiar imagen'}
+              <span className="absolute bottom-2 right-2 flex h-9 w-9 items-center justify-center rounded-full bg-black/60 shadow-lg backdrop-blur-sm" title="Cambiar imagen">
+                {uploadingCover ? <Loader2 size={15} className="animate-spin" /> : <Camera size={15} />}
               </span>
             </button>
           </section>
