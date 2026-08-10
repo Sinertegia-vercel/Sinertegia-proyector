@@ -266,3 +266,10 @@ No hace falta tocar nada en Vercel para esto — la conexión GitHub↔Vercel ya
 - El chat general del equipo registra cada lector y muestra sus nombres debajo de los mensajes propios.
 - Las lecturas se sincronizan mediante Supabase Realtime y una comprobación de respaldo mientras la conversación está abierta.
 - Requiere ejecutar `sql/2026-08-08_chat_read_receipts.sql` en Supabase.
+
+### Asignación segura de administradores
+
+- El superadministrador puede promover cualquier cantidad de integrantes del Equipo a Administradores.
+- También puede regresar un administrador normal al Equipo conservando tareas, historial y archivos.
+- Los cambios de rol reactivan la cuenta y reinician sus permisos individuales para evitar configuraciones heredadas incompatibles.
+- Requiere ejecutar `sql/2026-08-10_manage_administrator_roles.sql` en Supabase.

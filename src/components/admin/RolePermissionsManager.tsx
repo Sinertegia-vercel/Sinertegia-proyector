@@ -228,13 +228,10 @@ export default function RolePermissionsManager() {
     setSaving('promote-admin')
     setError('')
 
-    const { data: promoted, error: promoteError } = await supabase
-      .from('users')
-      .update({ role: 'admin', department: null })
-      .eq('id', selected.userId)
-      .eq('role', 'team')
-      .select('id')
-      .maybeSingle()
+    const { data: promoted, error: promoteError } = await supabase.rpc('set_user_access_role', {
+      p_user_id: selected.userId,
+      p_role: 'admin',
+    })
 
     if (promoteError || !promoted) {
       setError(promoteError?.message ? `No se pudo asignar como administrador: ${promoteError.message}` : 'No se pudo cambiar el rol de esta persona.')
@@ -260,13 +257,10 @@ export default function RolePermissionsManager() {
     if (!window.confirm(`¿Regresar a ${selected.name} al Equipo?\n\nConservará sus tareas, historial y archivos. Dejará de tener acceso administrativo.`)) return
     setSaving('return-team')
     setError('')
-    const { data: updated, error: updateError } = await supabase
-      .from('users')
-      .update({ role: 'team', active: true })
-      .eq('id', selected.userId)
-      .eq('role', 'admin')
-      .select('id')
-      .maybeSingle()
+    const { data: updated, error: updateError } = await supabase.rpc('set_user_access_role', {
+      p_user_id: selected.userId,
+      p_role: 'team',
+    })
     if (updateError || !updated) {
       setError(updateError?.message ? `No se pudo regresar al Equipo: ${updateError.message}` : 'No se pudo cambiar el rol de esta persona.')
       setSaving('')
