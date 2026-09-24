@@ -15,6 +15,43 @@ export interface ProjectTemplate {
   tasks: TemplateTask[]
 }
 
+export interface StoredTemplateTask {
+  title: string
+  department: Department
+  priority: Priority
+  group?: string
+}
+
+function taskKey(task: Pick<StoredTemplateTask, 'title' | 'department'>) {
+  return `${task.department}:${task.title.trim().toLocaleLowerCase('es-MX')}`
+}
+
+/**
+ * Resolves the one canonical task list used by the funnel manager and project creation.
+ * A stored project_templates row means the built-in was explicitly edited, so its DB
+ * tasks replace the code defaults. Rows added only through "Guardar en plantilla"
+ * extend the defaults instead. Duplicate title/department pairs are kept once.
+ */
+export function resolveTemplateTasks(
+  template: ProjectTemplate | undefined,
+  storedTasks: StoredTemplateTask[],
+  hasStoredTemplate: boolean,
+): TemplateTask[] {
+  const baseTasks = template && !hasStoredTemplate ? template.tasks : []
+  const baseByKey = new Map((template?.tasks || []).map(task => [taskKey(task), task]))
+  const merged = [...baseTasks, ...storedTasks.map(task => ({
+    ...task,
+    group: task.group || baseByKey.get(taskKey(task))?.group,
+  }))]
+  const seen = new Set<string>()
+  return merged.filter(task => {
+    const key = taskKey(task)
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
 // ─────────────────────────────────────────────
 //  TAREAS BASE (compartidas VSL y Webinar)
 // ─────────────────────────────────────────────

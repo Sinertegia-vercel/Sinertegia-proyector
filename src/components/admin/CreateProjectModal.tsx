@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react'
 import { X, Plus, ChevronLeft, CheckSquare, Square, GripVertical, MoreVertical, Pencil, Trash2, MessageSquare } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
-import type { Client, User } from '../../types'
-import { PROJECT_TEMPLATES, GROUP_LABELS, GROUP_COLORS, TEMPLATE_GROUP_ORDER, DEPT_LABELS } from '../../data/projectTemplates'
+import type { Client, Department, Priority, User } from '../../types'
+import { PROJECT_TEMPLATES, GROUP_LABELS, GROUP_COLORS, TEMPLATE_GROUP_ORDER, DEPT_LABELS, resolveTemplateTasks } from '../../data/projectTemplates'
 import CreateFunnelTemplateModal from './CreateFunnelTemplateModal'
 
 interface CustomTemplate { id: string; name: string; icon: string; description: string | null; taskCount: number }
+interface DbProjectTemplate { id: string; name: string; icon: string; description: string | null; archived?: boolean }
+interface StoredTemplateTask { template_id: string; title: string; department: Department; priority: Priority; group?: string }
 
 interface Props {
   clients: Client[]
@@ -56,6 +58,8 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
   const [customTemplates, setCustomTemplates] = useState<CustomTemplate[]>([])
   const [databaseTemplateIds, setDatabaseTemplateIds] = useState<Set<string>>(new Set())
   const [archivedTemplateIds, setArchivedTemplateIds] = useState<Set<string>>(new Set())
+  const [storedTemplateTasks, setStoredTemplateTasks] = useState<StoredTemplateTask[]>([])
+  const [templatesLoaded, setTemplatesLoaded] = useState(false)
   const [showCreateFunnel, setShowCreateFunnel] = useState(false)
 
   useEffect(() => {
@@ -66,29 +70,33 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
   }, [])
 
   async function fetchCustomTemplates() {
-    const { data: templates } = await supabase.from('project_templates').select('*').order('created_at')
-    if (!templates || templates.length === 0) {
-      setCustomTemplates([])
-      setDatabaseTemplateIds(new Set())
-      setArchivedTemplateIds(new Set())
+    setTemplatesLoaded(false)
+    const [templateResult, taskResult] = await Promise.all([
+      supabase.from('project_templates').select('*').order('created_at'),
+      supabase.from('template_tasks').select('template_id, title, department, priority').order('created_at'),
+    ])
+    if (templateResult.error || taskResult.error) {
+      setError('No se pudieron cargar los embudos y sus tareas. Cierra esta ventana e intenta de nuevo.')
+      setTemplatesLoaded(false)
       return
     }
+    const templates = (templateResult.data || []) as DbProjectTemplate[]
+    const storedTasks = (taskResult.data || []) as StoredTemplateTask[]
     const activeTemplates = templates.filter((template: { archived?: boolean }) => !template.archived)
     setDatabaseTemplateIds(new Set(activeTemplates.map((template: { id: string }) => template.id)))
     setArchivedTemplateIds(new Set(templates.filter((template: { archived?: boolean }) => template.archived).map((template: { id: string }) => template.id)))
-    const { data: counts } = activeTemplates.length
-      ? await supabase.from('template_tasks').select('template_id').in('template_id', activeTemplates.map((t: any) => t.id))
-      : { data: [] }
     const countByTemplate: Record<string, number> = {}
-    ;(counts || []).forEach((row: any) => { countByTemplate[row.template_id] = (countByTemplate[row.template_id] || 0) + 1 })
-    setCustomTemplates(activeTemplates.filter((t: any) => !['vsl', 'webinar', 'otro'].includes(t.id)).map((t: any) => ({
+    storedTasks.forEach(row => { countByTemplate[row.template_id] = (countByTemplate[row.template_id] || 0) + 1 })
+    setCustomTemplates(activeTemplates.filter(t => !['vsl', 'webinar', 'otro'].includes(t.id)).map(t => ({
       id: t.id, name: t.name, icon: t.icon, description: t.description, taskCount: countByTemplate[t.id] || 0,
     })))
+    setStoredTemplateTasks(storedTasks)
+    setTemplatesLoaded(true)
   }
 
-  function handleFunnelCreated(tpl: { id: string; name: string; icon: string; description: string }) {
+  async function handleFunnelCreated(tpl: { id: string; name: string; icon: string; description: string }) {
     setShowCreateFunnel(false)
-    fetchCustomTemplates()
+    await fetchCustomTemplates()
     setForm(f => ({ ...f, templateId: tpl.id }))
   }
 
@@ -117,14 +125,14 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
 
   async function handleContinue() {
     if (!validateStep1()) return
+    if (!templatesLoaded) {
+      setError('Espera a que terminen de cargar las tareas de los embudos.')
+      return
+    }
     const tpl = PROJECT_TEMPLATES.find(t => t.id === form.templateId)
 
     setLoadingTasks(true)
-    const { data: customDbTasks } = await supabase
-      .from('template_tasks')
-      .select('*')
-      .eq('template_id', form.templateId)
-      .order('created_at')
+    const customDbTasks = storedTemplateTasks.filter(task => task.template_id === form.templateId)
 
     if (form.templateId === 'otro' && (!customDbTasks || customDbTasks.length === 0)) {
       setLoadingTasks(false)
@@ -134,15 +142,16 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
 
     // tpl viene de PROJECT_TEMPLATES (vsl/webinar/otro); si es un embudo personalizado, tpl es undefined
     // y todas sus tareas vienen de template_tasks (customDbTasks) en vez de tareas fijas en el código.
-    const isManagedOverride = !!tpl && databaseTemplateIds.has(form.templateId)
-    const baseTasks: CombinedTask[] = isManagedOverride ? [] : (tpl?.tasks || []).map(t => ({ ...t, isCustom: false, group: t.group }))
-    const customTasks: CombinedTask[] = (customDbTasks || []).map(t => ({
-      title: t.title,
-      department: t.department,
-      priority: t.priority,
-      isCustom: true,
+    const resolvedTasks = resolveTemplateTasks(
+      tpl,
+      customDbTasks,
+      databaseTemplateIds.has(form.templateId),
+    )
+    const storedKeys = new Set(customDbTasks.map(task => `${task.department}:${task.title.trim().toLocaleLowerCase('es-MX')}`))
+    const all: CombinedTask[] = resolvedTasks.map(task => ({
+      ...task,
+      isCustom: storedKeys.has(`${task.department}:${task.title.trim().toLocaleLowerCase('es-MX')}`),
     }))
-    const all = [...baseTasks, ...customTasks]
 
     setCombinedTasks(all)
     setSelectedTasks(new Set(all.map((_, i) => i)))
@@ -170,7 +179,8 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
   function toggleTask(idx: number) {
     setSelectedTasks(prev => {
       const next = new Set(prev)
-      next.has(idx) ? next.delete(idx) : next.add(idx)
+      if (next.has(idx)) next.delete(idx)
+      else next.add(idx)
       return next
     })
   }
@@ -331,9 +341,16 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
           _note: t.note || null, // no es columna real, se usa abajo para crear el comentario
         }
       })
-      const { data: insertedTasks } = await supabase.from('tasks').insert(
-        tasksToInsert.map(({ _note, ...t }) => t)
-      ).select('id')
+      const taskRows = tasksToInsert.map(task => ({
+        project_id: task.project_id,
+        title: task.title,
+        department: task.department,
+        assigned_to: task.assigned_to,
+        priority: task.priority,
+        status: task.status,
+        created_by: task.created_by,
+      }))
+      const { data: insertedTasks } = await supabase.from('tasks').insert(taskRows).select('id')
 
       // Las notas que se escribieron al armar la plantilla se guardan como el primer
       // comentario de cada tarea (para que le lleguen al encargado que la asignó).
@@ -348,13 +365,13 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
       }
 
       // Agregar asignados a client_team_members para que puedan ver el chat
-      const uniqueAssignees = [...new Set(tasksToInsert.map((t: any) => t.assigned_to).filter(Boolean))]
+      const uniqueAssignees = [...new Set(tasksToInsert.map(t => t.assigned_to).filter(Boolean))]
       if (uniqueAssignees.length > 0) {
         const { data: existing } = await supabase
           .from('client_team_members')
           .select('user_id')
           .eq('client_id', clientId)
-        const existingIds = new Set((existing || []).map((m: any) => m.user_id))
+        const existingIds = new Set((existing || []).map((member: { user_id: string }) => member.user_id))
         const toAdd = uniqueAssignees.filter(id => !existingIds.has(id))
         if (toAdd.length > 0) {
           await supabase.from('client_team_members').insert(
@@ -366,7 +383,7 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
       // Notificar a cada asignado único (excluyendo al creador)
       const assigneesToNotify = uniqueAssignees.filter(id => id !== user!.id)
       const clientName = mode === 'existing'
-        ? clients.find((c: any) => c.id === clientId)?.name || 'un cliente'
+        ? clients.find(client => client.id === clientId)?.name || 'un cliente'
         : newClient.name || 'un cliente'
       if (assigneesToNotify.length > 0) {
         await supabase.from('notifications').insert(
@@ -396,6 +413,15 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
   const selectedCount = selectedTasks.size
   const selectedTpl = PROJECT_TEMPLATES.find(t => t.id === form.templateId)
     || customTemplates.find(t => t.id === form.templateId)
+  const effectiveTaskCount = (templateId: string) => {
+    const template = PROJECT_TEMPLATES.find(item => item.id === templateId)
+    const stored = storedTemplateTasks.filter(task => task.template_id === templateId)
+    return resolveTemplateTasks(
+      template,
+      stored,
+      databaseTemplateIds.has(templateId),
+    ).length
+  }
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -529,9 +555,10 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
                     <p className="text-2xl mb-1">{tpl.icon}</p>
                     <p className="font-semibold text-sm text-gray-800">{tpl.name}</p>
                     <p className="text-xs text-gray-400 mt-0.5 leading-tight">{tpl.description}</p>
-                    {tpl.tasks.length > 0 && (
-                      <p className="text-xs font-semibold text-blue-500 mt-2">{tpl.tasks.length}+ tareas</p>
+                    {templatesLoaded && effectiveTaskCount(tpl.id) > 0 && (
+                      <p className="text-xs font-semibold text-blue-500 mt-2">{effectiveTaskCount(tpl.id)} tareas</p>
                     )}
+                    {!templatesLoaded && <p className="mt-2 text-xs font-medium text-gray-400">Cargando tareas...</p>}
                   </button>
                 ))}
 
@@ -547,7 +574,7 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
                     <p className="font-semibold text-sm text-gray-800">{tpl.name}</p>
                     <p className="text-xs text-gray-400 mt-0.5 leading-tight">{tpl.description}</p>
                     {tpl.taskCount > 0 && (
-                      <p className="text-xs font-semibold text-blue-500 mt-2">{tpl.taskCount}+ tareas</p>
+                      <p className="text-xs font-semibold text-blue-500 mt-2">{tpl.taskCount} tareas</p>
                     )}
                   </button>
                 ))}
@@ -579,9 +606,9 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
 
             <div className="flex justify-end gap-3 pt-1">
               <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancelar</button>
-              <button type="button" onClick={handleContinue} disabled={loadingTasks}
+              <button type="button" onClick={handleContinue} disabled={loadingTasks || !templatesLoaded}
                 className="px-6 py-2 bg-gradient-to-r from-blue-700 to-red-600 text-white text-sm font-semibold rounded-lg hover:opacity-90 disabled:opacity-60">
-                {loadingTasks ? 'Cargando tareas...' : form.templateId === 'otro' ? 'Crear proyecto' : 'Siguiente → Seleccionar tareas'}
+                {!templatesLoaded ? 'Cargando embudos...' : loadingTasks ? 'Cargando tareas...' : form.templateId === 'otro' ? 'Crear proyecto' : 'Siguiente → Seleccionar tareas'}
               </button>
             </div>
           </div>

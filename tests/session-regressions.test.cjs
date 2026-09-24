@@ -215,6 +215,31 @@ test('Recovery state clears on continuation and sign-out', async () => {
   assert.equal(h.render().props.value.isPasswordRecovery, false)
 })
 
+test('Built-in funnel tasks and stored additions resolve to one canonical list', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'src/data/projectTemplates.ts'), 'utf8')
+  const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText
+  const exported = {}
+  vm.runInNewContext(code, { exports: exported, require() { return {} } })
+  const vsl = exported.PROJECT_TEMPLATES.find(template => template.id === 'vsl')
+  const additions = Array.from({ length: 6 }, (_, index) => ({
+    title: `Extra ${index + 1}`, department: 'webmaster', priority: 'alta',
+  }))
+  const extended = exported.resolveTemplateTasks(vsl, additions, false)
+  assert.equal(extended.length, vsl.tasks.length + additions.length)
+  assert.equal(exported.resolveTemplateTasks(vsl, additions, true).length, additions.length)
+  assert.equal(exported.resolveTemplateTasks(vsl, [vsl.tasks[0]], false).length, vsl.tasks.length)
+})
+
+test('Funnel manager and project creation share the canonical task resolver', () => {
+  for (const file of [
+    'src/components/admin/FunnelTemplatesManager.tsx',
+    'src/components/admin/CreateProjectModal.tsx',
+  ]) {
+    const source = fs.readFileSync(path.join(__dirname, '..', file), 'utf8')
+    assert.match(source, /resolveTemplateTasks/)
+  }
+})
+
 const projectProps = {
   project: { id: 'project-1', name: 'Project example', description: 'Description', status: 'activo' },
   tasks: [], projects: [], teamMembers: [], onBack() {}, onUpdate() {},

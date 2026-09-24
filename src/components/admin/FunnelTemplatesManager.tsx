@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { LoaderCircle, Pencil, Plus, Trash2, Workflow } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import { PROJECT_TEMPLATES } from '../../data/projectTemplates'
+import { PROJECT_TEMPLATES, resolveTemplateTasks } from '../../data/projectTemplates'
 import type { Department, Priority } from '../../types'
 import CreateFunnelTemplateModal, { type EditableFunnel } from './CreateFunnelTemplateModal'
 
 interface DbTemplate { id: string; name: string; icon: string; description: string | null; archived?: boolean }
-interface DbTask { template_id: string; title: string; department: Department; priority: Priority }
+interface DbTask { template_id: string; title: string; department: Department; priority: Priority; group?: string }
 
 export default function FunnelTemplatesManager() {
   const [templates, setTemplates] = useState<DbTemplate[]>([])
@@ -24,8 +24,14 @@ export default function FunnelTemplatesManager() {
       supabase.from('project_templates').select('id, name, icon, description, archived').order('created_at'),
       supabase.from('template_tasks').select('template_id, title, department, priority').order('created_at'),
     ])
+    if (templateResult.error || taskResult.error) {
+      setError('No se pudieron cargar todos los embudos. Recarga la página para intentarlo de nuevo.')
+      setLoading(false)
+      return
+    }
     setTemplates((templateResult.data as DbTemplate[]) || [])
     setTasks((taskResult.data as DbTask[]) || [])
+    setError('')
     setLoading(false)
   }
 
@@ -33,12 +39,13 @@ export default function FunnelTemplatesManager() {
     const builtIns = PROJECT_TEMPLATES.filter(template => templates.find(item => item.id === template.id)?.archived !== true).map(template => {
       const stored = templates.find(item => item.id === template.id)
       const storedTasks = tasks.filter(task => task.template_id === template.id)
+      const resolvedTasks = resolveTemplateTasks(template, storedTasks, Boolean(stored))
       return {
         id: template.id,
         name: stored?.name || template.name,
         icon: stored?.icon || template.icon,
         description: stored?.description || template.description,
-        tasks: storedTasks.length ? storedTasks.map(({ title, department, priority }) => ({ title, department, priority })) : template.tasks.map(({ title, department, priority }) => ({ title, department, priority })),
+        tasks: resolvedTasks,
       }
     })
     const custom = templates

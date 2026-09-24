@@ -4,6 +4,13 @@ FAVOR DE DOCUMENTAR CADA CAMBIO QUE SE LE HAGA AL CODIGO
 
 ## Correcciones del 24 de septiembre de 2026
 
+### Conteos consistentes de tareas por embudo
+
+- Embudos, las tarjetas de “Nuevo proyecto” y el paso “Seleccionar tareas” ahora usan `resolveTemplateTasks` como una sola fuente para calcular la lista efectiva y el total exacto.
+- Una plantilla integrada sin registro propio en `project_templates` conserva sus tareas base y agrega las filas adicionales de `template_tasks`. Si existe un registro propio porque el embudo fue editado, las tareas de Supabase reemplazan la versión base. Los duplicados por título y departamento se muestran una sola vez.
+- “Siguiente” permanece deshabilitado hasta cargar tanto las plantillas como sus tareas, evitando que un clic rápido cree una cantidad distinta. Los conteos dejan de mostrar `+` y reflejan exactamente las tareas que se presentarán en el siguiente paso.
+- Al cargar Embudos se comprueban ambas consultas; si una falla, se muestra el error en vez de presentar conteos parciales como si fueran correctos.
+
 ### Menú de edición y eliminación de proyectos
 
 - En el detalle del proyecto se añade un botón de tres puntos junto al estado. Contiene “Editar proyecto” y “Eliminar proyecto”; el selector Activo/Pausado/Completado sigue disponible.
