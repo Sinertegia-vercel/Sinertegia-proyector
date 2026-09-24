@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { ArrowLeft, Plus, ChevronDown, Pencil, Check, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { ArrowLeft, Plus, ChevronDown, Pencil, Check, X, MoreVertical, Trash2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import type { Task, Project, User } from '../../types'
 import PriorityBadge from '../shared/PriorityBadge'
@@ -47,25 +47,103 @@ export default function ProjectDetail({ project, tasks, teamMembers, projects, o
   const [filterStatus, setFilterStatus] = useState<string>('todos')
   const [filterDept, setFilterDept] = useState<string>('todos')
   const [filterPerson, setFilterPerson] = useState<string>('todos')
+  const [actionsOpen, setActionsOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [actionError, setActionError] = useState('')
+  const [savingStatus, setSavingStatus] = useState(false)
+  const actionsRef = useRef<HTMLDivElement>(null)
+  const busyRef = useRef(false)
+
+  useEffect(() => {
+    function dismiss(event: PointerEvent) {
+      if (!actionsRef.current?.contains(event.target as Node)) {
+        setActionsOpen(false)
+        setStatusOpen(false)
+      }
+    }
+    function escape(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setActionsOpen(false)
+        setStatusOpen(false)
+      }
+    }
+    document.addEventListener('pointerdown', dismiss)
+    document.addEventListener('keydown', escape)
+    return () => {
+      document.removeEventListener('pointerdown', dismiss)
+      document.removeEventListener('keydown', escape)
+    }
+  }, [])
+
+  function startEditing() {
+    setEditName(project.name)
+    setEditDesc(project.description || '')
+    setActionError('')
+    setActionsOpen(false)
+    setEditingName(true)
+  }
 
   const completed = tasks.filter(t => t.status === 'completada').length
   const pct = tasks.length ? (completed / tasks.length) * 100 : 0
   const overdue = tasks.filter(t => t.commitment_date && t.status !== 'completada' && new Date(t.commitment_date) < new Date())
 
   async function saveProjectName() {
-    if (!editName.trim()) return
+    if (!editName.trim() || busyRef.current) return
+    busyRef.current = true
     setSavingName(true)
-    await supabase.from('projects').update({ name: editName.trim(), description: editDesc.trim() || null }).eq('id', project.id)
-    setSavingName(false)
-    setEditingName(false)
-    onUpdate()
+    setActionError('')
+    try {
+      const { error } = await supabase.from('projects').update({ name: editName.trim(), description: editDesc.trim() || null }).eq('id', project.id).select('id').single()
+      if (error) throw error
+      setEditName(editName.trim())
+      setEditDesc(editDesc.trim())
+      setEditingName(false)
+      onUpdate()
+    } catch {
+      setActionError('No se pudieron guardar los cambios. Intenta de nuevo.')
+    } finally {
+      busyRef.current = false
+      setSavingName(false)
+    }
   }
 
   async function changeProjectStatus(newStatus: 'activo' | 'pausado' | 'completado') {
-    await supabase.from('projects').update({ status: newStatus }).eq('id', project.id)
-    setCurrentStatus(newStatus)
-    setStatusOpen(false)
-    onUpdate()
+    if (busyRef.current) return
+    busyRef.current = true
+    setSavingStatus(true)
+    setActionError('')
+    try {
+      const { error } = await supabase.from('projects').update({ status: newStatus }).eq('id', project.id).select('id').single()
+      if (error) throw error
+      setCurrentStatus(newStatus)
+      setStatusOpen(false)
+      onUpdate()
+    } catch {
+      setActionError('No se pudo cambiar el estado del proyecto. Intenta de nuevo.')
+    } finally {
+      busyRef.current = false
+      setSavingStatus(false)
+    }
+  }
+
+  async function deleteProject() {
+    if (busyRef.current) return
+    setActionsOpen(false)
+    if (!window.confirm(`¿Eliminar el proyecto «${project.name}» y TODAS sus tareas, incluidas las completadas?\n\nTambién se eliminarán sus subtareas, comentarios, enlaces y registros de tiempo. Esta acción no se puede deshacer.`)) return
+    busyRef.current = true
+    setDeleting(true)
+    setActionError('')
+    try {
+      const { data, error } = await supabase.rpc('admin_delete_project', { p_project_id: project.id })
+      if (error || data !== project.id) throw error || new Error('Eliminación sin confirmar')
+      onBack()
+      onUpdate()
+    } catch {
+      setActionError('No se pudo eliminar el proyecto. No se confirmó ningún borrado. Intenta de nuevo o contacta al administrador.')
+    } finally {
+      busyRef.current = false
+      setDeleting(false)
+    }
   }
 
   const statusOpt = STATUS_OPTIONS.find(s => s.value === currentStatus) || STATUS_OPTIONS[0]
@@ -94,12 +172,14 @@ export default function ProjectDetail({ project, tasks, teamMembers, projects, o
             {editingName ? (
               <div className="mt-1 space-y-2">
                 <input
+                  aria-label="Nombre del proyecto"
                   value={editName}
                   onChange={e => setEditName(e.target.value)}
                   autoFocus
                   className="w-full text-xl font-bold text-gray-900 border border-blue-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 <input
+                  aria-label="Descripción del proyecto"
                   value={editDesc}
                   onChange={e => setEditDesc(e.target.value)}
                   placeholder="Descripción (opcional)"
@@ -110,7 +190,7 @@ export default function ProjectDetail({ project, tasks, teamMembers, projects, o
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition disabled:opacity-50">
                     <Check size={13} /> {savingName ? 'Guardando...' : 'Guardar'}
                   </button>
-                  <button onClick={() => { setEditingName(false); setEditName(project.name); setEditDesc(project.description || '') }}
+                  <button disabled={savingName} onClick={() => { setEditingName(false); setEditName(project.name); setEditDesc(project.description || ''); setActionError('') }}
                     className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 text-gray-600 text-xs font-semibold rounded-lg hover:bg-gray-50 transition">
                     <X size={13} /> Cancelar
                   </button>
@@ -122,7 +202,7 @@ export default function ProjectDetail({ project, tasks, teamMembers, projects, o
                   <h3 className="text-xl font-bold text-gray-900">{editName}</h3>
                   {editDesc && <p className="text-sm text-gray-500 mt-1">{editDesc}</p>}
                 </div>
-                <button onClick={() => setEditingName(true)}
+                <button onClick={startEditing} disabled={deleting || savingStatus}
                   title="Editar nombre del proyecto"
                   className="opacity-0 group-hover:opacity-100 transition mt-1 p-1 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 shrink-0">
                   <Pencil size={14} />
@@ -131,16 +211,31 @@ export default function ProjectDetail({ project, tasks, teamMembers, projects, o
             )}
           </div>
           {/* Estado clickeable */}
-          <div className="relative">
-            <button onClick={() => setStatusOpen(!statusOpen)}
+          <div ref={actionsRef} className="relative flex items-center gap-2 shrink-0">
+            <button disabled={deleting || savingName || savingStatus} onClick={() => { setStatusOpen(!statusOpen); setActionsOpen(false) }}
               className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition ${statusOpt.color}`}>
               {statusOpt.label}
               <ChevronDown size={12} />
             </button>
+            <button type="button" aria-label="Opciones del proyecto" aria-expanded={actionsOpen} aria-controls="project-actions" disabled={deleting || savingName || savingStatus}
+              onClick={() => { setActionsOpen(!actionsOpen); setStatusOpen(false) }}
+              className="p-1.5 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition disabled:opacity-50">
+              <MoreVertical size={20} />
+            </button>
+            {actionsOpen && (
+              <div id="project-actions" className="absolute right-0 top-10 bg-white border border-gray-200 rounded-xl shadow-lg z-20 w-52 py-1">
+                <button type="button" onClick={startEditing} className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50">
+                  <Pencil size={15} /> Editar proyecto
+                </button>
+                <button type="button" onClick={deleteProject} className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-50">
+                  <Trash2 size={15} /> Eliminar proyecto
+                </button>
+              </div>
+            )}
             {statusOpen && (
               <div className="absolute right-0 top-8 bg-white border border-gray-200 rounded-xl shadow-lg z-10 min-w-[140px] py-1">
                 {STATUS_OPTIONS.map(opt => (
-                  <button key={opt.value} onClick={() => changeProjectStatus(opt.value as 'activo' | 'pausado' | 'completado')}
+                  <button key={opt.value} disabled={savingStatus || opt.value === currentStatus} onClick={() => changeProjectStatus(opt.value as 'activo' | 'pausado' | 'completado')}
                     className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 font-medium ${opt.value === currentStatus ? 'opacity-50 cursor-default' : ''}`}>
                     {opt.label}
                   </button>
@@ -149,6 +244,8 @@ export default function ProjectDetail({ project, tasks, teamMembers, projects, o
             )}
           </div>
         </div>
+        {deleting && <p role="status" className="text-sm text-gray-500 mb-3">Eliminando proyecto y tareas...</p>}
+        {actionError && <p role="alert" className="text-sm text-red-600 mb-3">{actionError}</p>}
         <ProgressBar percentage={pct} />
         <div className="flex gap-6 mt-4 text-sm text-gray-500">
           <span>{completed}/{tasks.length} tareas completadas</span>

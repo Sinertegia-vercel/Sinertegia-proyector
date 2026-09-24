@@ -4,6 +4,15 @@ FAVOR DE DOCUMENTAR CADA CAMBIO QUE SE LE HAGA AL CODIGO
 
 ## Correcciones del 24 de septiembre de 2026
 
+### Menú de edición y eliminación de proyectos
+
+- En el detalle del proyecto se añade un botón de tres puntos junto al estado. Contiene “Editar proyecto” y “Eliminar proyecto”; el selector Activo/Pausado/Completado sigue disponible.
+- Editar abre los campos de nombre y descripción con Guardar/Cancelar. Si falla el guardado, el editor conserva los cambios y muestra el error. Los cambios de estado también comprueban el guardado.
+- Eliminar solicita confirmación con el nombre del proyecto e incluye todas sus tareas, también las completadas y las ocultas por filtros. Una única llamada a `admin_delete_project` realiza el borrado dentro de una transacción; al terminar se vuelve al listado y se actualizan los datos.
+- Antes de publicar la interfaz, ejecutar `sql/2026-09-24_admin_delete_project.sql` en Supabase. Requiere la función `admin_delete_team_task` de `sql/2026-08-07_admin_team_task_controls.sql`. La migración solo define la función: no borra proyectos existentes. Solo los administradores activos pueden ejecutarla.
+- Se eliminan las tareas y sus comentarios, enlaces, subtareas, valoraciones y tiempos. Se conserva el cliente y el historial de solicitudes, mensajes y notificaciones, desvinculando sus referencias. No se eliminan archivos físicos de Storage, que pueden estar compartidos.
+- Comprobaciones locales: 24 pruebas de handlers, TypeScript, compilación y lint de los archivos de detalle/pruebas. La migración y su función dependiente se ejecutaron en PostgreSQL embebido (PGlite) con datos ficticios para comprobar autorización, borrado completo, conservación de otro proyecto y reversión ante un fallo de integridad. Esto no sustituye verificar el esquema real de Supabase antes de activarla.
+
 - Permisos: el icono de Lucide se importa como `MapIcon` en los paneles de equipo y cliente para no ocultar el `Map` nativo. Se conserva la prioridad de los permisos individuales sobre los del rol.
 - Checador: se comprueban los errores de consulta y guardado de entrada/salida. Una salida fallida conserva el contador y muestra un error; el cierre de sesión solo continúa cuando la salida está confirmada. Los botones se bloquean durante el guardado para evitar envíos duplicados desde la misma pantalla.
 - Horas extra: el aviso se activa a partir de la hora de salida configurada y se revisa al volver a la pestaña. La confirmación se recuerda por sesión laboral durante la vida de la página.

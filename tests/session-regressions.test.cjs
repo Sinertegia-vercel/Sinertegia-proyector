@@ -7,11 +7,16 @@ const ts = require('typescript')
 
 // Execute the real component handlers with deterministic hooks and database replies.
 // No production accounts or database writes are used.
-function harness(file, initial, replies = [], auth = {}) {
+function harness(file, initial, replies = [], auth = {}, props = {}) {
   const states = [...initial], refs = [], effects = [], calls = []
   let index = 0, refIndex = 0
   const user = { id: 'user-1', role: 'team', work_start: 9, work_end: 18 }
   const database = {
+    async rpc(name, args) {
+      calls.push({ rpc: name, args })
+      assert.ok(replies.length, 'Unexpected RPC request')
+      return replies.shift()
+    },
     auth: { signUp: async () => ({ data: { user: { id: user.id } } }), ...auth },
     from(table) {
       const call = { table, operations: [] }
@@ -45,7 +50,7 @@ function harness(file, initial, replies = [], auth = {}) {
   const surface = { addEventListener() {}, removeEventListener() {} }
   const context = {
     exports: exported, console, URLSearchParams,
-    window: { ...surface, location: { search: auth.locationSearch || '' } }, document: surface,
+    window: { ...surface, location: { search: auth.locationSearch || '' }, confirm: auth.confirm || (() => false) }, document: surface,
     setInterval() { return 1 }, clearInterval() {},
     require(id) {
       if (id === 'react') return react
@@ -59,7 +64,7 @@ function harness(file, initial, replies = [], auth = {}) {
   vm.runInNewContext(code, context)
   return { states, effects, calls, render() {
     index = 0; refIndex = 0; effects.length = 0
-    return (exported.default || exported.WorkSessionProvider || exported.AuthProvider)({ children: null, inviteToken: 'invite-1' })
+    return (exported.default || exported.WorkSessionProvider || exported.AuthProvider)({ children: null, inviteToken: 'invite-1', ...props })
   } }
 }
 
@@ -208,4 +213,59 @@ test('Recovery state clears on continuation and sign-out', async () => {
   onAuthChange('PASSWORD_RECOVERY', { user: { id: 'user-1' } })
   onAuthChange('SIGNED_OUT', null)
   assert.equal(h.render().props.value.isPasswordRecovery, false)
+})
+
+const projectProps = {
+  project: { id: 'project-1', name: 'Project example', description: 'Description', status: 'activo' },
+  tasks: [], projects: [], teamMembers: [], onBack() {}, onUpdate() {},
+}
+const projectFile = 'src/components/admin/ProjectDetail.tsx'
+function buttonText(node, text) {
+  return node.type === 'button' && [node.props.children].flat().includes(text)
+}
+function openProjectMenu(h) {
+  find(h.render(), node => node.props?.['aria-label'] === 'Opciones del proyecto').props.onClick()
+}
+
+test('Project actions menu opens the inline editor', () => {
+  const h = harness(projectFile, [], [], {}, projectProps)
+  openProjectMenu(h)
+  find(h.render(), node => buttonText(node, ' Editar proyecto')).props.onClick()
+  assert.ok(find(h.render(), node => node.props?.['aria-label'] === 'Nombre del proyecto'))
+  assert.ok(find(h.render(), node => node.props?.['aria-label'] === 'Descripción del proyecto'))
+})
+
+test('Cancelling project deletion makes no database calls', async () => {
+  const h = harness(projectFile, [], [], { confirm: () => false }, projectProps)
+  openProjectMenu(h)
+  await find(h.render(), node => buttonText(node, ' Eliminar proyecto')).props.onClick()
+  assert.equal(h.calls.length, 0)
+})
+
+for (const [label, reply, success] of [
+  ['success', { data: 'project-1' }, true],
+  ['failure', { error: { message: 'denied' } }, false],
+  ['missing confirmation', { data: null }, false],
+]) test(`Project deletion ${label}`, async () => {
+  let navigated = false, refreshed = false
+  const h = harness(projectFile, [], [reply], { confirm: () => true }, {
+    ...projectProps, onBack() { navigated = true }, onUpdate() { refreshed = true },
+  })
+  openProjectMenu(h)
+  await find(h.render(), node => buttonText(node, ' Eliminar proyecto')).props.onClick()
+  assert.equal(h.calls.length, 1)
+  assert.equal(h.calls[0].rpc, 'admin_delete_project')
+  assert.equal(h.calls[0].args.p_project_id, 'project-1')
+  assert.equal(navigated, success)
+  assert.equal(refreshed, success)
+  assert.equal(Boolean(find(h.render(), node => node.props?.role === 'alert')), !success)
+})
+
+test('Failed project edit stays open and reports the failure', async () => {
+  const h = harness(projectFile, [], [{ error: { message: 'denied' } }], {}, projectProps)
+  openProjectMenu(h)
+  find(h.render(), node => buttonText(node, ' Editar proyecto')).props.onClick()
+  await find(h.render(), node => buttonText(node, 'Guardar')).props.onClick()
+  assert.ok(find(h.render(), node => node.props?.['aria-label'] === 'Nombre del proyecto'))
+  assert.ok(find(h.render(), node => node.props?.role === 'alert'))
 })

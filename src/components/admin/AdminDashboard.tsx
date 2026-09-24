@@ -628,9 +628,10 @@ export default function AdminDashboard() {
             {/* Vista detalle de proyecto */}
             {view === 'project' && selectedProject && (
               <ProjectDetail
-                project={selectedProject}
+                key={selectedProject.id}
+                project={projects.find(project => project.id === selectedProject.id) || selectedProject}
                 tasks={tasks.filter((t) => t.project_id === selectedProject.id)}
-                onBack={() => setView('overview')}
+                onBack={() => { setSelectedProject(null); setView('overview') }}
                 onUpdate={fetchAll}
                 teamMembers={teamMembers}
                 projects={projects}
