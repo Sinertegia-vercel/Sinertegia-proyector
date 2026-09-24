@@ -235,11 +235,17 @@ test('Project actions menu opens the inline editor', () => {
   assert.ok(find(h.render(), node => node.props?.['aria-label'] === 'Descripción del proyecto'))
 })
 
-test('Cancelling project deletion makes no database calls', async () => {
-  const h = harness(projectFile, [], [], { confirm: () => false }, projectProps)
+test('Project deletion uses an application modal and cancel makes no database calls', async () => {
+  const h = harness(projectFile, [], [], {}, projectProps)
   openProjectMenu(h)
-  await find(h.render(), node => buttonText(node, ' Eliminar proyecto')).props.onClick()
+  find(h.render(), node => buttonText(node, ' Eliminar proyecto')).props.onClick()
+  const modal = find(h.render(), node => node.props?.role === 'dialog')
+  assert.ok(modal)
+  assert.match(JSON.stringify(modal), /Project example/)
+  assert.match(JSON.stringify(modal), /no se puede deshacer/)
+  find(modal, node => buttonText(node, 'Cancelar')).props.onClick()
   assert.equal(h.calls.length, 0)
+  assert.equal(find(h.render(), node => node.props?.role === 'dialog'), undefined)
 })
 
 for (const [label, reply, success] of [
@@ -248,17 +254,20 @@ for (const [label, reply, success] of [
   ['missing confirmation', { data: null }, false],
 ]) test(`Project deletion ${label}`, async () => {
   let navigated = false, refreshed = false
-  const h = harness(projectFile, [], [reply], { confirm: () => true }, {
+  const h = harness(projectFile, [], [reply], {}, {
     ...projectProps, onBack() { navigated = true }, onUpdate() { refreshed = true },
   })
   openProjectMenu(h)
-  await find(h.render(), node => buttonText(node, ' Eliminar proyecto')).props.onClick()
+  find(h.render(), node => buttonText(node, ' Eliminar proyecto')).props.onClick()
+  const modal = find(h.render(), node => node.props?.role === 'dialog')
+  await find(modal, node => buttonText(node, success ? 'Sí, eliminar proyecto' : 'Sí, eliminar proyecto')).props.onClick()
   assert.equal(h.calls.length, 1)
   assert.equal(h.calls[0].rpc, 'admin_delete_project')
   assert.equal(h.calls[0].args.p_project_id, 'project-1')
   assert.equal(navigated, success)
   assert.equal(refreshed, success)
   assert.equal(Boolean(find(h.render(), node => node.props?.role === 'alert')), !success)
+  assert.equal(Boolean(find(h.render(), node => node.props?.role === 'dialog')), !success)
 })
 
 test('Failed project edit stays open and reports the failure', async () => {

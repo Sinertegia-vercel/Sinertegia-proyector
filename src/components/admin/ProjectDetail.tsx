@@ -48,6 +48,7 @@ export default function ProjectDetail({ project, tasks, teamMembers, projects, o
   const [filterDept, setFilterDept] = useState<string>('todos')
   const [filterPerson, setFilterPerson] = useState<string>('todos')
   const [actionsOpen, setActionsOpen] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [actionError, setActionError] = useState('')
   const [savingStatus, setSavingStatus] = useState(false)
@@ -65,6 +66,7 @@ export default function ProjectDetail({ project, tasks, teamMembers, projects, o
       if (event.key === 'Escape') {
         setActionsOpen(false)
         setStatusOpen(false)
+        if (!busyRef.current) setShowDeleteConfirm(false)
       }
     }
     document.addEventListener('pointerdown', dismiss)
@@ -128,14 +130,13 @@ export default function ProjectDetail({ project, tasks, teamMembers, projects, o
 
   async function deleteProject() {
     if (busyRef.current) return
-    setActionsOpen(false)
-    if (!window.confirm(`¿Eliminar el proyecto «${project.name}» y TODAS sus tareas, incluidas las completadas?\n\nTambién se eliminarán sus subtareas, comentarios, enlaces y registros de tiempo. Esta acción no se puede deshacer.`)) return
     busyRef.current = true
     setDeleting(true)
     setActionError('')
     try {
       const { data, error } = await supabase.rpc('admin_delete_project', { p_project_id: project.id })
       if (error || data !== project.id) throw error || new Error('Eliminación sin confirmar')
+      setShowDeleteConfirm(false)
       onBack()
       onUpdate()
     } catch {
@@ -227,7 +228,7 @@ export default function ProjectDetail({ project, tasks, teamMembers, projects, o
                 <button type="button" onClick={startEditing} className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50">
                   <Pencil size={15} /> Editar proyecto
                 </button>
-                <button type="button" onClick={deleteProject} className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-50">
+                <button type="button" onClick={() => { setActionsOpen(false); setActionError(''); setShowDeleteConfirm(true) }} className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-50">
                   <Trash2 size={15} /> Eliminar proyecto
                 </button>
               </div>
@@ -365,6 +366,48 @@ export default function ProjectDetail({ project, tasks, teamMembers, projects, o
           onClose={() => setShowCreateTask(false)}
           onCreated={onUpdate}
         />
+      )}
+
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm" onMouseDown={event => {
+          if (event.target === event.currentTarget && !deleting) setShowDeleteConfirm(false)
+        }}>
+          <div role="dialog" aria-modal="true" aria-labelledby="delete-project-title" aria-describedby="delete-project-description"
+            className="w-full max-w-md overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl">
+            <div className="border-b border-red-100 bg-gradient-to-r from-red-50 to-orange-50 px-6 py-5">
+              <div className="flex items-start gap-4">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600">
+                  <Trash2 size={21} />
+                </div>
+                <div>
+                  <h2 id="delete-project-title" className="text-lg font-bold text-gray-900">Eliminar proyecto</h2>
+                  <p className="mt-1 text-sm text-gray-600">Esta acción es permanente y no se puede deshacer.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="px-6 py-5">
+              <p id="delete-project-description" className="text-sm leading-6 text-gray-600">
+                Se eliminará el proyecto <span className="font-bold text-gray-900">{project.name}</span> y sus <span className="font-bold text-gray-900">{tasks.length} tareas</span>, incluidas las completadas.
+              </p>
+              <div className="mt-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+                También se eliminarán sus subtareas, comentarios, enlaces, valoraciones y registros de tiempo. La cuenta del cliente y sus otros proyectos se conservarán.
+              </div>
+              {actionError && <p role="alert" className="mt-4 text-sm font-medium text-red-600">{actionError}</p>}
+            </div>
+
+            <div className="flex flex-col-reverse gap-2 border-t border-gray-100 bg-gray-50 px-6 py-4 sm:flex-row sm:justify-end">
+              <button type="button" onClick={() => { setShowDeleteConfirm(false); setActionError('') }} disabled={deleting}
+                className="rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:opacity-50">
+                Cancelar
+              </button>
+              <button type="button" onClick={deleteProject} disabled={deleting}
+                className="flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700 disabled:cursor-wait disabled:opacity-60">
+                <Trash2 size={16} /> {deleting ? 'Eliminando...' : 'Sí, eliminar proyecto'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
