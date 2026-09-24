@@ -51,7 +51,6 @@ export default function MentionInput({ value, onChange, onSend, onFileSelect, us
   }
 
   const filtered = users.filter(u => u.full_name.toLowerCase().includes(mentionQuery))
-  const isAudio = selectedFile?.type.startsWith('audio/')
   const isImage = selectedFile?.type.startsWith('image/')
 
   return (

@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { MessageSquare, CheckCircle, Clock, ClipboardList, MessageCircle, Map, Plus, CalendarDays, Link2, Loader2, XCircle, FileText, ChevronDown, Home, AlertTriangle, ArrowRight, PlayCircle, Eye, UserRound, PanelLeftClose, PanelLeftOpen, LogOut } from 'lucide-react'
+import { MessageSquare, CheckCircle, Clock, ClipboardList, MessageCircle, Map as MapIcon, Plus, CalendarDays, Link2, Loader2, XCircle, FileText, ChevronDown, Home, AlertTriangle, ArrowRight, PlayCircle, Eye, UserRound, PanelLeftClose, PanelLeftOpen, LogOut } from 'lucide-react'
 import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
@@ -24,7 +24,7 @@ const TEAM_NAV_ITEMS = [
   { id: 'today' as TeamView, label: 'Mi día', icon: Home },
   { id: 'tasks' as TeamView, label: 'Mis tareas', icon: ClipboardList },
   { id: 'calendar' as TeamView, label: 'Mi Calendario', icon: CalendarDays },
-  { id: 'roadmap' as TeamView, label: 'Hoja de Ruta', icon: Map },
+  { id: 'roadmap' as TeamView, label: 'Hoja de Ruta', icon: MapIcon },
   { id: 'chat_team' as TeamView, label: 'Chat del Equipo', icon: MessageSquare },
   { id: 'chat_clients' as TeamView, label: 'Chat con Clientes', icon: MessageCircle },
   { id: 'entregables' as TeamView, label: 'Entregables', icon: Link2 },

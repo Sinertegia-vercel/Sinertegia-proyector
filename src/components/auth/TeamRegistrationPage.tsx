@@ -78,50 +78,58 @@ export default function TeamRegistrationPage({ inviteToken }: Props) {
       return
     }
 
+    if (saving) return
     setSaving(true)
+    try {
 
-    const { data: authData, error: authErr } = await supabase.auth.signUp({
-      email: invite!.email,
-      password: form.password,
-    })
-
-    if (authErr || !authData.user) {
-      setError(authErr?.message === 'User already registered' ? 'Este correo ya tiene una cuenta registrada.' : 'No se pudo crear la cuenta. Intenta de nuevo.')
-      setSaving(false)
-      return
-    }
-
-    const userId = authData.user.id
-
-    await supabase.from('users').upsert(
-      {
-        id: userId,
+      const { data: authData, error: authErr } = await supabase.auth.signUp({
         email: invite!.email,
-        full_name: form.full_name.trim(),
-        role: invite!.role,
-        department: invite!.department || null,
-        must_change_password: false,
-        active: true,
-      },
-      { onConflict: 'id' },
-    )
-
-    if (Object.keys(invite!.permissions || {}).length) {
-      const { error: permissionError } = await supabase.rpc('apply_invitation_permissions', {
-        invitation_id: inviteToken,
-        invitation_kind: 'team',
+        password: form.password,
       })
-      if (permissionError) {
-        setError('La cuenta se creó, pero no fue posible aplicar sus permisos. Contacta al administrador.')
+
+      if (authErr || !authData.user) {
+        setError(authErr?.message === 'User already registered' ? 'Este correo ya tiene una cuenta registrada.' : 'No se pudo crear la cuenta. Intenta de nuevo.')
         setSaving(false)
         return
       }
+
+      const userId = authData.user.id
+
+      const { error: profileError } = await supabase.from('users').upsert(
+        {
+          id: userId,
+          email: invite!.email,
+          full_name: form.full_name.trim(),
+          role: invite!.role,
+          department: invite!.department || null,
+          must_change_password: false,
+          active: true,
+        },
+        { onConflict: 'id' },
+      ).select('id').single()
+      if (profileError) throw new Error('La cuenta se creó, pero no se pudo guardar el perfil. Contacta al administrador para completar el registro.')
+
+      if (Object.keys(invite!.permissions || {}).length) {
+        const { error: permissionError } = await supabase.rpc('apply_invitation_permissions', {
+          invitation_id: inviteToken,
+          invitation_kind: 'team',
+        })
+        if (permissionError) {
+          setError('La cuenta se creó, pero no fue posible aplicar sus permisos. Contacta al administrador.')
+          setSaving(false)
+          return
+        }
+      }
+
+      const { error: inviteError } = await supabase.from('team_invitations').update({ used: true }).eq('id', inviteToken).select('id').single()
+      if (inviteError) throw new Error('No se pudo finalizar la invitación. Contacta al administrador para verificar el registro.')
+
+      setDone(true)
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'No se pudo completar el registro. Contacta al administrador.')
+    } finally {
+      setSaving(false)
     }
-
-    await supabase.from('team_invitations').update({ used: true }).eq('id', inviteToken)
-
-    setDone(true)
-    setSaving(false)
   }
 
   if (loading) {

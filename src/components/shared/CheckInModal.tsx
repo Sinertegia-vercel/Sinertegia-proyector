@@ -9,7 +9,7 @@ function isMobileDevice() {
 
 export default function CheckInModal() {
   const { user } = useAuth()
-  const { checkIn } = useWorkSession()
+  const { checkIn, sessionError, savingSession } = useWorkSession()
 
   const hora = new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
   const fecha = new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })
@@ -65,9 +65,11 @@ export default function CheckInModal() {
 
           <p className="text-sm font-semibold text-gray-700 text-center mb-4">¿Dónde trabajas hoy?</p>
 
+          {sessionError && <p role="alert" className="text-sm text-red-600 mb-3">{sessionError}</p>}
           <div className="grid grid-cols-2 gap-3">
             <button
               onClick={() => checkIn('oficina')}
+              disabled={savingSession}
               className="flex flex-col items-center gap-3 py-6 px-4 border-2 border-gray-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all group"
             >
               <Building2 size={36} className="text-gray-300 group-hover:text-blue-500 transition" />
@@ -77,6 +79,7 @@ export default function CheckInModal() {
             </button>
             <button
               onClick={() => checkIn('home_office')}
+              disabled={savingSession}
               className="flex flex-col items-center gap-3 py-6 px-4 border-2 border-gray-200 rounded-xl hover:border-purple-500 hover:bg-purple-50 transition-all group"
             >
               <Home size={36} className="text-gray-300 group-hover:text-purple-500 transition" />

@@ -2,7 +2,7 @@ import { Clock } from 'lucide-react'
 import { useWorkSession } from '../../contexts/WorkSessionContext'
 
 export default function OvertimeModal() {
-  const { continueOvertime, declineOvertime, elapsedMinutes } = useWorkSession()
+  const { continueOvertime, declineOvertime, elapsedMinutes, sessionError, savingSession } = useWorkSession()
   const isSaturday = new Date().getDay() === 6
   const endLabel = isSaturday ? '2:00 pm' : '6:00 pm'
   const hours = Math.floor(elapsedMinutes / 60)
@@ -28,15 +28,18 @@ export default function OvertimeModal() {
             ¿Continuarás trabajando? Las horas adicionales se registrarán como <span className="font-semibold text-orange-600">horas extras</span>.
           </p>
 
+          {sessionError && <p role="alert" className="text-sm text-red-600 mb-3">{sessionError}</p>}
           <div className="grid grid-cols-2 gap-3">
             <button
               onClick={declineOvertime}
+              disabled={savingSession}
               className="py-3 px-4 border border-gray-300 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 transition"
             >
               No, ya salgo
             </button>
             <button
               onClick={continueOvertime}
+              disabled={savingSession}
               className="py-3 px-4 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-sm font-semibold transition"
             >
               ✅ Sí, horas extras

@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { ExternalLink, Send, Camera, Loader2, PlusCircle, CheckCircle, X, ChevronDown, CheckCheck, ClipboardList, LayoutGrid, CalendarDays, Map, MessageCircle, Link2, Clock3, Eye, Sparkles, UserRound, LogOut } from 'lucide-react'
+import { ExternalLink, Send, Camera, Loader2, PlusCircle, CheckCircle, X, ChevronDown, CheckCheck, ClipboardList, LayoutGrid, CalendarDays, Map as MapIcon, MessageCircle, Link2, Clock3, Eye, Sparkles, UserRound, LogOut } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import type { Task, Project, Client } from '../../types'
@@ -24,7 +24,7 @@ const CLIENT_NAV_ITEMS = [
   { id: 'progreso' as Tab, label: 'Todas las tareas', icon: ClipboardList },
   { id: 'area' as Tab, label: 'Por área', icon: LayoutGrid },
   { id: 'calendario' as Tab, label: 'Calendario', icon: CalendarDays },
-  { id: 'roadmap' as Tab, label: 'Hoja de Ruta', icon: Map },
+  { id: 'roadmap' as Tab, label: 'Hoja de Ruta', icon: MapIcon },
   { id: 'chat' as Tab, label: 'Chat con el equipo', icon: MessageCircle },
   { id: 'entregables' as Tab, label: 'Entregables', icon: Link2 },
 ]
@@ -55,7 +55,7 @@ export default function ClientPortal() {
 
   const [coverImage, setCoverImage] = useState<string | null>(null)
   const [uploadingCover, setUploadingCover] = useState(false)
-  const [uploadStatus, setUploadStatus] = useState('')
+  const [, setUploadStatus] = useState('')
   const [coverError, setCoverError] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
 

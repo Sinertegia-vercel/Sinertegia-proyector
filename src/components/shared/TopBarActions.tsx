@@ -10,7 +10,7 @@ import GlobalSearch from './GlobalSearch'
 
 export default function TopBarActions() {
   const { user, signOut, refreshUser } = useAuth()
-  const { currentSession, checkOut, elapsedMinutes, isInOvertime } = useWorkSession()
+  const { currentSession, checkOut, elapsedMinutes, isInOvertime, sessionError, savingSession } = useWorkSession()
   const [menuOpen, setMenuOpen] = useState(false)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -76,8 +76,7 @@ export default function TopBarActions() {
   }
 
   async function confirmLogout() {
-    await checkOut()
-    await signOut()
+    if (await checkOut()) await signOut()
   }
 
   async function handleChangePassword() {
@@ -300,6 +299,7 @@ export default function TopBarActions() {
               </button>
             </div>
             <div className="p-6">
+              {sessionError && <p role="alert" className="text-sm text-red-600 mb-3">{sessionError}</p>}
               <div className="bg-gray-50 rounded-xl p-4 mb-4 text-center">
                 <p className="text-3xl font-bold text-gray-800">{timerLabel}</p>
                 <p className="text-xs text-gray-500 mt-1">horas trabajadas hoy</p>
@@ -324,6 +324,7 @@ export default function TopBarActions() {
                 </button>
                 <button
                   onClick={confirmLogout}
+                  disabled={savingSession}
                   className="py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-xl text-sm font-semibold transition"
                 >
                   Cerrar sesión

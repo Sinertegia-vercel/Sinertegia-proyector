@@ -2,6 +2,16 @@
 
 FAVOR DE DOCUMENTAR CADA CAMBIO QUE SE LE HAGA AL CODIGO 
 
+## Correcciones del 24 de septiembre de 2026
+
+- Permisos: el icono de Lucide se importa como `MapIcon` en los paneles de equipo y cliente para no ocultar el `Map` nativo. Se conserva la prioridad de los permisos individuales sobre los del rol.
+- Checador: se comprueban los errores de consulta y guardado de entrada/salida. Una salida fallida conserva el contador y muestra un error; el cierre de sesión solo continúa cuando la salida está confirmada. Los botones se bloquean durante el guardado para evitar envíos duplicados desde la misma pantalla.
+- Horas extra: el aviso se activa a partir de la hora de salida configurada y se revisa al volver a la pestaña. La confirmación se recuerda por sesión laboral durante la vida de la página.
+- Invitaciones: se valida el guardado del perfil, la vinculación del cliente y el cierre de la invitación antes de mostrar éxito. La carga del perfil se pospone en las URLs de invitación para que los eventos de autenticación no interrumpan el registro. Si Auth ya creó la cuenta y una escritura posterior falla, se muestra que el administrador debe completar el registro; estas operaciones no son una transacción ni eliminan automáticamente cuentas parciales.
+- Recuperación de contraseña: se añade el botón “Continuar al panel” y se limpia el estado de recuperación al cerrar sesión.
+- TypeScript: se normalizan las relaciones de proyecto, responsable y autor en entregables; se eliminan dos variables sin uso del chat y se conserva el actualizador del estado de carga de portada sin declarar una lectura sin uso. `npm run build` ahora valida tipos antes de generar los archivos de producción.
+- Verificación: `npm test` ejecuta pruebas de regresión de los handlers reales con hooks y respuestas de Supabase simulados. No escribe en una base de datos real. La validación con usuarios y políticas RLS de producción debe hacerse por separado. El lint general conserva incidencias anteriores fuera del alcance de estas correcciones.
+
 Guía rápida para entender, prender y modificar este proyecto.
 
 ## 1. ¿Qué es esto?

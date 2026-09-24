@@ -151,7 +151,6 @@ export default function TeamChat() {
     let file_name: string | undefined
 
     if (fileToSend) {
-      const ext = fileToSend.name.split('.').pop()
       const path = `${roomId}/${Date.now()}_${fileToSend.name}`
       const { error } = await supabase.storage.from('chat-files').upload(path, fileToSend)
       if (!error) {

@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { Eye, EyeOff, KeyRound, CheckCircle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
 import logoImg from '../../assets/logo.png'
 
 export default function ResetPasswordPage() {
+  const { finishPasswordRecovery } = useAuth()
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showNew, setShowNew] = useState(false)
@@ -56,6 +58,7 @@ export default function ResetPasswordPage() {
             <CheckCircle size={48} className="text-green-500" />
             <p className="text-green-700 font-semibold text-center">¡Contraseña actualizada con éxito!</p>
             <p className="text-sm text-gray-500 text-center">Ya puedes usar tu nueva contraseña para iniciar sesión.</p>
+            <button type="button" onClick={finishPasswordRecovery} className="w-full bg-blue-700 text-white font-semibold py-3 rounded-lg">Continuar al panel</button>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">

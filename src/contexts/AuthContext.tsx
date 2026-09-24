@@ -14,6 +14,7 @@ interface AuthContextType {
   licenseSuspended: boolean
   signOut: () => Promise<void>
   refreshUser: () => Promise<void>
+  finishPasswordRecovery: () => void
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -26,6 +27,7 @@ const AuthContext = createContext<AuthContextType>({
   licenseSuspended: false,
   signOut: async () => {},
   refreshUser: async () => {},
+  finishPasswordRecovery: () => {},
 })
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -53,13 +55,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       setSession(session)
       if (session) fetchUser(session.user.id)
-      else { setUser(null); setLoading(false) }
+      else { setUser(null); setIsPasswordRecovery(false); setLoading(false) }
     })
 
     return () => subscription.unsubscribe()
   }, [])
 
   async function fetchUser(id: string) {
+    // Keep the invitation form mounted until all registration writes finish.
+    const params = new URLSearchParams(window.location.search)
+    if (params.has('invite') || params.has('team_invite')) {
+      setLoading(false)
+      return
+    }
     const { data } = await supabase.from('users').select('*').eq('id', id).single()
     if (!data) {
       // Cuenta autenticada (ej. Google) pero sin registro en el sistema: se rechaza el acceso.
@@ -106,7 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ session, user, loading, isPasswordRecovery, unauthorizedEmail, deactivatedEmail, licenseSuspended, signOut, refreshUser }}>
+    <AuthContext.Provider value={{ session, user, loading, isPasswordRecovery, unauthorizedEmail, deactivatedEmail, licenseSuspended, signOut, refreshUser, finishPasswordRecovery: () => setIsPasswordRecovery(false) }}>
       {children}
     </AuthContext.Provider>
   )

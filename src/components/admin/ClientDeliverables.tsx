@@ -94,7 +94,15 @@ export default function ClientDeliverables({ fixedClientId, onlyApproved = false
     }
 
     const { data: rawTasks } = await query
-    setTasks((rawTasks || []) as TaskRow[])
+    setTasks((rawTasks || []).map(task => ({
+      ...task,
+      project: Array.isArray(task.project) ? task.project[0] : task.project,
+      assignee: Array.isArray(task.assignee) ? task.assignee[0] : task.assignee,
+      comments: (task.comments || []).map(comment => ({
+        ...comment,
+        user: Array.isArray(comment.user) ? comment.user[0] : comment.user,
+      })),
+    })))
     setLoading(false)
   }
 

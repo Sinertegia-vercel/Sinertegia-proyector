@@ -64,54 +64,63 @@ export default function ClientRegistrationPage({ inviteToken }: Props) {
       return
     }
 
+    if (saving) return
     setSaving(true)
+    try {
 
-    // 1. Crear cuenta en Supabase Auth
-    const { data: authData, error: authErr } = await supabase.auth.signUp({
-      email: form.email,
-      password: form.password,
-    })
-
-    if (authErr || !authData.user) {
-      setError(authErr?.message === 'User already registered' ? 'Este correo ya tiene una cuenta registrada.' : 'No se pudo crear la cuenta. Intenta de nuevo.')
-      setSaving(false)
-      return
-    }
-
-    const userId = authData.user.id
-
-    // 2. Actualizar perfil en public.users (el trigger ya lo creó, solo corregimos los datos)
-    await supabase.from('users').upsert(
-      {
-        id: userId,
+      // 1. Crear cuenta en Supabase Auth
+      const { data: authData, error: authErr } = await supabase.auth.signUp({
         email: form.email,
-        full_name: form.full_name.trim(),
-        role: 'client',
-        must_change_password: false,
-      },
-      { onConflict: 'id' },
-    )
-
-    // 3. Vincular usuario al cliente
-    await supabase.from('clients').update({ user_id: userId }).eq('id', invite!.client.id)
-
-    if (Object.keys(invite!.permissions || {}).length) {
-      const { error: permissionError } = await supabase.rpc('apply_invitation_permissions', {
-        invitation_id: inviteToken,
-        invitation_kind: 'client',
+        password: form.password,
       })
-      if (permissionError) {
-        setError('La cuenta se creó, pero no fue posible aplicar sus permisos. Contacta al administrador.')
+
+      if (authErr || !authData.user) {
+        setError(authErr?.message === 'User already registered' ? 'Este correo ya tiene una cuenta registrada.' : 'No se pudo crear la cuenta. Intenta de nuevo.')
         setSaving(false)
         return
       }
+
+      const userId = authData.user.id
+
+      // 2. Actualizar perfil en public.users (el trigger ya lo creó, solo corregimos los datos)
+      const { error: profileError } = await supabase.from('users').upsert(
+        {
+          id: userId,
+          email: form.email,
+          full_name: form.full_name.trim(),
+          role: 'client',
+          must_change_password: false,
+        },
+        { onConflict: 'id' },
+      ).select('id').single()
+      if (profileError) throw new Error('La cuenta se creó, pero no se pudo guardar el perfil. Contacta al administrador para completar el registro.')
+
+      // 3. Vincular usuario al cliente
+      const { error: clientError } = await supabase.from('clients').update({ user_id: userId }).eq('id', invite!.client.id).select('id').single()
+      if (clientError) throw new Error('La cuenta se creó, pero no se pudo vincular al cliente. Contacta al administrador.')
+
+      if (Object.keys(invite!.permissions || {}).length) {
+        const { error: permissionError } = await supabase.rpc('apply_invitation_permissions', {
+          invitation_id: inviteToken,
+          invitation_kind: 'client',
+        })
+        if (permissionError) {
+          setError('La cuenta se creó, pero no fue posible aplicar sus permisos. Contacta al administrador.')
+          setSaving(false)
+          return
+        }
+      }
+
+      // 4. Marcar invitación como usada
+      const { error: inviteError } = await supabase.from('client_invitations').update({ used: true }).eq('id', inviteToken).select('id').single()
+      if (inviteError) throw new Error('No se pudo finalizar la invitación. Contacta al administrador para verificar el registro.')
+
+      setDone(true)
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'No se pudo completar el registro. Contacta al administrador.')
+    } finally {
+      setSaving(false)
     }
-
-    // 4. Marcar invitación como usada
-    await supabase.from('client_invitations').update({ used: true }).eq('id', inviteToken)
-
-    setDone(true)
-    setSaving(false)
   }
 
   if (loading) {

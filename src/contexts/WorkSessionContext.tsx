@@ -20,18 +20,20 @@ interface WorkSessionContextType {
   needsCheckIn: boolean
   showOvertimeModal: boolean
   checkIn: (location: 'oficina' | 'home_office') => Promise<void>
-  checkOut: () => Promise<void>
+  checkOut: () => Promise<boolean>
   continueOvertime: () => void
   declineOvertime: () => void
   elapsedMinutes: number
   isInOvertime: boolean
+  sessionError: string
+  savingSession: boolean
 }
 
 const WorkSessionContext = createContext<WorkSessionContextType>({
   currentSession: null, needsCheckIn: false, showOvertimeModal: false,
-  checkIn: async () => {}, checkOut: async () => {},
+  checkIn: async () => {}, checkOut: async () => true,
   continueOvertime: () => {}, declineOvertime: () => {},
-  elapsedMinutes: 0, isInOvertime: false,
+  elapsedMinutes: 0, isInOvertime: false, sessionError: '', savingSession: false,
 })
 
 function getScheduleHours(user: User, date = new Date()) {
@@ -80,13 +82,24 @@ export function WorkSessionProvider({ children }: { children: React.ReactNode })
   const [needsCheckIn, setNeedsCheckIn] = useState(false)
   const [showOvertimeModal, setShowOvertimeModal] = useState(false)
   const [elapsedMinutes, setElapsedMinutes] = useState(0)
-  const overtimeAlerted = useRef(false)
+  const overtimeAlerted = useRef<string | null>(null)
+  const savingRef = useRef(false)
+  const [sessionError, setSessionError] = useState('')
+  const [savingSession, setSavingSession] = useState(false)
 
   const schedule = user ? getScheduleHours(user) : { enabled: true, start: 9, end: 18 }
   const isInOvertime = !schedule.enabled || new Date().getHours() >= schedule.end
 
   const loadTodaySession = useCallback(async () => {
-    if (!user || user.role === 'client') return
+    if (!user || user.role === 'client') {
+      setCurrentSession(null)
+      setElapsedMinutes(0)
+      setNeedsCheckIn(false)
+      setShowOvertimeModal(false)
+      setSessionError('')
+      overtimeAlerted.current = null
+      return
+    }
 
     const { data, error } = await supabase
       .from('work_sessions')
@@ -149,68 +162,106 @@ export function WorkSessionProvider({ children }: { children: React.ReactNode })
 
       const now = new Date()
       const todaySchedule = user ? getScheduleHours(user, now) : { enabled: true, start: 9, end: 18 }
-      const reachedOvertime = !todaySchedule.enabled || (now.getHours() === todaySchedule.end && now.getMinutes() === 0)
-      if (reachedOvertime && !overtimeAlerted.current) {
-        overtimeAlerted.current = true
+      const reachedOvertime = !todaySchedule.enabled || now.getHours() >= todaySchedule.end
+      if (reachedOvertime && overtimeAlerted.current !== currentSession.id) {
+        overtimeAlerted.current = currentSession.id
         setShowOvertimeModal(true)
       }
     }
     tick()
     const id = setInterval(tick, 60000)
-    return () => clearInterval(id)
+    window.addEventListener('focus', tick)
+    document.addEventListener('visibilitychange', tick)
+    return () => {
+      clearInterval(id)
+      window.removeEventListener('focus', tick)
+      document.removeEventListener('visibilitychange', tick)
+    }
   }, [currentSession, user])
 
   async function checkIn(location: 'oficina' | 'home_office') {
-    const { data: openRows } = await supabase
-      .from('work_sessions')
-      .select('*')
-      .eq('user_id', user!.id)
-      .is('ended_at', null)
-      .order('started_at', { ascending: true })
+    if (!user || savingRef.current) return
+    savingRef.current = true
+    setSavingSession(true)
+    setSessionError('')
+    try {
+      const { data: openRows, error: readError } = await supabase
+        .from('work_sessions')
+        .select('*')
+        .eq('user_id', user!.id)
+        .is('ended_at', null)
+        .order('started_at', { ascending: true })
 
-    const existingSession = ((openRows || []) as WorkSession[]).find(isSessionFromToday)
-    if (existingSession) {
-      const session = existingSession
-      setCurrentSession(session)
-      setElapsedMinutes(Math.max(0, Math.floor((Date.now() - new Date(session.started_at).getTime()) / 60000)))
-      setNeedsCheckIn(false)
-      return
-    }
+      if (readError) throw readError
+      const existingSession = ((openRows || []) as WorkSession[]).find(isSessionFromToday)
+      if (existingSession) {
+        const session = existingSession
+        setCurrentSession(session)
+        setElapsedMinutes(Math.max(0, Math.floor((Date.now() - new Date(session.started_at).getTime()) / 60000)))
+        setNeedsCheckIn(false)
+        return
+      }
 
-    const { data } = await supabase
-      .from('work_sessions')
-      .insert({ user_id: user!.id, location, date: getLocalDateKey() })
-      .select()
-      .single()
-    if (data) {
-      setCurrentSession(data as WorkSession)
-      setElapsedMinutes(0)
-      setNeedsCheckIn(false)
+      const { data, error } = await supabase
+        .from('work_sessions')
+        .insert({ user_id: user!.id, location, date: getLocalDateKey() })
+        .select()
+        .single()
+      if (error || !data) throw error || new Error('No se pudo registrar la entrada')
+      if (data) {
+        setCurrentSession(data as WorkSession)
+        setElapsedMinutes(0)
+        setNeedsCheckIn(false)
+      }
+    } catch {
+      setSessionError('No se pudo guardar la entrada. Intenta de nuevo.')
+    } finally {
+      savingRef.current = false
+      setSavingSession(false)
     }
   }
 
   async function checkOut() {
-    if (!currentSession || !user) return
-    const now = new Date().toISOString()
-    const { data } = await supabase
-      .from('work_sessions')
-      .select('*')
-      .eq('user_id', user.id)
-      .is('ended_at', null)
+    if (savingRef.current) return false
+    if (!currentSession || !user) return true
+    savingRef.current = true
+    setSavingSession(true)
+    setSessionError('')
+    try {
+      const now = new Date().toISOString()
+      const { data, error } = await supabase
+        .from('work_sessions').select('*').eq('user_id', user.id).is('ended_at', null)
+      if (error || !data) throw error || new Error('No se pudieron consultar las sesiones')
 
-    const todaySessions = ((data || [currentSession]) as WorkSession[]).filter(isSessionFromToday)
-    await Promise.all(todaySessions.map(session => {
-      const mins = calcMinutes(session.started_at, now, user)
-      return supabase.from('work_sessions').update({ ended_at: now, ...mins }).eq('id', session.id)
-    }))
-    setCurrentSession(null)
-    setElapsedMinutes(0)
+      const todaySessions = (data as WorkSession[]).filter(session => isSessionFromToday(session) || session.id === currentSession.id)
+      if (!todaySessions.some(session => session.id === currentSession.id)) {
+        const { data: savedSession, error: savedError } = await supabase.from('work_sessions')
+          .select('ended_at').eq('id', currentSession.id).eq('user_id', user.id).single()
+        if (savedError || !savedSession?.ended_at) throw savedError || new Error('Salida sin confirmar')
+      }
+      for (const session of todaySessions) {
+        const mins = calcMinutes(session.started_at, now, user)
+        const { error: updateError } = await supabase.from('work_sessions')
+          .update({ ended_at: now, ...mins }).eq('id', session.id).eq('user_id', user.id)
+          .select('id').single()
+        if (updateError) throw updateError
+      }
+      setCurrentSession(null)
+      setElapsedMinutes(0)
+      setShowOvertimeModal(false)
+      return true
+    } catch {
+      setSessionError('No se pudo guardar la salida. Tu sesión sigue abierta; intenta de nuevo.')
+      return false
+    } finally {
+      savingRef.current = false
+      setSavingSession(false)
+    }
   }
 
   function continueOvertime() { setShowOvertimeModal(false) }
 
   async function declineOvertime() {
-    setShowOvertimeModal(false)
     await checkOut()
   }
 
@@ -218,7 +269,7 @@ export function WorkSessionProvider({ children }: { children: React.ReactNode })
     <WorkSessionContext.Provider value={{
       currentSession, needsCheckIn, showOvertimeModal,
       checkIn, checkOut, continueOvertime, declineOvertime,
-      elapsedMinutes, isInOvertime,
+      elapsedMinutes, isInOvertime, sessionError, savingSession,
     }}>
       {children}
     </WorkSessionContext.Provider>
