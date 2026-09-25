@@ -240,6 +240,16 @@ test('Funnel manager and project creation share the canonical task resolver', ()
   }
 })
 
+test('New task loads every active funnel and reports template save failures', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'src/components/admin/CreateTaskModal.tsx'), 'utf8')
+  assert.match(source, /from\('project_templates'\)/)
+  assert.match(source, /templateOptions\.map/)
+  assert.match(source, /!template\.archived/)
+  assert.match(source, /templateError/)
+  assert.match(source, /no se pudo fijar en el embudo/)
+  assert.doesNotMatch(source, /useState<'vsl' \| 'webinar'>/)
+})
+
 const projectProps = {
   project: { id: 'project-1', name: 'Project example', description: 'Description', status: 'activo' },
   tasks: [], projects: [], teamMembers: [], onBack() {}, onUpdate() {},

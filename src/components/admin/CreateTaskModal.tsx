@@ -1,8 +1,19 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { FileUp, Link2, Plus, Trash2, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import type { Project, User, Priority, Department } from '../../types'
+import { PROJECT_TEMPLATES } from '../../data/projectTemplates'
+
+interface TemplateOption {
+  id: string
+  name: string
+  icon: string
+}
+
+interface StoredProjectTemplate extends TemplateOption {
+  archived?: boolean
+}
 
 interface Props {
   projects: Project[]
@@ -41,10 +52,46 @@ export default function CreateTaskModal({ projects, teamMembers, defaultProjectI
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [saveToTemplate, setSaveToTemplate] = useState(false)
-  const [templateType, setTemplateType] = useState<'vsl' | 'webinar'>('vsl')
+  const [templateType, setTemplateType] = useState('')
+  const [templateOptions, setTemplateOptions] = useState<TemplateOption[]>([])
+  const [templatesLoading, setTemplatesLoading] = useState(true)
   const [referenceLinks, setReferenceLinks] = useState<Array<{ label: string; url: string }>>([])
   const [linkDraft, setLinkDraft] = useState({ label: '', url: '' })
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
+
+  useEffect(() => {
+    async function loadTemplateOptions() {
+      setTemplatesLoading(true)
+      const { data, error: templatesError } = await supabase
+        .from('project_templates')
+        .select('id, name, icon, archived')
+        .order('created_at')
+
+      if (templatesError) {
+        setError('No se pudieron cargar los embudos disponibles. Cierra esta ventana e intenta de nuevo.')
+        setTemplatesLoading(false)
+        return
+      }
+
+      const stored = (data || []) as StoredProjectTemplate[]
+      const builtIns = PROJECT_TEMPLATES
+        .filter(template => template.id !== 'otro' && stored.find(item => item.id === template.id)?.archived !== true)
+        .map(template => {
+          const override = stored.find(item => item.id === template.id)
+          return { id: template.id, name: override?.name || template.name, icon: override?.icon || template.icon }
+        })
+      const custom = stored
+        .filter(template => !template.archived && template.id !== 'otro' && !PROJECT_TEMPLATES.some(item => item.id === template.id))
+        .map(({ id, name, icon }) => ({ id, name, icon }))
+      const options = [...builtIns, ...custom]
+
+      setTemplateOptions(options)
+      setTemplateType(current => options.some(option => option.id === current) ? current : (options[0]?.id || ''))
+      setTemplatesLoading(false)
+    }
+
+    void loadTemplateOptions()
+  }, [])
 
   function addReferenceLink() {
     const url = linkDraft.url.trim()
@@ -78,6 +125,10 @@ export default function CreateTaskModal({ projects, teamMembers, defaultProjectI
     e.preventDefault()
     if (!form.project_id || !form.title || !form.assigned_to || form.approver_ids.length === 0 || !form.department) {
       setError('Por favor completa todos los campos requeridos')
+      return
+    }
+    if (saveToTemplate && (!templateType || templatesLoading)) {
+      setError('Selecciona el embudo donde quieres fijar esta tarea')
       return
     }
     setSaving(true)
@@ -129,12 +180,17 @@ export default function CreateTaskModal({ projects, teamMembers, defaultProjectI
 
     // Guardar en plantilla si se marcó
     if (saveToTemplate && form.title && form.department) {
-      await supabase.from('template_tasks').insert({
+      const { error: templateError } = await supabase.from('template_tasks').insert({
         title: form.title,
         department: form.department,
         priority: form.priority,
         template_id: templateType,
       })
+      if (templateError) {
+        setError(`La tarea se creó, pero no se pudo fijar en el embudo: ${templateError.message}`)
+        setSaving(false)
+        return
+      }
     }
 
     // Notificaciones al asignado y al cliente
@@ -311,15 +367,21 @@ export default function CreateTaskModal({ projects, teamMembers, defaultProjectI
               </div>
             </label>
             {saveToTemplate && (
-              <div className="mt-3 flex gap-2">
-                <button type="button" onClick={() => setTemplateType('vsl')}
-                  className={`flex-1 py-1.5 text-sm rounded-lg font-medium transition ${templateType === 'vsl' ? 'bg-blue-600 text-white' : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
-                  🎬 VSL
-                </button>
-                <button type="button" onClick={() => setTemplateType('webinar')}
-                  className={`flex-1 py-1.5 text-sm rounded-lg font-medium transition ${templateType === 'webinar' ? 'bg-blue-600 text-white' : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
-                  📡 Webinar
-                </button>
+              <div className="mt-3">
+                {templatesLoading ? (
+                  <p className="text-xs font-medium text-gray-500">Cargando embudos...</p>
+                ) : templateOptions.length > 0 ? (
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {templateOptions.map(template => (
+                      <button key={template.id} type="button" onClick={() => setTemplateType(template.id)}
+                        className={`min-w-0 rounded-lg px-3 py-2 text-sm font-medium transition ${templateType === template.id ? 'bg-blue-600 text-white' : 'border border-gray-300 bg-white text-gray-600 hover:bg-gray-50'}`}>
+                        <span className="block truncate">{template.icon} {template.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs font-medium text-red-600">No hay embudos disponibles.</p>
+                )}
               </div>
             )}
           </div>
