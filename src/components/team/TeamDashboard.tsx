@@ -159,6 +159,26 @@ export default function TeamDashboard({ embedded = false }: Props) {
   }, [])
 
   useEffect(() => {
+    const openProject = () => setTeamView('roadmap')
+    const openClient = () => setTeamView('chat_clients')
+    const openPerson = () => setTeamView('chat_team')
+    const openSection = (event: Event) => {
+      const target = (event as CustomEvent).detail?.view as TeamView | undefined
+      if (target && !hiddenSections.has(target)) setTeamView(target)
+    }
+    window.addEventListener('open-project', openProject)
+    window.addEventListener('open-client', openClient)
+    window.addEventListener('open-person', openPerson)
+    window.addEventListener('open-section', openSection)
+    return () => {
+      window.removeEventListener('open-project', openProject)
+      window.removeEventListener('open-client', openClient)
+      window.removeEventListener('open-person', openPerson)
+      window.removeEventListener('open-section', openSection)
+    }
+  }, [hiddenSections])
+
+  useEffect(() => {
     document.documentElement.classList.toggle('ui-compact', localStorage.getItem('sinertegia-compact') === 'true')
   }, [])
 

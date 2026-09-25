@@ -100,6 +100,36 @@ export default function ClientPortal() {
     return () => window.removeEventListener('open-profile', handleOpenProfile)
   }, [])
 
+  useEffect(() => {
+    const openTask = (event: Event) => {
+      const taskId = (event as CustomEvent).detail?.taskId
+      if (!taskId || !tasks.some(task => task.id === taskId)) return
+      setActiveTab('progreso')
+      setOpenTaskId(taskId)
+    }
+    const openProject = (event: Event) => {
+      const projectId = (event as CustomEvent).detail?.projectId
+      const project = projects.find(item => item.id === projectId)
+      if (project) setSelectedProject(project)
+      setActiveTab('progreso')
+    }
+    const openClient = () => setActiveTab('progreso')
+    const openSection = (event: Event) => {
+      const target = (event as CustomEvent).detail?.view as Tab | undefined
+      if (target && !hiddenSections.has(target)) setActiveTab(target)
+    }
+    window.addEventListener('open-task', openTask)
+    window.addEventListener('open-project', openProject)
+    window.addEventListener('open-client', openClient)
+    window.addEventListener('open-section', openSection)
+    return () => {
+      window.removeEventListener('open-task', openTask)
+      window.removeEventListener('open-project', openProject)
+      window.removeEventListener('open-client', openClient)
+      window.removeEventListener('open-section', openSection)
+    }
+  }, [hiddenSections, projects, tasks])
+
   async function fetchData() {
     const { data: client } = await supabase.from('clients').select('*').eq('user_id', user!.id).single()
     if (!client) { setLoading(false); return }

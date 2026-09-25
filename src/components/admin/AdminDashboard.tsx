@@ -183,6 +183,29 @@ export default function AdminDashboard() {
     return () => window.removeEventListener('open-project', handleOpenProject)
   }, [projects])
 
+  useEffect(() => {
+    const openClient = () => setView('clientes')
+    const openPerson = () => setView(user?.is_super_admin ? 'permisos' : 'team_tasks')
+    const openFunnel = () => setView('funnels')
+    const openSection = (event: Event) => {
+      const target = (event as CustomEvent).detail?.view as View | undefined
+      if (!target) return
+      if (target === 'permisos' && !user?.is_super_admin) return
+      if (!user?.is_super_admin && adminPermissions[target] === false) return
+      setView(target)
+    }
+    window.addEventListener('open-client', openClient)
+    window.addEventListener('open-person', openPerson)
+    window.addEventListener('open-funnel', openFunnel)
+    window.addEventListener('open-section', openSection)
+    return () => {
+      window.removeEventListener('open-client', openClient)
+      window.removeEventListener('open-person', openPerson)
+      window.removeEventListener('open-funnel', openFunnel)
+      window.removeEventListener('open-section', openSection)
+    }
+  }, [adminPermissions, user])
+
   // ── open-task desde campanita ────────────────────────────────────────────
   useEffect(() => {
     async function handleOpenTask(e: Event) {

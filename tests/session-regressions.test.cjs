@@ -319,6 +319,25 @@ test('My workflow separates completed tasks, charts them in green, and refreshes
   assert.match(source, /window\.addEventListener\('focus', refreshTasks\)/)
 })
 
+test('Global search covers application records, handles failures, and opens every result type', () => {
+  const search = fs.readFileSync(path.join(__dirname, '..', 'src/components/shared/GlobalSearch.tsx'), 'utf8')
+  const admin = fs.readFileSync(path.join(__dirname, '..', 'src/components/admin/AdminDashboard.tsx'), 'utf8')
+  const team = fs.readFileSync(path.join(__dirname, '..', 'src/components/team/TeamDashboard.tsx'), 'utf8')
+  const client = fs.readFileSync(path.join(__dirname, '..', 'src/components/client/ClientPortal.tsx'), 'utf8')
+  for (const table of ['tasks', 'projects', 'clients', 'users', 'project_templates']) {
+    assert.match(search, new RegExp(`from\\('${table}'\\)`))
+  }
+  assert.match(search, /finally \{[\s\S]*setLoading\(false\)/)
+  assert.match(search, /normalize\('NFD'\)/)
+  for (const eventName of ['open-task', 'open-project', 'open-client', 'open-person', 'open-funnel', 'open-section']) {
+    assert.match(search, new RegExp(eventName))
+  }
+  assert.match(admin, /addEventListener\('open-client'/)
+  assert.match(admin, /addEventListener\('open-funnel'/)
+  assert.match(team, /addEventListener\('open-section'/)
+  assert.match(client, /addEventListener\('open-task'/)
+})
+
 const projectProps = {
   project: { id: 'project-1', name: 'Project example', description: 'Description', status: 'activo' },
   tasks: [], projects: [], teamMembers: [], onBack() {}, onUpdate() {},
