@@ -286,6 +286,18 @@ test('Administrators can configure their weekly work schedule', () => {
   assert.doesNotMatch(source, /selected\.role === 'team' && <WeeklyScheduleEditor/)
 })
 
+test('Review authorization is visible only to explicitly selected people', () => {
+  const dashboard = fs.readFileSync(path.join(__dirname, '..', 'src/components/team/TeamDashboard.tsx'), 'utf8')
+  const detail = fs.readFileSync(path.join(__dirname, '..', 'src/components/team/TaskDetailModal.tsx'), 'utf8')
+  assert.match(dashboard, /task\.reviewer_id === user\?\.id/)
+  assert.match(dashboard, /approverIds\.includes\(user\.id\)/)
+  assert.match(detail, /const canAuthorize = isReviewer/)
+  assert.match(detail, /Selecciona quién debe revisar y autorizar esta tarea/)
+  assert.doesNotMatch(detail, /Trafficker \/ Líder \(por defecto\)/)
+  assert.doesNotMatch(detail, /select\('id'\)\.eq\('role', 'admin'\)/)
+  assert.doesNotMatch(detail, /select\('id'\)\.eq\('department', 'trafficker'\)/)
+})
+
 const projectProps = {
   project: { id: 'project-1', name: 'Project example', description: 'Description', status: 'activo' },
   tasks: [], projects: [], teamMembers: [], onBack() {}, onUpdate() {},

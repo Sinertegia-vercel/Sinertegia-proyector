@@ -312,7 +312,11 @@ export default function TeamDashboard({ embedded = false }: Props) {
     <>
       {/* Paneles de revisión para trafficker/lider */}
       {isTraffickerOrLider && reviewTasks.length > 0 && (() => {
-        const pendingAuth = reviewTasks.filter((t: any) => t.review_status === 'pendiente_revision' || t.review_status === 'pendiente_trafficker')
+        const pendingAuth = reviewTasks.filter((task) => {
+          if (task.review_status !== 'pendiente_revision' && task.review_status !== 'pendiente_trafficker') return false
+          const approverIds = task.approver_ids?.length ? task.approver_ids : (task.approver_id ? [task.approver_id] : [])
+          return task.reviewer_id === user?.id || (!!user?.id && approverIds.includes(user.id))
+        })
         const clientChanges = reviewTasks.filter((t: any) => t.client_approval === 'cambios_solicitados')
         return (
           <div className="mb-5 space-y-3">
@@ -363,7 +367,7 @@ export default function TeamDashboard({ embedded = false }: Props) {
       })()}
 
       {/* Panel: Tareas que me toca revisar (para cualquier miembro del equipo) */}
-      {myReviewTasks.length > 0 && (
+      {!isTraffickerOrLider && myReviewTasks.length > 0 && (
         <div className="mb-5">
           <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
             <p className="text-sm font-bold text-purple-800 mb-3">

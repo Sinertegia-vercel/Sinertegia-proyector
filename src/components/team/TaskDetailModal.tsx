@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { X, ExternalLink, Send, CheckCircle, RotateCcw, ShieldCheck, ThumbsUp, Plus, Trash2, MessageSquare, Pencil, Upload, FileCode, Image as ImageIcon, File as FileIcon, ListChecks, Timer, Play, Square, Link2, AlertTriangle, ChevronDown, SlidersHorizontal } from 'lucide-react'
+import { X, ExternalLink, Send, CheckCircle, RotateCcw, ShieldCheck, Plus, Trash2, MessageSquare, Pencil, Upload, FileCode, Image as ImageIcon, File as FileIcon, ListChecks, Timer, Play, Square, Link2, AlertTriangle, ChevronDown, SlidersHorizontal } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import type { Task, User, Comment, Subtask, TimeEntry } from '../../types'
@@ -18,8 +18,7 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone,
   const isTeam = user?.role === 'team'
   const approverIds = task.approver_ids?.length ? task.approver_ids : (task.approver_id ? [task.approver_id] : [])
   const isReviewer = user?.id === task.reviewer_id || (!!user?.id && approverIds.includes(user.id))
-  const isTaskApprover = !!user?.id && approverIds.includes(user.id)
-  const canAuthorize = isAdmin || isTaskApprover || (!task.approver_id && (user?.department === 'trafficker' || user?.department === 'lider'))
+  const canAuthorize = isReviewer
 
   const [teamMembers, setTeamMembers] = useState<User[]>([])
   const [links, setLinks] = useState<{ id: string; label: string; url: string }[]>(task.links || [])
@@ -323,6 +322,11 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone,
 
   // ─── PASO 1 → solicitar revisión ─────────────────────────────────────────
   async function submitForReview() {
+    const selectedReviewers = approverIds.length > 0 ? approverIds : (reviewerId ? [reviewerId] : [])
+    if (selectedReviewers.length === 0) {
+      setSubmitAttempted(true)
+      return
+    }
     setBusy(true)
     await supabase.from('tasks').update({
       status: 'completada',
@@ -330,16 +334,7 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone,
     }).eq('id', task.id)
     await updateReviewStatus('pendiente_revision')
 
-    const notifyIds: string[] = approverIds.length > 0 ? approverIds : (reviewerId ? [reviewerId] : [])
-    if (notifyIds.length === 0) {
-      const [{ data: admins }, { data: traf }] = await Promise.all([
-        supabase.from('users').select('id').eq('role', 'admin'),
-        supabase.from('users').select('id').eq('department', 'trafficker'),
-      ])
-      ;[...(admins || []), ...(traf || [])].forEach((u: any) => {
-        if (u.id !== user?.id) notifyIds.push(u.id)
-      })
-    }
+    const notifyIds = [...new Set(selectedReviewers.filter(id => id !== user?.id))]
     if (notifyIds.length > 0) {
       await supabase.from('notifications').insert(notifyIds.map(id => ({
         user_id: id,
@@ -350,48 +345,6 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone,
       })))
     }
     setBusy(false); onUpdate(); onClose()
-  }
-
-  // ─── PASO 2 → revisor aprueba → pasa a trafficker ────────────────────────
-  async function approveToTrafficker() {
-    setBusy(true)
-    await updateReviewStatus('pendiente_trafficker')
-    const now = new Date().toLocaleDateString('es-MX', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })
-    await supabase.from('task_comments').insert({
-      task_id: task.id, user_id: user!.id,
-      content: `✅ Revisado y aprobado por ${user?.full_name} el ${now}. Pasando a validación del Trafficker.`,
-    })
-
-    // Buscar trafficker del proyecto
-    const notifyIds = new Set<string>()
-    const clientId = task.project?.client?.id || (task.project as any)?.client_id
-    if (clientId) {
-      const { data: members } = await supabase
-        .from('client_team_members')
-        .select('user_id, user:users!user_id(department)')
-        .eq('client_id', clientId)
-      const trafMember = (members || []).find((m: any) => m.user?.department === 'trafficker')
-      if (trafMember) notifyIds.add(trafMember.user_id)
-
-      if (notifyIds.size === 0) {
-        const { data: ptasks } = await supabase
-          .from('tasks').select('assigned_to, assignee:users!assigned_to(department)')
-          .eq('project_id', task.project_id)
-        const pt = (ptasks || []).find((t: any) => t.assignee?.department === 'trafficker')
-        if (pt) notifyIds.add(pt.assigned_to)
-      }
-    }
-    const { data: admins } = await supabase.from('users').select('id').eq('role', 'admin')
-    ;(admins || []).forEach((u: any) => notifyIds.add(u.id))
-
-    if (notifyIds.size > 0) {
-      await supabase.from('notifications').insert([...notifyIds].map(id => ({
-        user_id: id, title: '✅ Listo para autorización',
-        message: `${user?.full_name} aprobó "${task.title}". Requiere tu autorización final.`,
-        type: 'review', task_id: task.id,
-      })))
-    }
-    setBusy(false); onReviewDone?.(task.id); onUpdate(); onClose()
   }
 
   // ─── PASO 2 → solicitar retrabajo ────────────────────────────────────────
@@ -791,17 +744,18 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone,
                 <select value={reviewerId} onChange={e => setReviewerId(e.target.value)}
                   disabled={approverIds.length > 0}
                   className="w-full border border-blue-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="">Trafficker / Líder (por defecto)</option>
+                  <option value="">Selecciona una persona</option>
                   {teamMembers.filter(m => m.id !== user?.id).map(m => (
                     <option key={m.id} value={m.id}>{m.full_name}</option>
                   ))}
                 </select>
                 {approverIds.length > 0 && <p className="mt-1 text-xs text-blue-600">Esta tarea se enviará a {approverIds.length} persona{approverIds.length === 1 ? '' : 's'} responsable{approverIds.length === 1 ? '' : 's'}.</p>}
+                {submitAttempted && approverIds.length === 0 && !reviewerId && <p className="mt-1 text-xs font-medium text-red-600">Selecciona quién debe revisar y autorizar esta tarea.</p>}
               </div>
               <button type="button" onClick={() => {
                 setSubmitAttempted(true)
                 if (links.length > 0) void submitForReview()
-              }} disabled={busy}
+              }} disabled={busy || (approverIds.length === 0 && !reviewerId)}
                 className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold py-2.5 rounded-lg transition disabled:opacity-50">
                 <Send size={14} />
                 {busy ? 'Enviando...' : 'Enviar a revisión'}
@@ -817,16 +771,7 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone,
               <p className="text-sm font-bold text-yellow-800">Paso 2 — Revisión del entregable</p>
               <p className="text-xs text-yellow-600">Revisa los links de arriba y decide.</p>
 
-              {/* Revisor interno → pasa a Trafficker */}
-              {isReviewer && !canAuthorize && (
-                <button type="button" onClick={approveToTrafficker} disabled={busy}
-                  className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold py-2.5 rounded-lg transition disabled:opacity-50">
-                  <ThumbsUp size={14} />
-                  {busy ? 'Enviando...' : '✅ Aprobar — pasar a Trafficker'}
-                </button>
-              )}
-
-              {/* Responsable elegido / Trafficker / Admin autoriza directo */}
+              {/* Solo la persona elegida puede autorizar */}
               {canAuthorize && (
                 <button type="button" onClick={authorizeForClient} disabled={busy}
                   className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold py-2.5 rounded-lg transition disabled:opacity-50">
