@@ -265,9 +265,17 @@ test('Team tasks includes active administrators and uses responsive task cards',
   const source = fs.readFileSync(path.join(__dirname, '..', 'src/components/admin/TeamTasksManager.tsx'), 'utf8')
   assert.match(source, /\.in\('role', \['admin', 'team'\]\)/)
   assert.match(source, /\.eq\('active', true\)/)
-  assert.match(source, /2xl:hidden/)
-  assert.match(source, /hidden overflow-hidden[^\n]+2xl:block/)
+  assert.match(source, /grid gap-3 xl:grid-cols-2/)
+  assert.match(source, /hidden overflow-hidden rounded-xl/)
   assert.doesNotMatch(source, /min-w-\[1120px\]/)
+})
+
+test('Administrators can have an independent operational role', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'src/components/admin/RolePermissionsManager.tsx'), 'utf8')
+  assert.match(source, /selected\.role !== 'team' && selected\.role !== 'admin'/)
+  assert.match(source, /selected\.role === 'team' \|\| selected\.role === 'admin'/)
+  assert.match(source, /Rol operativo de/)
+  assert.match(source, /independiente de sus permisos de administrador/)
 })
 
 const projectProps = {

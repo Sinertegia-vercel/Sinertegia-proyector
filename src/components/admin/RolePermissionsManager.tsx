@@ -199,7 +199,7 @@ export default function RolePermissionsManager() {
   }
 
   async function updateDepartment(department: string) {
-    if (!selected?.userId || selected.role !== 'team') return
+    if (!selected?.userId || (selected.role !== 'team' && selected.role !== 'admin')) return
     setSaving('department')
     setError('')
     const { error: saveError } = await supabase.from('users').update({ department: department || null }).eq('id', selected.userId)
@@ -593,20 +593,20 @@ export default function RolePermissionsManager() {
                   </div>
                 )}
               </div>
-              {selected.role === 'team' && selected.userId && (
+              {(selected.role === 'team' || selected.role === 'admin') && selected.userId && (
                 <div className="mb-5 rounded-xl border border-indigo-100 bg-indigo-50/60 p-4">
                   <div className="flex flex-wrap items-end gap-3">
                     <label className="min-w-[240px] flex-1 text-xs font-bold text-gray-700">
-                      Departamento de {selected.name}
+                      Rol operativo de {selected.name}
                       <select value={users.find((user) => user.id === selected.userId)?.department || ''} onChange={(event) => void updateDepartment(event.target.value)} disabled={saving === 'department'} className="mt-1.5 w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm font-medium outline-none focus:border-blue-500">
-                        <option value="">Sin departamento</option>
+                        <option value="">Sin rol operativo</option>
                         {departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}
                       </select>
                     </label>
-                    <button type="button" onClick={() => setDepartmentOpen(true)} className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-3 py-2.5 text-xs font-bold text-blue-600 hover:bg-blue-50"><Plus size={14} /> Nuevo departamento</button>
+                    <button type="button" onClick={() => setDepartmentOpen(true)} className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-3 py-2.5 text-xs font-bold text-blue-600 hover:bg-blue-50"><Plus size={14} /> Nuevo rol operativo</button>
                   </div>
-                  <p className="mt-2 text-xs text-indigo-600">La lista de Equipo se ordena automáticamente por estos departamentos.</p>
-                  <WeeklyScheduleEditor key={`${selected.userId}-${JSON.stringify(users.find(user => user.id === selected.userId)?.work_schedule)}`} user={users.find(user => user.id === selected.userId)} saving={saving === 'work-schedule'} onSave={updateWorkSchedule} />
+                  <p className="mt-2 text-xs text-indigo-600">Este rol es independiente de sus permisos de administrador y se mostrará en Tareas del equipo.</p>
+                  {selected.role === 'team' && <WeeklyScheduleEditor key={`${selected.userId}-${JSON.stringify(users.find(user => user.id === selected.userId)?.work_schedule)}`} user={users.find(user => user.id === selected.userId)} saving={saving === 'work-schedule'} onSave={updateWorkSchedule} />}
                 </div>
               )}
               {!selected.userId ? (
@@ -808,15 +808,15 @@ export default function RolePermissionsManager() {
         <div className="fixed inset-0 z-[110] grid place-items-center bg-black/50 p-4" onMouseDown={() => setDepartmentOpen(false)}>
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
             <div className="flex items-start justify-between gap-4">
-              <div><h3 className="text-lg font-bold text-gray-900">Nuevo departamento</h3><p className="mt-1 text-sm text-gray-500">Se agregará a la organización y al formulario de invitación.</p></div>
+              <div><h3 className="text-lg font-bold text-gray-900">Nuevo rol operativo</h3><p className="mt-1 text-sm text-gray-500">Se agregará a la organización y al formulario de invitación.</p></div>
               <button type="button" onClick={() => setDepartmentOpen(false)} className="rounded-lg p-1 text-gray-400 hover:bg-gray-100"><X size={18} /></button>
             </div>
-            <label className="mt-5 block text-xs font-bold text-gray-700">Nombre del departamento *
+            <label className="mt-5 block text-xs font-bold text-gray-700">Nombre del rol operativo *
               <input value={newDepartment} onChange={(event) => setNewDepartment(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void createDepartment() }} autoFocus placeholder="Ej. Community Manager" className="mt-1.5 w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-blue-500" />
             </label>
             <div className="mt-6 flex justify-end gap-2">
               <button type="button" onClick={() => setDepartmentOpen(false)} className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600">Cancelar</button>
-              <button type="button" onClick={() => void createDepartment()} disabled={!newDepartment.trim() || saving === 'new-department'} className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{saving === 'new-department' ? <LoaderCircle className="animate-spin" size={16} /> : <Plus size={16} />} Crear departamento</button>
+              <button type="button" onClick={() => void createDepartment()} disabled={!newDepartment.trim() || saving === 'new-department'} className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{saving === 'new-department' ? <LoaderCircle className="animate-spin" size={16} /> : <Plus size={16} />} Crear rol</button>
             </div>
           </div>
         </div>

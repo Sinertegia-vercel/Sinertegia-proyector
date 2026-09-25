@@ -183,7 +183,7 @@ export default function TeamTasksManager({ teamMembers, tasks, onTasksChange }: 
             </select>
           </div>
 
-          <div className="hidden overflow-hidden rounded-xl border border-gray-200 2xl:block">
+          <div className="hidden overflow-hidden rounded-xl border border-gray-200">
             <table className="w-full table-fixed text-left text-sm">
               <colgroup><col className="w-[24%]" /><col className="w-[17%]" /><col className="w-[11%]" /><col className="w-[10%]" /><col className="w-[12%]" /><col className="w-[14%]" /><col className="w-[12%]" /></colgroup>
               <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500"><tr><th className="px-4 py-3">Tarea</th><th className="px-4 py-3">Integrante</th><th className="px-4 py-3">Estado</th><th className="px-4 py-3">Prioridad</th><th className="px-4 py-3">Entrega</th><th className="px-4 py-3">Comentarios</th><th className="px-4 py-3 text-right">Acciones</th></tr></thead>
@@ -209,7 +209,7 @@ export default function TeamTasksManager({ teamMembers, tasks, onTasksChange }: 
             {!filteredTasks.length && <div className="flex min-h-64 flex-col items-center justify-center p-8 text-center text-gray-400"><ClipboardList size={42} className="mb-3 text-gray-300" /><b className="text-gray-600">No hay tareas con estos filtros</b><span className="mt-1 text-sm">Prueba otra persona, estado o búsqueda.</span></div>}
           </div>
 
-          <div className="space-y-3 2xl:hidden">
+          <div className="grid gap-3 xl:grid-cols-2">
             {filteredTasks.map(task => {
               const taskComments = commentsByTask.get(task.id) || []
               const latestComment = taskComments[0]
