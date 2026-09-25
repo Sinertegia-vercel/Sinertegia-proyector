@@ -80,6 +80,31 @@ export default function TeamDashboard({ embedded = false }: Props) {
     }
   }, [user])
 
+  useEffect(() => {
+    if (!user?.id) return
+    const refreshTasks = () => { void fetchTasks() }
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') refreshTasks()
+    }
+    const channel = supabase
+      .channel(`my-tasks-${user.id}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'tasks',
+        filter: `assigned_to=eq.${user.id}`,
+      }, refreshTasks)
+      .subscribe()
+
+    window.addEventListener('focus', refreshTasks)
+    document.addEventListener('visibilitychange', refreshWhenVisible)
+    return () => {
+      window.removeEventListener('focus', refreshTasks)
+      document.removeEventListener('visibilitychange', refreshWhenVisible)
+      void supabase.removeChannel(channel)
+    }
+  }, [user?.id])
+
   async function fetchPermissions() {
     const [roleResult, userResult] = await Promise.all([
       supabase.from('role_permissions').select('section_key, allowed').eq('role', 'team'),
@@ -197,7 +222,7 @@ export default function TeamDashboard({ embedded = false }: Props) {
     setReviewTasks((data as any) || [])
   }
 
-  const byStatus = filter === 'todas' ? tasks.filter(t => t.status !== 'completada') : tasks.filter(t => t.status === filter)
+  const byStatus = filter === 'todas' ? tasks : tasks.filter(t => t.status === filter)
   const byClient = clientFilter === 'todos' ? byStatus : byStatus.filter(t => t.project?.client?.name === clientFilter)
   const isOverdue = (t: Task) => t.commitment_date && t.status !== 'completada' && new Date(t.commitment_date) < new Date()
   const filtered = (priorityFilter === 'todos' ? byClient : byClient.filter(t => t.priority === priorityFilter)).slice().sort((a, b) => {
