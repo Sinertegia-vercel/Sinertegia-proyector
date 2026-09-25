@@ -261,6 +261,15 @@ test('New task loads all active administrators and team members, including the s
   assert.equal((source.match(/assignableMembers\.map/g) || []).length, 2)
 })
 
+test('Team tasks includes active administrators and uses responsive task cards', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'src/components/admin/TeamTasksManager.tsx'), 'utf8')
+  assert.match(source, /\.in\('role', \['admin', 'team'\]\)/)
+  assert.match(source, /\.eq\('active', true\)/)
+  assert.match(source, /2xl:hidden/)
+  assert.match(source, /hidden overflow-hidden[^\n]+2xl:block/)
+  assert.doesNotMatch(source, /min-w-\[1120px\]/)
+})
+
 const projectProps = {
   project: { id: 'project-1', name: 'Project example', description: 'Description', status: 'activo' },
   tasks: [], projects: [], teamMembers: [], onBack() {}, onUpdate() {},
