@@ -35,11 +35,19 @@ const DEPARTMENTS: { value: Department; label: string }[] = [
   { value: 'cliente', label: 'Tarea del Cliente' },
 ]
 
+function mergeAssignableMembers(currentUser: User | null, members: User[]) {
+  const byId = new Map(members.map(member => [member.id, member]))
+  if (currentUser) byId.set(currentUser.id, currentUser)
+  return [...byId.values()].sort((a, b) => {
+    if (a.id === currentUser?.id) return -1
+    if (b.id === currentUser?.id) return 1
+    return a.full_name.localeCompare(b.full_name, 'es')
+  })
+}
+
 export default function CreateTaskModal({ projects, teamMembers, defaultProjectId, prefillTitle, onClose, onCreated }: Props) {
   const { user } = useAuth()
-  const assignableMembers = user
-    ? [user, ...teamMembers.filter(member => member.id !== user.id)]
-    : teamMembers
+  const [assignableMembers, setAssignableMembers] = useState<User[]>(() => mergeAssignableMembers(user, teamMembers))
   const [form, setForm] = useState({
     project_id: defaultProjectId || '',
     title: prefillTitle || '',
@@ -61,6 +69,25 @@ export default function CreateTaskModal({ projects, teamMembers, defaultProjectI
   const [referenceLinks, setReferenceLinks] = useState<Array<{ label: string; url: string }>>([])
   const [linkDraft, setLinkDraft] = useState({ label: '', url: '' })
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
+
+  useEffect(() => {
+    async function loadAssignableMembers() {
+      const { data, error: membersError } = await supabase
+        .from('users')
+        .select('*')
+        .in('role', ['admin', 'team'])
+        .eq('active', true)
+        .order('full_name')
+
+      if (membersError) {
+        setAssignableMembers(mergeAssignableMembers(user, teamMembers))
+        return
+      }
+      setAssignableMembers(mergeAssignableMembers(user, (data || []) as User[]))
+    }
+
+    void loadAssignableMembers()
+  }, [teamMembers, user])
 
   useEffect(() => {
     async function loadTemplateOptions() {

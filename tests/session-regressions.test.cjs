@@ -250,10 +250,13 @@ test('New task loads every active funnel and reports template save failures', ()
   assert.doesNotMatch(source, /useState<'vsl' \| 'webinar'>/)
 })
 
-test('New task lets the signed-in administrator assign the task to themselves', () => {
+test('New task loads all active administrators and team members, including the signed-in user', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'src/components/admin/CreateTaskModal.tsx'), 'utf8')
-  assert.match(source, /const assignableMembers = user/)
-  assert.match(source, /teamMembers\.filter\(member => member\.id !== user\.id\)/)
+  assert.match(source, /from\('users'\)/)
+  assert.match(source, /\.in\('role', \['admin', 'team'\]\)/)
+  assert.match(source, /\.eq\('active', true\)/)
+  assert.match(source, /mergeAssignableMembers\(user, \(data \|\| \[\]\) as User\[\]\)/)
+  assert.match(source, /byId\.set\(currentUser\.id, currentUser\)/)
   assert.match(source, /member\.id === user\?\.id \? ' \(yo\)'/)
   assert.equal((source.match(/assignableMembers\.map/g) || []).length, 2)
 })
