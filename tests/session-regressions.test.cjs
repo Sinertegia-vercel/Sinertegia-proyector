@@ -250,6 +250,14 @@ test('New task loads every active funnel and reports template save failures', ()
   assert.doesNotMatch(source, /useState<'vsl' \| 'webinar'>/)
 })
 
+test('New task lets the signed-in administrator assign the task to themselves', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'src/components/admin/CreateTaskModal.tsx'), 'utf8')
+  assert.match(source, /const assignableMembers = user/)
+  assert.match(source, /teamMembers\.filter\(member => member\.id !== user\.id\)/)
+  assert.match(source, /member\.id === user\?\.id \? ' \(yo\)'/)
+  assert.equal((source.match(/assignableMembers\.map/g) || []).length, 2)
+})
+
 const projectProps = {
   project: { id: 'project-1', name: 'Project example', description: 'Description', status: 'activo' },
   tasks: [], projects: [], teamMembers: [], onBack() {}, onUpdate() {},
