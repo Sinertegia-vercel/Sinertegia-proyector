@@ -209,7 +209,7 @@ export default function RolePermissionsManager() {
   }
 
   async function updateWorkSchedule(schedule: WorkSchedule) {
-    if (!selected?.userId || selected.role !== 'team') return
+    if (!selected?.userId || (selected.role !== 'team' && selected.role !== 'admin')) return
     if (Object.values(schedule).some(day => day.enabled && (day.end <= day.start || day.start < 0 || day.end > 23))) {
       setError('En cada día activo, la hora de salida debe ser posterior a la entrada.')
       return
@@ -606,7 +606,7 @@ export default function RolePermissionsManager() {
                     <button type="button" onClick={() => setDepartmentOpen(true)} className="flex items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-3 py-2.5 text-xs font-bold text-blue-600 hover:bg-blue-50"><Plus size={14} /> Nuevo rol operativo</button>
                   </div>
                   <p className="mt-2 text-xs text-indigo-600">Este rol es independiente de sus permisos de administrador y se mostrará en Tareas del equipo.</p>
-                  {selected.role === 'team' && <WeeklyScheduleEditor key={`${selected.userId}-${JSON.stringify(users.find(user => user.id === selected.userId)?.work_schedule)}`} user={users.find(user => user.id === selected.userId)} saving={saving === 'work-schedule'} onSave={updateWorkSchedule} />}
+                  <WeeklyScheduleEditor key={`${selected.userId}-${JSON.stringify(users.find(user => user.id === selected.userId)?.work_schedule)}`} user={users.find(user => user.id === selected.userId)} saving={saving === 'work-schedule'} onSave={updateWorkSchedule} />
                 </div>
               )}
               {!selected.userId ? (

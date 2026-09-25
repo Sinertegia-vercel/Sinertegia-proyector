@@ -278,6 +278,14 @@ test('Administrators can have an independent operational role', () => {
   assert.match(source, /independiente de sus permisos de administrador/)
 })
 
+test('Administrators can configure their weekly work schedule', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'src/components/admin/RolePermissionsManager.tsx'), 'utf8')
+  assert.match(source, /async function updateWorkSchedule[\s\S]*selected\.role !== 'team' && selected\.role !== 'admin'/)
+  const scheduleEditorUses = source.match(/<WeeklyScheduleEditor/g) || []
+  assert.equal(scheduleEditorUses.length, 1)
+  assert.doesNotMatch(source, /selected\.role === 'team' && <WeeklyScheduleEditor/)
+})
+
 const projectProps = {
   project: { id: 'project-1', name: 'Project example', description: 'Description', status: 'activo' },
   tasks: [], projects: [], teamMembers: [], onBack() {}, onUpdate() {},
