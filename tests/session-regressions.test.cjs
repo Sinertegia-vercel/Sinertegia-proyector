@@ -250,6 +250,17 @@ test('New task loads every active funnel and reports template save failures', ()
   assert.doesNotMatch(source, /useState<'vsl' \| 'webinar'>/)
 })
 
+test('New task requires a deliverable and keeps template settings under more options', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'src/components/admin/CreateTaskModal.tsx'), 'utf8')
+  assert.match(source, /referenceLinks\.length === 0 && pendingFiles\.length === 0/)
+  assert.match(source, /Agrega al menos un entregable: un enlace o un archivo/)
+  assert.match(source, /Entregables \*/)
+  assert.match(source, /📆 Fecha de entrega/)
+  assert.match(source, /Más opciones/)
+  assert.match(source, /advancedOpen && <div/)
+  assert.match(source, /La necesito para \(Líder\)/)
+})
+
 test('New task loads all active administrators and team members, including the signed-in user', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'src/components/admin/CreateTaskModal.tsx'), 'utf8')
   assert.match(source, /from\('users'\)/)

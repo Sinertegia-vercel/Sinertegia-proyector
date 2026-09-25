@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { FileUp, Link2, Plus, Trash2, X } from 'lucide-react'
+import { ChevronDown, FileUp, Link2, Plus, Trash2, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import type { Project, User, Priority, Department } from '../../types'
@@ -69,6 +69,7 @@ export default function CreateTaskModal({ projects, teamMembers, defaultProjectI
   const [referenceLinks, setReferenceLinks] = useState<Array<{ label: string; url: string }>>([])
   const [linkDraft, setLinkDraft] = useState({ label: '', url: '' })
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
+  const [advancedOpen, setAdvancedOpen] = useState(false)
 
   useEffect(() => {
     async function loadAssignableMembers() {
@@ -155,6 +156,10 @@ export default function CreateTaskModal({ projects, teamMembers, defaultProjectI
     e.preventDefault()
     if (!form.project_id || !form.title || !form.assigned_to || form.approver_ids.length === 0 || !form.department) {
       setError('Por favor completa todos los campos requeridos')
+      return
+    }
+    if (referenceLinks.length === 0 && pendingFiles.length === 0) {
+      setError('Agrega al menos un entregable: un enlace o un archivo')
       return
     }
     if (saveToTemplate && (!templateType || templatesLoading)) {
@@ -298,7 +303,7 @@ export default function CreateTaskModal({ projects, teamMembers, defaultProjectI
           </div>
 
           <div>
-            <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-gray-500">Entregables</label>
+            <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-gray-500">Entregables *</label>
             <div className="grid gap-2 sm:grid-cols-[minmax(0,.8fr)_minmax(0,1.4fr)_auto]">
               <input value={linkDraft.label} onChange={event => setLinkDraft(current => ({ ...current, label: event.target.value }))} placeholder="Nombre (opcional)" className="rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
               <input type="url" value={linkDraft.url} onChange={event => setLinkDraft(current => ({ ...current, url: event.target.value }))} placeholder="https://..." className="rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
@@ -384,40 +389,45 @@ export default function CreateTaskModal({ projects, teamMembers, defaultProjectI
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-green-700 mb-1 uppercase tracking-wide">📆 Mi compromiso de entrega</label>
+            <label className="block text-xs font-semibold text-green-700 mb-1 uppercase tracking-wide">📆 Fecha de entrega</label>
             <input type="date" value={form.commitment_date} onChange={e => setForm({ ...form, commitment_date: e.target.value })}
               className="w-full border-2 border-green-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400 bg-green-50" />
-            <p className="text-xs text-green-600 mt-1">¿Para qué fecha te comprometes a entregar esta tarea?</p>
+            <p className="text-xs text-green-600 mt-1">Fecha acordada para entregar esta tarea.</p>
           </div>
 
-          {/* Fijar en plantilla */}
-          <div className={`border-2 rounded-xl p-4 transition ${saveToTemplate ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-gray-50'}`}>
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input type="checkbox" checked={saveToTemplate} onChange={e => setSaveToTemplate(e.target.checked)}
-                className="w-4 h-4 accent-blue-600" />
-              <div>
-                <p className="text-sm font-semibold text-gray-700">🔖 Fijar en plantilla para futuros proyectos</p>
-                <p className="text-xs text-gray-400">Esta tarea aparecerá automáticamente la próxima vez que crees un proyecto de ese tipo</p>
-              </div>
-            </label>
-            {saveToTemplate && (
-              <div className="mt-3">
-                {templatesLoading ? (
-                  <p className="text-xs font-medium text-gray-500">Cargando embudos...</p>
-                ) : templateOptions.length > 0 ? (
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                    {templateOptions.map(template => (
-                      <button key={template.id} type="button" onClick={() => setTemplateType(template.id)}
-                        className={`min-w-0 rounded-lg px-3 py-2 text-sm font-medium transition ${templateType === template.id ? 'bg-blue-600 text-white' : 'border border-gray-300 bg-white text-gray-600 hover:bg-gray-50'}`}>
-                        <span className="block truncate">{template.icon} {template.name}</span>
-                      </button>
-                    ))}
+          <div className="rounded-xl border border-gray-200 bg-gray-50">
+            <button type="button" onClick={() => setAdvancedOpen(open => !open)} className="flex w-full items-center justify-between px-4 py-3 text-sm font-semibold text-gray-700">
+              Más opciones
+              <ChevronDown size={17} className={`transition-transform ${advancedOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {advancedOpen && <div className="border-t border-gray-200 p-4">
+              <div className={`border-2 rounded-xl p-4 transition ${saveToTemplate ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-white'}`}>
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input type="checkbox" checked={saveToTemplate} onChange={e => setSaveToTemplate(e.target.checked)} className="w-4 h-4 accent-blue-600" />
+                  <div>
+                    <p className="text-sm font-semibold text-gray-700">🔖 Fijar en plantilla para futuros proyectos</p>
+                    <p className="text-xs text-gray-400">Esta tarea aparecerá automáticamente la próxima vez que crees un proyecto de ese tipo</p>
                   </div>
-                ) : (
-                  <p className="text-xs font-medium text-red-600">No hay embudos disponibles.</p>
+                </label>
+                {saveToTemplate && (
+                  <div className="mt-3">
+                    {templatesLoading ? (
+                      <p className="text-xs font-medium text-gray-500">Cargando embudos...</p>
+                    ) : templateOptions.length > 0 ? (
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                        {templateOptions.map(template => (
+                          <button key={template.id} type="button" onClick={() => setTemplateType(template.id)} className={`min-w-0 rounded-lg px-3 py-2 text-sm font-medium transition ${templateType === template.id ? 'bg-blue-600 text-white' : 'border border-gray-300 bg-white text-gray-600 hover:bg-gray-50'}`}>
+                            <span className="block truncate">{template.icon} {template.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs font-medium text-red-600">No hay embudos disponibles.</p>
+                    )}
+                  </div>
                 )}
               </div>
-            )}
+            </div>}
           </div>
 
           {error && <p className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-4 py-2">{error}</p>}
