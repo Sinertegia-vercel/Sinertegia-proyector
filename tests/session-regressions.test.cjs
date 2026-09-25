@@ -309,10 +309,11 @@ test('Review authorization is visible only to explicitly selected people', () =>
   assert.doesNotMatch(detail, /select\('id'\)\.eq\('department', 'trafficker'\)/)
 })
 
-test('My workflow shows completed tasks and refreshes administrator updates', () => {
+test('My workflow separates completed tasks, charts them in green, and refreshes administrator updates', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'src/components/team/TeamDashboard.tsx'), 'utf8')
-  assert.match(source, /const byStatus = filter === 'todas' \? tasks : tasks\.filter/)
-  assert.doesNotMatch(source, /filter === 'todas' \? tasks\.filter\(t => t\.status !== 'completada'\)/)
+  assert.match(source, /const byStatus = filter === 'todas' \? tasks\.filter\(t => t\.status !== 'completada'\)/)
+  assert.match(source, /task\.status !== 'completada' && task\.priority === priority/)
+  assert.match(source, /\{ name: 'Completadas', value: tasks\.filter\(task => task\.status === 'completada'\)\.length, color: '#10B981' \}/)
   assert.match(source, /channel\(`my-tasks-\$\{user\.id\}`\)/)
   assert.match(source, /filter: `assigned_to=eq\.\$\{user\.id\}`/)
   assert.match(source, /window\.addEventListener\('focus', refreshTasks\)/)

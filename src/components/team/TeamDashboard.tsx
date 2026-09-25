@@ -222,7 +222,7 @@ export default function TeamDashboard({ embedded = false }: Props) {
     setReviewTasks((data as any) || [])
   }
 
-  const byStatus = filter === 'todas' ? tasks : tasks.filter(t => t.status === filter)
+  const byStatus = filter === 'todas' ? tasks.filter(t => t.status !== 'completada') : tasks.filter(t => t.status === filter)
   const byClient = clientFilter === 'todos' ? byStatus : byStatus.filter(t => t.project?.client?.name === clientFilter)
   const isOverdue = (t: Task) => t.commitment_date && t.status !== 'completada' && new Date(t.commitment_date) < new Date()
   const filtered = (priorityFilter === 'todos' ? byClient : byClient.filter(t => t.priority === priorityFilter)).slice().sort((a, b) => {
@@ -245,9 +245,14 @@ export default function TeamDashboard({ embedded = false }: Props) {
   }
 
   // Distribución de prioridades para la gráfica de dona
-  const priorityData = (Object.keys(PRIORITY_CHART) as Priority[])
-    .map(p => ({ name: PRIORITY_CHART[p].label, value: tasks.filter(t => t.priority === p).length, color: PRIORITY_CHART[p].color }))
-    .filter(d => d.value > 0)
+  const priorityData = [
+    ...(Object.keys(PRIORITY_CHART) as Priority[]).map(priority => ({
+      name: PRIORITY_CHART[priority].label,
+      value: tasks.filter(task => task.status !== 'completada' && task.priority === priority).length,
+      color: PRIORITY_CHART[priority].color,
+    })),
+    { name: 'Completadas', value: tasks.filter(task => task.status === 'completada').length, color: '#10B981' },
+  ].filter(item => item.value > 0)
 
   // Tareas completadas por día de la semana (acumulado Lun → Dom)
   // Usa completion_date si existe; si no, cae a updated_at (que siempre se llena al cambiar de estatus)
