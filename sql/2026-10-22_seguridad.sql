@@ -23,8 +23,8 @@ $$;
 revoke all on function public.is_active_admin() from public;
 grant execute on function public.is_active_admin() to authenticated;
 
--- Administradores, o el responsable/creador de la tarea.
-create or replace function public.can_edit_task_items(p_task_id uuid)
+-- Acceso total a subtareas y tiempo: administradores y departamento Líder.
+create or replace function public.has_full_task_access()
 returns boolean
 language sql
 stable
@@ -32,6 +32,23 @@ security definer
 set search_path = public
 as $$
   select public.is_active_admin() or exists (
+    select 1 from public.users
+    where id = auth.uid() and department = 'lider' and coalesce(active, true)
+  );
+$$;
+
+revoke all on function public.has_full_task_access() from public;
+grant execute on function public.has_full_task_access() to authenticated;
+
+-- Acceso total, o el responsable/creador de la tarea.
+create or replace function public.can_edit_task_items(p_task_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select public.has_full_task_access() or exists (
     select 1 from public.tasks
     where id = p_task_id
       and (assigned_to = auth.uid() or created_by = auth.uid())
@@ -104,6 +121,7 @@ begin
     raise exception 'La invitación pertenece a otro correo';
   end if;
 
+  perform set_config('app.profile_from_invitation', 'on', true);
   insert into public.users (id, email, full_name, role, department, must_change_password, active)
   values (auth.uid(), invitation.email, trim(p_full_name), invitation.role, invitation.department, false, true)
   on conflict (id) do update
@@ -150,6 +168,12 @@ begin
     raise exception 'Invalid or used invitation';
   end if;
 
+  if nullif(trim(invitation.email), '') is not null
+     and lower(trim(invitation.email)) is distinct from lower(auth.jwt() ->> 'email') then
+    raise exception 'La invitación pertenece a otro correo';
+  end if;
+
+  perform set_config('app.profile_from_invitation', 'on', true);
   insert into public.users (id, email, full_name, role, must_change_password)
   values (auth.uid(), auth.jwt() ->> 'email', trim(p_full_name), 'client', false)
   on conflict (id) do update
@@ -198,12 +222,22 @@ create policy "Solo superadmin puede actualizar la licencia"
 -- ni crea perfiles por su cuenta. Las funciones security definer (set_user_access_role,
 -- accept_*_invitation) corren como su dueño y sí pueden. Reactivar una cuenta
 -- desactivada queda solo para administradores.
+-- Cualquier perfil creado fuera de accept_*_invitation (por ejemplo, el trigger de alta
+-- de Supabase Auth, sin importar su nombre ni si lee raw_user_meta_data) nace como
+-- 'client', sin superadmin ni departamento. Con el registro abierto y sin confirmación
+-- de correo, una cuenta nueva no obtiene acceso de equipo hasta aceptar una invitación.
 create or replace function public.protect_user_access_fields()
 returns trigger
 language plpgsql
 set search_path = public
 as $$
 begin
+  if tg_op = 'INSERT' and current_setting('app.profile_from_invitation', true) is distinct from 'on' then
+    new.role := 'client';
+    new.is_super_admin := false;
+    new.department := null;
+  end if;
+
   if current_user not in ('authenticated', 'anon') then
     return new;
   end if;
@@ -221,6 +255,11 @@ begin
     raise exception 'Solo los administradores pueden activar o desactivar cuentas';
   end if;
 
+  -- El departamento 'lider' da acceso total a subtareas y tiempo.
+  if new.department is distinct from old.department and not public.is_active_admin() then
+    raise exception 'Solo los administradores pueden cambiar el departamento';
+  end if;
+
   return new;
 end;
 $$;
@@ -230,7 +269,7 @@ create trigger protect_user_access_fields
   before insert or update on public.users
   for each row execute function public.protect_user_access_fields();
 
--- 4. Subtareas: las editan administradores y el responsable/creador de la tarea.
+-- 4. Subtareas: las editan administradores, Líder y el responsable/creador de la tarea.
 drop policy if exists "Usuarios autenticados pueden crear subtareas" on public.task_subtasks;
 drop policy if exists "Usuarios autenticados pueden editar subtareas" on public.task_subtasks;
 drop policy if exists "Usuarios autenticados pueden borrar subtareas" on public.task_subtasks;
@@ -247,7 +286,7 @@ create policy "Responsables borran subtareas" on public.task_subtasks for delete
   using (public.can_edit_task_items(task_id));
 
 -- Tiempo: cada quien registra el suyo; edita/borra el suyo o el de tareas a su cargo.
--- Los administradores pueden todo.
+-- Administradores y Líder pueden todo.
 drop policy if exists "Usuarios autenticados pueden registrar tiempo" on public.task_time_entries;
 drop policy if exists "Usuarios autenticados pueden actualizar su tiempo" on public.task_time_entries;
 drop policy if exists "Usuarios autenticados pueden borrar tiempo" on public.task_time_entries;
@@ -256,7 +295,7 @@ drop policy if exists "Cada quien edita su tiempo" on public.task_time_entries;
 drop policy if exists "Cada quien borra su tiempo" on public.task_time_entries;
 
 create policy "Cada quien registra su tiempo" on public.task_time_entries for insert to authenticated
-  with check (user_id = auth.uid() or public.is_active_admin());
+  with check (user_id = auth.uid() or public.has_full_task_access());
 create policy "Cada quien edita su tiempo" on public.task_time_entries for update to authenticated
   using (user_id = auth.uid() or public.can_edit_task_items(task_id))
   with check (user_id = auth.uid() or public.can_edit_task_items(task_id));
