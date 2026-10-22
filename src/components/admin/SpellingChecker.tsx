@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Search, Loader2, ExternalLink, AlertCircle, CheckCircle } from 'lucide-react'
+import { supabase } from '../../lib/supabase'
 
 export default function SpellingChecker() {
   const [url, setUrl] = useState('')
@@ -16,9 +17,10 @@ export default function SpellingChecker() {
     setChars(0)
 
     try {
+      const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch('/api/check-spelling', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token ?? ''}` },
         body: JSON.stringify({ url: url.trim() }),
       })
       const data = await res.json()
