@@ -48,7 +48,7 @@ export default function TeamRegistrationPage({ inviteToken }: Props) {
   }, [inviteToken])
 
   async function loadInvite() {
-    const { data, error } = await supabase.from('team_invitations').select('id, email, full_name, role, department, used, permissions').eq('id', inviteToken).single()
+    const { data, error } = await supabase.rpc('get_team_invitation', { p_invitation_id: inviteToken }).single()
 
     if (error || !data) {
       setInviteError('Este link de invitación no es válido.')
@@ -93,36 +93,12 @@ export default function TeamRegistrationPage({ inviteToken }: Props) {
         return
       }
 
-      const userId = authData.user.id
-
-      const { error: profileError } = await supabase.from('users').upsert(
-        {
-          id: userId,
-          email: invite!.email,
-          full_name: form.full_name.trim(),
-          role: invite!.role,
-          department: invite!.department || null,
-          must_change_password: false,
-          active: true,
-        },
-        { onConflict: 'id' },
-      ).select('id').single()
-      if (profileError) throw new Error('La cuenta se creó, pero no se pudo guardar el perfil. Contacta al administrador para completar el registro.')
-
-      if (Object.keys(invite!.permissions || {}).length) {
-        const { error: permissionError } = await supabase.rpc('apply_invitation_permissions', {
-          invitation_id: inviteToken,
-          invitation_kind: 'team',
-        })
-        if (permissionError) {
-          setError('La cuenta se creó, pero no fue posible aplicar sus permisos. Contacta al administrador.')
-          setSaving(false)
-          return
-        }
-      }
-
-      const { error: inviteError } = await supabase.from('team_invitations').update({ used: true }).eq('id', inviteToken).select('id').single()
-      if (inviteError) throw new Error('No se pudo finalizar la invitación. Contacta al administrador para verificar el registro.')
+      // El rol, departamento y permisos salen de la invitación validada en la base de datos.
+      const { error: acceptError } = await supabase.rpc('accept_team_invitation', {
+        p_invitation_id: inviteToken,
+        p_full_name: form.full_name.trim(),
+      })
+      if (acceptError) throw new Error('La cuenta se creó, pero no se pudo completar el registro. Contacta al administrador.')
 
       setDone(true)
     } catch (error) {

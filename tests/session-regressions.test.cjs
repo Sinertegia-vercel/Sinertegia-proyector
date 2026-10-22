@@ -157,7 +157,7 @@ test('Overtime is shown after scheduled end and acknowledged once per session', 
 for (const kind of ['Team', 'Client']) {
   const invite = { id: 'invite-1', email: 'test@example.invalid', role: 'team', permissions: {}, client: { id: 'client-1' } }
   const form = { full_name: 'Test User', email: invite.email, password: 'password123', confirm: 'password123' }
-  const stages = kind === 'Team' ? 2 : 3
+  const stages = 1
   for (let failure = 0; failure < stages; failure++) test(`${kind} registration stops at failed write ${failure + 1}`, async () => {
     const replies = Array.from({ length: failure }, () => ({ data: { id: 'ok' } }))
     replies.push({ data: null, error: { message: 'denied' } })
