@@ -496,6 +496,7 @@ function loadModule(file) {
   vm.runInNewContext(code, { exports: exported, require(id) {
     if (id.endsWith('/types')) return {}
     if (id.endsWith('/projectTemplates')) return loadModule('src/data/projectTemplates.ts')
+    if (id.endsWith('/roadmapPhases')) return loadModule('src/lib/roadmapPhases.ts')
     return {}
   } })
   return exported
@@ -859,4 +860,124 @@ test('Admin summary cards show template, modalidad, phase, launch delta, semáfo
   assert.match(source, /recording_mode === 'remota' \? 'Remota' : 'Oficina'/)
   assert.match(source, /DISPLAY_PHASE_LABELS\[card\.phase\]/)
   assert.match(source, /card\.lider/)
+})
+
+// ─────────────────────────────────────────────────────────────────────────
+// Misiones sin fecha (ventana después del check-in) — src/lib/missingDates.ts
+// ─────────────────────────────────────────────────────────────────────────
+
+const missingDates = loadModule('src/lib/missingDates.ts')
+
+function mission(overrides = {}) {
+  return {
+    id: 'task-1', title: 'Tarea', department: 'copy', status: 'pendiente', review_status: null,
+    commitment_date: null, assigned_to: 'user-1', project_id: 'project-1', phase: 'estrategia',
+    created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-01T00:00:00Z',
+    project: { status: 'activo', launch_date: null, name: 'Proyecto', client: { name: 'Cliente' } },
+    ...overrides,
+  }
+}
+
+test('isUndatedMission: excludes dated, client-department, done, and finished-project tasks', () => {
+  assert.equal(missingDates.isUndatedMission(mission()), true)
+  assert.equal(missingDates.isUndatedMission(mission({ commitment_date: '2026-11-01' })), false)
+  assert.equal(missingDates.isUndatedMission(mission({ department: 'cliente' })), false)
+  assert.equal(missingDates.isUndatedMission(mission({ status: 'completada', review_status: null })), false)
+  assert.equal(missingDates.isUndatedMission(mission({ status: 'completada', review_status: 'aprobada' })), false)
+  assert.equal(missingDates.isUndatedMission(mission({ project: { status: 'completado' } })), false)
+})
+
+test('isUndatedMission: tasks pending review or with rework requested still count as a mission', () => {
+  assert.equal(missingDates.isUndatedMission(mission({ status: 'completada', review_status: 'pendiente_revision' })), true)
+  assert.equal(missingDates.isUndatedMission(mission({ status: 'completada', review_status: 'pendiente_trafficker' })), true)
+  assert.equal(missingDates.isUndatedMission(mission({ status: 'completada', review_status: 'cambios_solicitados' })), true)
+})
+
+test('filterUndatedMissions scopes to the given user and drops dated/done/client tasks', () => {
+  const tasks = [
+    mission({ id: 'a' }),
+    mission({ id: 'b', assigned_to: 'user-2' }),
+    mission({ id: 'c', commitment_date: '2026-11-01' }),
+    mission({ id: 'd', department: 'cliente' }),
+  ]
+  const result = missingDates.filterUndatedMissions(tasks, 'user-1')
+  assert.deepEqual(result.map(t => t.id), ['a'])
+})
+
+test('orderMissions: projects with a closer launch date come first', () => {
+  const tasks = [
+    mission({ id: 'far', project_id: 'p-far', project: { status: 'activo', launch_date: '2026-12-01', name: 'Lejos' } }),
+    mission({ id: 'near', project_id: 'p-near', project: { status: 'activo', launch_date: '2026-11-01', name: 'Cerca' } }),
+  ]
+  const ordered = missingDates.orderMissions(tasks)
+  assert.deepEqual(Array.from(ordered, t => t.id), ['near', 'far'])
+})
+
+test('orderMissions: projects without a launch date rank after dated ones, by most recent activity', () => {
+  const tasks = [
+    mission({ id: 'stale', project_id: 'p-stale', updated_at: '2026-10-01T00:00:00Z', project: { status: 'activo', launch_date: null, name: 'Viejo' } }),
+    mission({ id: 'dated', project_id: 'p-dated', updated_at: '2026-10-01T00:00:00Z', project: { status: 'activo', launch_date: '2026-12-01', name: 'Con fecha' } }),
+    mission({ id: 'fresh', project_id: 'p-fresh', updated_at: '2026-10-20T00:00:00Z', project: { status: 'activo', launch_date: null, name: 'Reciente' } }),
+  ]
+  const ordered = missingDates.orderMissions(tasks)
+  assert.deepEqual(Array.from(ordered, t => t.id), ['dated', 'fresh', 'stale'])
+})
+
+test('orderMissions: within the same project, orders by funnel phase and then by creation date', () => {
+  const tasks = [
+    mission({ id: 'late-phase', phase: 'revision', created_at: '2026-10-01T00:00:00Z' }),
+    mission({ id: 'early-phase-later', phase: 'entrada', created_at: '2026-10-05T00:00:00Z' }),
+    mission({ id: 'early-phase-first', phase: 'entrada', created_at: '2026-10-01T00:00:00Z' }),
+  ]
+  const ordered = missingDates.orderMissions(tasks)
+  assert.deepEqual(Array.from(ordered, t => t.id), ['early-phase-first', 'early-phase-later', 'late-phase'])
+})
+
+test('isPastDate and isAfterLaunch compare date keys as strings', () => {
+  assert.equal(missingDates.isPastDate('2026-10-22', '2026-10-23'), true)
+  assert.equal(missingDates.isPastDate('2026-10-23', '2026-10-23'), false)
+  assert.equal(missingDates.isPastDate('2026-10-24', '2026-10-23'), false)
+  assert.equal(missingDates.isAfterLaunch('2026-11-05', '2026-11-01'), true)
+  assert.equal(missingDates.isAfterLaunch('2026-11-01', '2026-11-01'), false)
+  assert.equal(missingDates.isAfterLaunch('2026-11-05', null), false)
+})
+
+test('shouldShowMissingDatesModal: only for team, with an open session, outside the check-in gate, with pending missions, and not skipped today', () => {
+  const base = { role: 'team', hasSessionToday: true, checkInGateOpen: false, skippedOn: null, todayKey: '2026-10-23', count: 3 }
+  assert.equal(missingDates.shouldShowMissingDatesModal(base), true)
+  assert.equal(missingDates.shouldShowMissingDatesModal({ ...base, role: 'admin' }), false)
+  assert.equal(missingDates.shouldShowMissingDatesModal({ ...base, role: 'client' }), false)
+  assert.equal(missingDates.shouldShowMissingDatesModal({ ...base, hasSessionToday: false }), false)
+  assert.equal(missingDates.shouldShowMissingDatesModal({ ...base, checkInGateOpen: true }), false)
+  assert.equal(missingDates.shouldShowMissingDatesModal({ ...base, count: 0 }), false)
+  assert.equal(missingDates.shouldShowMissingDatesModal({ ...base, skippedOn: '2026-10-23' }), false)
+  assert.equal(missingDates.shouldShowMissingDatesModal({ ...base, skippedOn: '2026-10-22' }), true)
+})
+
+test('countUndatedByAssignee tallies pending missions per person, excluding client tasks and finished projects', () => {
+  const tasks = [
+    mission({ id: 'a', assigned_to: 'user-1' }),
+    mission({ id: 'b', assigned_to: 'user-1' }),
+    mission({ id: 'c', assigned_to: 'user-2' }),
+    mission({ id: 'd', assigned_to: 'user-2', department: 'cliente' }),
+    mission({ id: 'e', assigned_to: 'user-3', project: { status: 'completado' } }),
+    mission({ id: 'f', assigned_to: 'user-4', commitment_date: '2026-11-01' }),
+  ]
+  const counts = missingDates.countUndatedByAssignee(tasks)
+  assert.equal(counts.get('user-1'), 2)
+  assert.equal(counts.get('user-2'), 1)
+  assert.equal(counts.get('user-3'), undefined)
+  assert.equal(counts.get('user-4'), undefined)
+})
+
+test('MissingDatesModal is mounted only for the team role and never for admin/client', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'src/App.tsx'), 'utf8')
+  assert.match(source, /user\.role === 'team' && <MissingDatesModal \/>/)
+})
+
+test('TeamTasksManager shows an undated-missions count per person and a team total', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'src/components/admin/TeamTasksManager.tsx'), 'utf8')
+  assert.match(source, /countUndatedByAssignee/)
+  assert.match(source, /Sin fecha: \$\{undated\}/)
+  assert.match(source, /sin fecha en el equipo/)
 })
