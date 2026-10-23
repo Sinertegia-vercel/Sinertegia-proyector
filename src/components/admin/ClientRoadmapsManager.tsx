@@ -89,7 +89,7 @@ export default function ClientRoadmapsManager({ restricted = false, initialClien
     const projectIds = projectList.map(project => project.id)
     if (projectIds.length > 0) {
       const [{ data: taskRows }, { data: delayRows }] = await Promise.all([
-        supabase.from('tasks').select('*, assignee:users!assigned_to(full_name)').in('project_id', projectIds),
+        supabase.from('tasks').select('*, assignee:users!assigned_to(full_name)').in('project_id', projectIds).is('archived_at', null),
         supabase.from('project_delay_events').select('id, project_id, task_id, responsible, days, reason, created_at').in('project_id', projectIds),
       ])
       setTasks((taskRows as Task[]) || [])

@@ -168,6 +168,7 @@ export default function ClientPortal() {
     const { data: tsk } = await supabase.from('tasks')
       .select('*, project:projects(*), assignee:users!assigned_to(full_name), links:task_links(*), comments:task_comments(*, user:users(full_name))')
       .in('project_id', (proj || []).map(p => p.id))
+      .is('archived_at', null)
       .order('priority')
 
     setProjects(proj || [])

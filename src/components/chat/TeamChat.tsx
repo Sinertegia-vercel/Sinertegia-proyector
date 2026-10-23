@@ -115,7 +115,7 @@ export default function TeamChat() {
       getOrCreateTeamRoom(),
       supabase.from('users').select('*').in('role', ['admin', 'team']),
       supabase.from('projects').select('*, client:clients(*)').eq('status', 'activo'),
-      supabase.from('tasks').select('*, project:projects(*, client:clients(*))').neq('status', 'completada').order('updated_at', { ascending: false }).limit(100),
+      supabase.from('tasks').select('*, project:projects(*, client:clients(*))').neq('status', 'completada').is('archived_at', null).order('updated_at', { ascending: false }).limit(100),
     ])
     setChatUsers(users || [])
     setProjects(projectRows || [])

@@ -75,7 +75,7 @@ export default function GlobalSearch() {
         .filter(([, label]) => matches(q, label))
         .map(([target, label]) => ({ id: `section-${target}`, type: 'section' as const, title: label, subtitle: 'Ir a esta sección', target }))
       const responses = await Promise.all([
-        supabase.from('tasks').select('id, title, description, status, department, priority, project:projects(name, client:clients(name, company))').order('updated_at', { ascending: false }).limit(1000),
+        supabase.from('tasks').select('id, title, description, status, department, priority, project:projects(name, client:clients(name, company))').is('archived_at', null).order('updated_at', { ascending: false }).limit(1000),
         supabase.from('projects').select('id, name, description, status, client:clients(name, company)').order('created_at', { ascending: false }).limit(500),
         supabase.from('clients').select('id, name, company, notes').order('name').limit(500),
         supabase.from('users').select('id, full_name, email, role, department').eq('active', true).order('full_name').limit(500),

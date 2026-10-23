@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, Plus, ChevronDown, Pencil, Check, X, MoreVertical, Trash2, Map as MapIcon, ListChecks } from 'lucide-react'
+import { ArrowLeft, Archive, Plus, ChevronDown, Pencil, Check, X, MoreVertical, Trash2, Map as MapIcon, ListChecks } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../contexts/AuthContext'
 import type { Task, Project, User } from '../../types'
 import PriorityBadge from '../shared/PriorityBadge'
 import StatusBadge from '../shared/StatusBadge'
 import ProgressBar from '../shared/ProgressBar'
 import TaskDetailModal from '../team/TaskDetailModal'
 import CreateTaskModal from './CreateTaskModal'
+import EditTaskModal from './EditTaskModal'
+import ArchiveTaskModal from './ArchiveTaskModal'
 import { isClientAttributableDelay } from '../../lib/taskDelays'
 import ClientRoadmapView, { type DelayEventLike } from '../roadmap/ClientRoadmapView'
 
@@ -38,7 +41,11 @@ const REVIEW_BADGES: Record<string, { label: string; color: string }> = {
 }
 
 export default function ProjectDetail({ project, tasks, teamMembers, projects, onBack, onUpdate }: Props) {
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'admin'
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
+  const [editingTask, setEditingTask] = useState<Task | null>(null)
+  const [archivingTask, setArchivingTask] = useState<Task | null>(null)
   const [showCreateTask, setShowCreateTask] = useState(false)
   const [statusOpen, setStatusOpen] = useState(false)
   const [currentStatus, setCurrentStatus] = useState(project.status)
@@ -385,11 +392,12 @@ export default function ProjectDetail({ project, tasks, teamMembers, projects, o
                 <th className="text-left px-4 py-3 font-semibold text-blue-500">Mi compromiso</th>
                 <th className="text-left px-4 py-3 font-semibold text-gray-500">Fecha de entrega</th>
                 <th className="text-left px-4 py-3 font-semibold text-gray-500">Revisión</th>
+                {isAdmin && <th className="text-right px-4 py-3 font-semibold text-gray-500">Acciones</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {filteredTasks.length === 0 && (
-                <tr><td colSpan={9} className="text-center py-8 text-gray-400">No hay tareas con estos filtros</td></tr>
+                <tr><td colSpan={isAdmin ? 10 : 9} className="text-center py-8 text-gray-400">No hay tareas con estos filtros</td></tr>
               )}
               {filteredTasks.map(task => {
                 const isLate = task.commitment_date && task.status !== 'completada' && new Date(task.commitment_date) < new Date()
@@ -428,6 +436,14 @@ export default function ProjectDetail({ project, tasks, teamMembers, projects, o
                         : <span className="text-xs text-gray-300">—</span>
                       }
                     </td>
+                    {isAdmin && (
+                      <td className="px-4 py-3" onClick={event => event.stopPropagation()}>
+                        <div className="flex justify-end gap-2">
+                          <button type="button" onClick={() => setEditingTask(task)} title="Editar tarea" className="rounded-lg border border-blue-200 p-1.5 text-blue-600 hover:bg-blue-50"><Pencil size={14} /></button>
+                          <button type="button" onClick={() => setArchivingTask(task)} title="Archivar tarea" className="rounded-lg border border-amber-200 p-1.5 text-amber-600 hover:bg-amber-50"><Archive size={14} /></button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 )
               })}
@@ -440,6 +456,14 @@ export default function ProjectDetail({ project, tasks, teamMembers, projects, o
 
       {selectedTask && (
         <TaskDetailModal task={selectedTask} onClose={() => setSelectedTask(null)} onUpdate={onUpdate} />
+      )}
+
+      {editingTask && (
+        <EditTaskModal task={editingTask} onClose={() => setEditingTask(null)} onSaved={() => { setEditingTask(null); onUpdate() }} />
+      )}
+
+      {archivingTask && (
+        <ArchiveTaskModal task={archivingTask} onClose={() => setArchivingTask(null)} onArchived={() => { setArchivingTask(null); onUpdate() }} />
       )}
 
       {showCreateTask && (
