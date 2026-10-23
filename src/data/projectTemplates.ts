@@ -1,10 +1,13 @@
 import type { Department, Priority } from '../types'
 
+export type Modalidad = 'oficina' | 'remota'
+
 export interface TemplateTask {
   title: string
   department: Department
   priority: Priority
   group?: string // sub-grupo visual (solo para el modal de plantilla)
+  modalidad?: Modalidad // solo para las tareas de grabación/cliente que dependen de la modalidad elegida
 }
 
 export interface ProjectTemplate {
@@ -60,12 +63,8 @@ const baseTasks: TemplateTask[] = [
   // ── Cliente ──
   { title: 'Llenar los 3 documentos', department: 'cliente', priority: 'alta' },
   { title: 'Reunión con el líder del proyecto para revisar guiones', department: 'cliente', priority: 'alta' },
-  { title: 'Grabar VSL de webinar, Gracias y 12 anuncios', department: 'cliente', priority: 'alta' },
-  { title: 'Compartir la grabación de video de VSL, Gracias, 12 anuncios', department: 'cliente', priority: 'alta' },
-  { title: 'Crear Presentación', department: 'cliente', priority: 'alta' },
   { title: 'Revisar el embudo con el equipo para dar check final', department: 'cliente', priority: 'alta' },
   { title: 'Compartir con el equipo de BGI los links para autorizarlos', department: 'cliente', priority: 'alta' },
-  { title: 'Solicitar reunión de revisión de presentación con Alfredo Mota', department: 'cliente', priority: 'alta' },
   // ── Líder (ScrumMaster) ──
   { title: 'Crear grupo de WhatsApp con cliente y equipo', department: 'lider', priority: 'alta' },
   { title: 'Enviar 3 documentos para llenar', department: 'lider', priority: 'alta' },
@@ -81,12 +80,10 @@ const baseTasks: TemplateTask[] = [
   // ── Webmaster ──
   { title: 'Montar funnel completo en GHL', department: 'webmaster', priority: 'alta' },
   { title: 'Cambiar diseño visual de Pág. Gracias', department: 'webmaster', priority: 'alta' },
-  { title: 'Cambiar diseño visual de Pág. Ingreso al Webinar', department: 'webmaster', priority: 'alta' },
   { title: 'Cambiar diseño visual y de texto a la Página de Oferta', department: 'webmaster', priority: 'alta' },
   { title: 'Instalar "Pixel" de Meta ADS', department: 'webmaster', priority: 'alta' },
   { title: 'Crear los "custom value" en GHL', department: 'webmaster', priority: 'alta' },
   { title: 'Crear grupo de WhatsApp en Funnelchat', department: 'webmaster', priority: 'alta' },
-  { title: 'Crear el Evento en Addevent', department: 'webmaster', priority: 'alta' },
   { title: 'Crear la automatización de correos', department: 'webmaster', priority: 'alta' },
   { title: 'Agregar los copys en correo', department: 'webmaster', priority: 'alta' },
   { title: 'Agregar video de gracias y VSL', department: 'webmaster', priority: 'alta' },
@@ -132,24 +129,42 @@ const baseTasks: TemplateTask[] = [
   { title: 'Montar campañas en Meta Ads', department: 'trafficker', priority: 'alta' },
   { title: 'Lanzar campañas', department: 'trafficker', priority: 'alta' },
   // ── Grabación (Producción) ──
-  { title: 'Grabar 12 anuncios', department: 'grabacion', priority: 'alta' },
-  { title: 'Grabar VSL y Video de Gracias', department: 'grabacion', priority: 'alta' },
   { title: 'Encarpetar', department: 'grabacion', priority: 'media' },
 ]
 
-const vslTasks: TemplateTask[] = baseTasks
+// Tareas exclusivas de VSL (ninguna por ahora: VSL usa solo la base común).
+const soloVslTasks: TemplateTask[] = []
 
-const webinarTasks: TemplateTask[] = [
-  ...baseTasks.filter(t => t.group !== 'diseno_web'), // reemplazamos diseno_web con versión webinar
-  // Diseño — Páginas web (webinar agrega: presentación del webinar)
-  { title: 'Diseñar Landing Page (LP)', department: 'diseno', priority: 'alta', group: 'diseno_web' },
-  { title: 'Diseñar Página de Gracias', department: 'diseno', priority: 'alta', group: 'diseno_web' },
-  { title: 'Diseñar miniatura del video de LP y Gracias', department: 'diseno', priority: 'alta', group: 'diseno_web' },
-  { title: 'Diseñar imagen mockup para WhatsApp en página de gracias', department: 'diseno', priority: 'alta', group: 'diseno_web' },
+// Tareas exclusivas de Webinar: presentación del cliente, su página de ingreso,
+// el evento de Addevent, el diseño de la presentación y el video de edificación.
+const soloWebinarTasks: TemplateTask[] = [
+  { title: 'Crear Presentación', department: 'cliente', priority: 'alta' },
+  { title: 'Solicitar reunión de revisión de presentación con Alfredo Mota', department: 'cliente', priority: 'alta' },
+  { title: 'Cambiar diseño visual de Pág. Ingreso al Webinar', department: 'webmaster', priority: 'alta' },
+  { title: 'Crear el Evento en Addevent', department: 'webmaster', priority: 'alta' },
   { title: 'Diseñar presentación de webinar (solo diseño, no estructura)', department: 'diseno', priority: 'alta', group: 'diseno_web' },
-  // Edición — Presentación (solo webinar)
   { title: 'Video de Edificación - Presentación', department: 'edicion', priority: 'alta', group: 'edicion_presentacion' },
 ]
+
+const vslTasks: TemplateTask[] = [...baseTasks, ...soloVslTasks]
+const webinarTasks: TemplateTask[] = [...baseTasks, ...soloWebinarTasks]
+
+// Tareas de grabación/cliente que dependen de la modalidad elegida al crear el proyecto.
+// En oficina, Grabación es la responsable de grabar y el cliente solo asiste a la sesión.
+// En remota, el cliente es el responsable de grabar y compartir, y Grabación solo apoya.
+const modalidadTasks: TemplateTask[] = [
+  { title: 'Grabar 12 anuncios', department: 'grabacion', priority: 'alta', modalidad: 'oficina' },
+  { title: 'Grabar VSL y Video de Gracias', department: 'grabacion', priority: 'alta', modalidad: 'oficina' },
+  { title: 'Asistir a la sesión de grabación', department: 'cliente', priority: 'alta', modalidad: 'oficina' },
+  { title: 'Grabar VSL, Gracias y 12 anuncios', department: 'cliente', priority: 'alta', modalidad: 'remota' },
+  { title: 'Compartir la grabación de video de VSL, Gracias, 12 anuncios', department: 'cliente', priority: 'alta', modalidad: 'remota' },
+  { title: 'Enviar guía de grabación al cliente y revisar material recibido', department: 'grabacion', priority: 'media', modalidad: 'remota' },
+]
+
+/** Tareas de grabación/cliente para la modalidad elegida (se agregan aparte de resolveTemplateTasks). */
+export function tasksForModalidad(modalidad: Modalidad): TemplateTask[] {
+  return modalidadTasks.filter(task => task.modalidad === modalidad)
+}
 
 export const PROJECT_TEMPLATES: ProjectTemplate[] = [
   {

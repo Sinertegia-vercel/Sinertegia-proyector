@@ -82,6 +82,9 @@ export interface Project {
   name: string
   description?: string
   status: 'activo' | 'pausado' | 'completado'
+  recording_mode?: 'oficina' | 'remota'
+  launch_date?: string
+  launch_date_original?: string
   created_at: string
   client?: Client
 }
@@ -144,6 +147,11 @@ export interface Task {
   client_approval?: 'aprobada' | 'cambios_solicitados'
   change_count?: number
   depends_on_task_id?: string
+  delay_responsible?: 'cliente' | 'agencia'
+  delay_days?: number
+  delay_reason?: string
+  delay_marked_at?: string
+  delay_marked_by?: string
   created_by: string
   created_at: string
   updated_at: string

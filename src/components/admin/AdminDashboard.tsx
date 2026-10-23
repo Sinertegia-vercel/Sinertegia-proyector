@@ -27,12 +27,14 @@ import {
   PanelLeftOpen,
   Workflow,
   ListChecks,
+  History,
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import type { Task, Project, User, Client } from '../../types'
 import Logo from '../shared/Logo'
 import TopBarActions from '../shared/TopBarActions'
 import ProjectDetail from './ProjectDetail'
+import { isClientAttributableDelay } from '../../lib/taskDelays'
 import TeamCapacity from './TeamCapacity'
 import TeamTasksManager from './TeamTasksManager'
 import TeamCalendar from './TeamCalendar'
@@ -281,7 +283,10 @@ export default function AdminDashboard() {
     return (ptasks.filter((t) => t.status === 'completada').length / ptasks.length) * 100
   }
 
-  const overdueTasks = tasks.filter((t) => t.commitment_date && t.status !== 'completada' && new Date(t.commitment_date) < new Date())
+  // "Fuera de fecha" y la salud operativa solo cuentan retrasos de la agencia —
+  // los del cliente se muestran aparte y no penalizan al equipo.
+  const overdueTasks = tasks.filter((t) => t.commitment_date && t.status !== 'completada' && new Date(t.commitment_date) < new Date() && !isClientAttributableDelay(t))
+  const clientDelayTasks = tasks.filter((t) => t.status !== 'completada' && isClientAttributableDelay(t))
 
   // Tareas que el equipo mandó a revisión y esperan autorización del trafficker
   const pendingTraffickerReview = tasks.filter((t) => t.review_status === 'pendiente_revision')
@@ -300,7 +305,7 @@ export default function AdminDashboard() {
   const activeProjects = projects.filter((p) => p.status === 'activo')
   const healthyProjects = activeProjects.filter((p) => !atRiskProjectIds.has(p.id))
   const healthPct = activeProjects.length ? Math.round((healthyProjects.length / activeProjects.length) * 100) : 100
-  const attentionTotal = pendingTraffickerReview.length + overdueTasks.length + clientChangesRequested.length
+  const attentionTotal = pendingTraffickerReview.length + overdueTasks.length + clientChangesRequested.length + clientDelayTasks.length
 
   const filteredProjects = (statusFilter === 'todos' ? projects : projects.filter((p) => p.status === statusFilter)).sort((a, b) => {
     const urgency = (projectId: string) => {
@@ -545,6 +550,19 @@ export default function AdminDashboard() {
                               <small>{clientChangesRequested[0].title}</small>
                             </span>
                             <strong className="mono">{clientChangesRequested.length}</strong>
+                            <ArrowRight />
+                          </button>
+                        )}
+                        {clientDelayTasks.length > 0 && (
+                          <button type="button" className="overdue" onClick={() => setReviewFocusTask(clientDelayTasks[0])}>
+                            <span className="v2-attention-icon">
+                              <History />
+                            </span>
+                            <span>
+                              <b>Retrasos del cliente</b>
+                              <small>{clientDelayTasks[0].title}</small>
+                            </span>
+                            <strong className="mono">{clientDelayTasks.length}</strong>
                             <ArrowRight />
                           </button>
                         )}

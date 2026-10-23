@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
-import { X, Plus, ChevronLeft, CheckSquare, Square, GripVertical, MoreVertical, Pencil, Trash2, MessageSquare } from 'lucide-react'
+import { X, Plus, ChevronLeft, CheckSquare, Square, GripVertical, MoreVertical, Pencil, Trash2, MessageSquare, Check, Copy, UserPlus } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import type { Client, Department, Priority, User } from '../../types'
-import { PROJECT_TEMPLATES, GROUP_LABELS, GROUP_COLORS, TEMPLATE_GROUP_ORDER, DEPT_LABELS, resolveTemplateTasks } from '../../data/projectTemplates'
+import { PROJECT_TEMPLATES, GROUP_LABELS, GROUP_COLORS, TEMPLATE_GROUP_ORDER, DEPT_LABELS, resolveTemplateTasks, tasksForModalidad, type Modalidad } from '../../data/projectTemplates'
 import CreateFunnelTemplateModal from './CreateFunnelTemplateModal'
 
 interface CustomTemplate { id: string; name: string; icon: string; description: string | null; taskCount: number }
@@ -32,10 +32,19 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
   const [mode, setMode] = useState<'existing' | 'new'>('existing')
   const [selectedClientId, setSelectedClientId] = useState('')
   const [newClient, setNewClient] = useState({ name: '', company: '' })
-  const [form, setForm] = useState({ name: '', description: '', templateId: '' })
+  const [form, setForm] = useState({ name: '', description: '', templateId: '', modalidad: 'oficina' as Modalidad })
   const [saving, setSaving] = useState(false)
   const [loadingTasks, setLoadingTasks] = useState(false)
   const [error, setError] = useState('')
+
+  // Bloqueo: no se puede crear un proyecto sin un usuario de cliente activo
+  const [blockedNoClientUser, setBlockedNoClientUser] = useState(false)
+  const [blockedClientId, setBlockedClientId] = useState('')
+  const [blockedClientName, setBlockedClientName] = useState('')
+  const [checkingClientUser, setCheckingClientUser] = useState(false)
+  const [inviteLink, setInviteLink] = useState('')
+  const [invitingClient, setInvitingClient] = useState(false)
+  const [inviteCopied, setInviteCopied] = useState(false)
 
   const [selectedTeamMembers, setSelectedTeamMembers] = useState<string[]>([])
 
@@ -54,7 +63,6 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
   const [commentingIdx, setCommentingIdx] = useState<number | null>(null)
   const [commentDraft, setCommentDraft] = useState('')
   const [clientUser, setClientUser] = useState<User | null>(null)
-  const [clientUsers, setClientUsers] = useState<User[]>([])
   const [customTemplates, setCustomTemplates] = useState<CustomTemplate[]>([])
   const [databaseTemplateIds, setDatabaseTemplateIds] = useState<Set<string>>(new Set())
   const [archivedTemplateIds, setArchivedTemplateIds] = useState<Set<string>>(new Set())
@@ -63,9 +71,6 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
   const [showCreateFunnel, setShowCreateFunnel] = useState(false)
 
   useEffect(() => {
-    supabase.from('users').select('*').eq('role', 'client').order('full_name').then(({ data }) => {
-      if (data) setClientUsers(data as User[])
-    })
     fetchCustomTemplates()
   }, [])
 
@@ -100,16 +105,8 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
     setForm(f => ({ ...f, templateId: tpl.id }))
   }
 
-  const clientAssignees = clientUsers.map(u => ({ id: u.id, full_name: `${u.full_name} (cliente)` }))
-
+  // El grupo Cliente ya no es elegible: sus tareas siempre son del usuario cliente del proyecto.
   const allAssignees = [
-    ...(clientUser ? [{ id: clientUser.id, full_name: `${clientUser.full_name} (cliente)` }] : clientAssignees),
-    ...(user ? [{ id: user.id, full_name: `${user.full_name} (yo)` }] : []),
-    ...teamMembers,
-  ]
-
-  const clientGroupAssignees = [
-    ...clientAssignees,
     ...(user ? [{ id: user.id, full_name: `${user.full_name} (yo)` }] : []),
     ...teamMembers,
   ]
@@ -123,12 +120,85 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
     return true
   }
 
+  function resetBlock() {
+    setBlockedNoClientUser(false)
+    setBlockedClientId('')
+    setBlockedClientName('')
+    setInviteLink('')
+    setInviteCopied(false)
+  }
+
+  async function inviteBlockedClient() {
+    if (!blockedClientId) return
+    setInvitingClient(true)
+    const { data } = await supabase.from('client_invitations').insert({ client_id: blockedClientId }).select('id').single()
+    if (data) setInviteLink(`https://agencia.sinertegia.com?invite=${data.id}`)
+    setInvitingClient(false)
+  }
+
+  async function copyInviteLink() {
+    if (!inviteLink) return
+    await navigator.clipboard.writeText(inviteLink)
+    setInviteCopied(true)
+    window.setTimeout(() => setInviteCopied(false), 2000)
+  }
+
+  // "Nuevo cliente" solo da de alta el registro y genera su invitación — el proyecto se
+  // crea después, eligiendo "Cliente existente" una vez que el cliente ya tiene cuenta.
+  async function handleCreateClientAndInvite() {
+    setSaving(true)
+    setError('')
+    const { data, error: clientErr } = await supabase.from('clients').insert({
+      name: newClient.name.trim(),
+      company: newClient.company.trim() || newClient.name.trim(),
+    }).select().single()
+    if (clientErr || !data) { setError('Error al crear el cliente'); setSaving(false); return }
+
+    if (selectedTeamMembers.length > 0) {
+      await supabase.from('client_team_members').insert(
+        selectedTeamMembers.map(userId => ({ client_id: data.id, user_id: userId }))
+      )
+    }
+
+    setBlockedClientId(data.id)
+    setBlockedClientName(data.name)
+    setBlockedNoClientUser(true)
+    setSaving(false)
+    onCreated()
+  }
+
   async function handleContinue() {
     if (!validateStep1()) return
     if (!templatesLoaded) {
       setError('Espera a que terminen de cargar las tareas de los embudos.')
       return
     }
+
+    if (mode === 'new') {
+      await handleCreateClientAndInvite()
+      return
+    }
+
+    const selectedClient = clients.find(c => c.id === selectedClientId)
+    if (!selectedClient?.user_id) {
+      setBlockedClientId(selectedClientId)
+      setBlockedClientName(selectedClient?.name || '')
+      setBlockedNoClientUser(true)
+      return
+    }
+
+    setCheckingClientUser(true)
+    const { data: cUser } = await supabase.from('users').select('*')
+      .eq('id', selectedClient.user_id).eq('role', 'client').eq('active', true).maybeSingle()
+    setCheckingClientUser(false)
+    if (!cUser) {
+      setBlockedClientId(selectedClientId)
+      setBlockedClientName(selectedClient.name)
+      setBlockedNoClientUser(true)
+      return
+    }
+    resetBlock()
+
     const tpl = PROJECT_TEMPLATES.find(t => t.id === form.templateId)
 
     setLoadingTasks(true)
@@ -147,8 +217,13 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
       customDbTasks,
       databaseTemplateIds.has(form.templateId),
     )
+    // La modalidad de grabación solo aplica a VSL/Webinar; se agrega aparte porque se
+    // elige por proyecto y no es parte de la definición fija de la plantilla.
+    const withModalidad = (form.templateId === 'vsl' || form.templateId === 'webinar')
+      ? [...resolvedTasks, ...tasksForModalidad(form.modalidad)]
+      : resolvedTasks
     const storedKeys = new Set(customDbTasks.map(task => `${task.department}:${task.title.trim().toLocaleLowerCase('es-MX')}`))
-    const all: CombinedTask[] = resolvedTasks.map(task => ({
+    const all: CombinedTask[] = withModalidad.map(task => ({
       ...task,
       isCustom: storedKeys.has(`${task.department}:${task.title.trim().toLocaleLowerCase('es-MX')}`),
     }))
@@ -158,18 +233,8 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
 
     const defaults: Record<string, string> = {}
     if (user) { defaults['lider'] = user.id }
-
-    // Buscar el usuario vinculado al cliente seleccionado
-    const selectedClient = clients.find(c => c.id === selectedClientId)
-    if (selectedClient?.user_id) {
-      const { data: cUser } = await supabase.from('users').select('*').eq('id', selectedClient.user_id).single()
-      if (cUser) {
-        setClientUser(cUser as User)
-        defaults['cliente'] = cUser.id
-      }
-    } else {
-      setClientUser(null)
-    }
+    setClientUser(cUser as User)
+    defaults['cliente'] = cUser.id
 
     setDeptAssignees(defaults)
     setLoadingTasks(false)
@@ -322,6 +387,7 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
       name: form.name.trim(),
       description: form.description.trim() || null,
       status: 'activo',
+      recording_mode: form.modalidad,
     }).select().single()
     if (projErr || !project) { setError('Error al crear el proyecto'); setSaving(false); return }
 
@@ -334,7 +400,9 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
           project_id: project.id,
           title: t.title,
           department: t.department,
-          assigned_to: taskOverrides[idx] || deptAssignees[t.group || t.department] || user!.id,
+          // Las tareas del departamento cliente siempre son del usuario cliente del proyecto —
+          // nunca de quien crea el proyecto ni de alguien del equipo.
+          assigned_to: t.department === 'cliente' ? clientUser!.id : (taskOverrides[idx] || deptAssignees[t.group || t.department] || user!.id),
           priority: t.priority,
           status: 'pendiente',
           created_by: user!.id,
@@ -459,17 +527,17 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
             <div>
               <label className="block text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Cliente *</label>
               <div className="flex gap-2 mb-2">
-                <button type="button" onClick={() => setMode('existing')}
+                <button type="button" onClick={() => { setMode('existing'); resetBlock() }}
                   className={`flex-1 py-1.5 text-sm rounded-lg font-medium transition ${mode === 'existing' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
                   Cliente existente
                 </button>
-                <button type="button" onClick={() => setMode('new')}
+                <button type="button" onClick={() => { setMode('new'); resetBlock() }}
                   className={`flex-1 py-1.5 text-sm rounded-lg font-medium transition flex items-center justify-center gap-1 ${mode === 'new' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
                   <Plus size={14} /> Nuevo cliente
                 </button>
               </div>
               {mode === 'existing' ? (
-                <select value={selectedClientId} onChange={e => setSelectedClientId(e.target.value)}
+                <select value={selectedClientId} onChange={e => { setSelectedClientId(e.target.value); resetBlock() }}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                   <option value="">Selecciona un cliente</option>
                   {clients.map(c => <option key={c.id} value={c.id}>{c.name}{c.company && c.company !== c.name ? ` — ${c.company}` : ''}</option>)}
@@ -602,14 +670,58 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
               </div>
             </div>
 
+            {/* Modalidad de grabación — solo aplica a VSL/Webinar */}
+            {(form.templateId === 'vsl' || form.templateId === 'webinar') && (
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Modalidad de grabación *</label>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setForm({ ...form, modalidad: 'oficina' })}
+                    className={`flex-1 py-2 text-sm rounded-lg font-medium transition text-left px-3 ${form.modalidad === 'oficina' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                    <span className="block font-semibold">🏢 Oficina</span>
+                    <span className={`block text-xs ${form.modalidad === 'oficina' ? 'text-blue-100' : 'text-gray-400'}`}>Grabación es responsable; el cliente solo asiste</span>
+                  </button>
+                  <button type="button" onClick={() => setForm({ ...form, modalidad: 'remota' })}
+                    className={`flex-1 py-2 text-sm rounded-lg font-medium transition text-left px-3 ${form.modalidad === 'remota' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                    <span className="block font-semibold">🌐 Remota</span>
+                    <span className={`block text-xs ${form.modalidad === 'remota' ? 'text-blue-100' : 'text-gray-400'}`}>El cliente graba y comparte el material</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {blockedNoClientUser && (
+              <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 space-y-3">
+                <p className="text-sm font-bold text-orange-800">Primero invita al cliente al portal</p>
+                <p className="text-xs text-orange-700">
+                  {blockedClientName ? `"${blockedClientName}"` : 'Este cliente'} todavía no tiene una cuenta activa en el portal. Las tareas del departamento Cliente siempre deben ser suyas, así que no se puede crear el proyecto hasta que se registre.
+                  {mode === 'new' && ' El cliente ya se guardó — genera su invitación y vuelve a crear el proyecto eligiendo "Cliente existente" cuando ya tenga cuenta.'}
+                </p>
+                {!inviteLink ? (
+                  <button type="button" onClick={inviteBlockedClient} disabled={invitingClient}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-orange-600 text-white text-xs font-semibold rounded-lg hover:bg-orange-700 transition disabled:opacity-60">
+                    <UserPlus size={13} /> {invitingClient ? 'Generando...' : 'Generar invitación'}
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-2 bg-white border border-orange-200 rounded-lg px-3 py-2">
+                    <p className="flex-1 truncate font-mono text-xs text-orange-700">{inviteLink}</p>
+                    <button type="button" onClick={copyInviteLink} className="shrink-0 flex items-center gap-1 text-xs font-semibold text-orange-700">
+                      {inviteCopied ? <><Check size={13} /> Copiado</> : <><Copy size={13} /> Copiar</>}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
             {error && <p className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-4 py-2">{error}</p>}
 
             <div className="flex justify-end gap-3 pt-1">
               <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancelar</button>
-              <button type="button" onClick={handleContinue} disabled={loadingTasks || !templatesLoaded}
-                className="px-6 py-2 bg-gradient-to-r from-blue-700 to-red-600 text-white text-sm font-semibold rounded-lg hover:opacity-90 disabled:opacity-60">
-                {!templatesLoaded ? 'Cargando embudos...' : loadingTasks ? 'Cargando tareas...' : form.templateId === 'otro' ? 'Crear proyecto' : 'Siguiente → Seleccionar tareas'}
-              </button>
+              {!blockedNoClientUser && (
+                <button type="button" onClick={handleContinue} disabled={loadingTasks || !templatesLoaded || checkingClientUser || saving}
+                  className="px-6 py-2 bg-gradient-to-r from-blue-700 to-red-600 text-white text-sm font-semibold rounded-lg hover:opacity-90 disabled:opacity-60">
+                  {!templatesLoaded ? 'Cargando embudos...' : checkingClientUser ? 'Verificando cliente...' : loadingTasks || saving ? 'Cargando...' : form.templateId === 'otro' && mode === 'existing' ? 'Crear proyecto' : mode === 'new' ? 'Guardar cliente y continuar' : 'Siguiente → Seleccionar tareas'}
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -642,7 +754,11 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
                         {groupTasks.filter(t => selectedTasks.has(t.idx)).length}/{groupTasks.length}
                       </span>
                       <div className="ml-auto flex items-center gap-2">
-                        {hasIndividualOverrides && !isCliente ? (
+                        {isCliente ? (
+                          <span className="text-xs text-blue-600 bg-blue-50 border border-blue-200 px-2 py-1 rounded-lg font-medium">
+                            👤 {clientUser?.full_name || 'Cliente'} (siempre el cliente)
+                          </span>
+                        ) : hasIndividualOverrides ? (
                           <span className="text-xs text-orange-600 bg-orange-50 border border-orange-200 px-2 py-1 rounded-lg">
                             Asignación individual activa
                           </span>
@@ -659,11 +775,11 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
                               }}
                               className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
                               <option value="">Asignar persona...</option>
-                              {(isCliente ? clientGroupAssignees : allAssignees).map(m => <option key={m.id} value={m.id}>{m.full_name}</option>)}
+                              {allAssignees.map(m => <option key={m.id} value={m.id}>{m.full_name}</option>)}
                             </select>
 
-                            {/* Persona 2: solo si hay persona 1 y NO es cliente */}
-                            {!isCliente && deptAssignees[groupKey] && (
+                            {/* Persona 2: solo si hay persona 1 */}
+                            {deptAssignees[groupKey] && (
                               deptAssignees2[groupKey] ? (
                                 <select value={deptAssignees2[groupKey]}
                                   onChange={e => {

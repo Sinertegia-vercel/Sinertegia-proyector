@@ -7,6 +7,7 @@ import StatusBadge from '../shared/StatusBadge'
 import ProgressBar from '../shared/ProgressBar'
 import TaskDetailModal from '../team/TaskDetailModal'
 import CreateTaskModal from './CreateTaskModal'
+import { isClientAttributableDelay } from '../../lib/taskDelays'
 
 interface Props {
   project: Project
@@ -43,6 +44,8 @@ export default function ProjectDetail({ project, tasks, teamMembers, projects, o
   const [editingName, setEditingName] = useState(false)
   const [editName, setEditName] = useState(project.name)
   const [editDesc, setEditDesc] = useState(project.description || '')
+  const [editRecordingMode, setEditRecordingMode] = useState(project.recording_mode || 'oficina')
+  const [editLaunchDate, setEditLaunchDate] = useState(project.launch_date || '')
   const [savingName, setSavingName] = useState(false)
   const [filterStatus, setFilterStatus] = useState<string>('todos')
   const [filterDept, setFilterDept] = useState<string>('todos')
@@ -80,6 +83,8 @@ export default function ProjectDetail({ project, tasks, teamMembers, projects, o
   function startEditing() {
     setEditName(project.name)
     setEditDesc(project.description || '')
+    setEditRecordingMode(project.recording_mode || 'oficina')
+    setEditLaunchDate(project.launch_date || '')
     setActionError('')
     setActionsOpen(false)
     setEditingName(true)
@@ -87,7 +92,11 @@ export default function ProjectDetail({ project, tasks, teamMembers, projects, o
 
   const completed = tasks.filter(t => t.status === 'completada').length
   const pct = tasks.length ? (completed / tasks.length) * 100 : 0
-  const overdue = tasks.filter(t => t.commitment_date && t.status !== 'completada' && new Date(t.commitment_date) < new Date())
+  const overdue = tasks.filter(t => t.commitment_date && t.status !== 'completada' && new Date(t.commitment_date) < new Date() && !isClientAttributableDelay(t))
+  const clientDelays = tasks.filter(t => isClientAttributableDelay(t) && t.status !== 'completada')
+  const launchDelta = project.launch_date && project.launch_date_original
+    ? Math.round((new Date(project.launch_date).getTime() - new Date(project.launch_date_original).getTime()) / 86400000)
+    : 0
 
   async function saveProjectName() {
     if (!editName.trim() || busyRef.current) return
@@ -95,7 +104,15 @@ export default function ProjectDetail({ project, tasks, teamMembers, projects, o
     setSavingName(true)
     setActionError('')
     try {
-      const { error } = await supabase.from('projects').update({ name: editName.trim(), description: editDesc.trim() || null }).eq('id', project.id).select('id').single()
+      const launchChanged = editLaunchDate && editLaunchDate !== project.launch_date
+      const { error } = await supabase.from('projects').update({
+        name: editName.trim(),
+        description: editDesc.trim() || null,
+        recording_mode: editRecordingMode,
+        launch_date: editLaunchDate || null,
+        // La modalidad no modifica tareas existentes — solo se ajustan manualmente si aplica.
+        ...(launchChanged && !project.launch_date_original ? { launch_date_original: editLaunchDate } : {}),
+      }).eq('id', project.id).select('id').single()
       if (error) throw error
       setEditName(editName.trim())
       setEditDesc(editDesc.trim())
@@ -187,6 +204,24 @@ export default function ProjectDetail({ project, tasks, teamMembers, projects, o
                   className="w-full text-sm text-gray-600 border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 <div className="flex gap-2">
+                  <select
+                    aria-label="Modalidad de grabación"
+                    value={editRecordingMode}
+                    onChange={e => setEditRecordingMode(e.target.value as 'oficina' | 'remota')}
+                    className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="oficina">🏢 Grabación en oficina</option>
+                    <option value="remota">🌐 Grabación remota</option>
+                  </select>
+                  <input
+                    aria-label="Fecha de lanzamiento"
+                    type="date"
+                    value={editLaunchDate}
+                    onChange={e => setEditLaunchDate(e.target.value)}
+                    className="flex-1 text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <p className="text-xs text-gray-400">Cambiar la modalidad no modifica las tareas ya creadas — ajusta manualmente las que correspondan.</p>
+                <div className="flex gap-2">
                   <button onClick={saveProjectName} disabled={savingName || !editName.trim()}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition disabled:opacity-50">
                     <Check size={13} /> {savingName ? 'Guardando...' : 'Guardar'}
@@ -248,10 +283,19 @@ export default function ProjectDetail({ project, tasks, teamMembers, projects, o
         {deleting && <p role="status" className="text-sm text-gray-500 mb-3">Eliminando proyecto y tareas...</p>}
         {actionError && <p role="alert" className="text-sm text-red-600 mb-3">{actionError}</p>}
         <ProgressBar percentage={pct} />
-        <div className="flex gap-6 mt-4 text-sm text-gray-500">
+        <div className="flex gap-6 mt-4 text-sm text-gray-500 flex-wrap">
           <span>{completed}/{tasks.length} tareas completadas</span>
           {overdue.length > 0 && <span className="text-red-600 font-semibold">⚠ {overdue.length} vencida{overdue.length > 1 ? 's' : ''}</span>}
+          {clientDelays.length > 0 && <span className="text-orange-600 font-semibold">🕐 {clientDelays.length} retraso{clientDelays.length > 1 ? 's' : ''} atribuible{clientDelays.length > 1 ? 's' : ''} al cliente</span>}
           <span className="text-gray-400">{tasks.filter(t => !t.commitment_date).length} sin fecha de compromiso</span>
+          {project.launch_date && (
+            <span className="text-gray-500">
+              🚀 Lanzamiento: {new Date(project.launch_date + 'T00:00:00').toLocaleDateString('es-MX')}
+              {project.launch_date_original && launchDelta > 0 && (
+                <> ({new Date(project.launch_date_original + 'T00:00:00').toLocaleDateString('es-MX')}, +{launchDelta} día{launchDelta > 1 ? 's' : ''} por retraso del cliente)</>
+              )}
+            </span>
+          )}
         </div>
       </div>
 
@@ -335,6 +379,9 @@ export default function ProjectDetail({ project, tasks, teamMembers, projects, o
                         </span>
                       ) : (
                         <span className="text-xs text-orange-400 font-medium">Sin fecha</span>
+                      )}
+                      {isClientAttributableDelay(task) && (
+                        <span className="block text-[10px] font-semibold text-orange-600 mt-0.5">Retraso atribuible al cliente</span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-xs text-gray-500">
