@@ -275,7 +275,7 @@ export default function AdminDashboard() {
   async function fetchAll() {
     const [{ data: proj }, { data: tsk }, { data: team }, { data: cls }] = await Promise.all([
       supabase.from('projects').select('*, client:clients(*)').order('created_at', { ascending: false }),
-      supabase.from('tasks').select('*, project:projects(*, client:clients(*)), assignee:users!assigned_to(*), links:task_links(*)'),
+      supabase.from('tasks').select('*, project:projects(*, client:clients(*)), assignee:users!assigned_to(*), links:task_links(*)').is('archived_at', null),
       supabase.from('users').select('*').eq('role', 'team').eq('active', true),
       supabase.from('clients').select('*').order('name'),
     ])

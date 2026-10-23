@@ -204,6 +204,7 @@ export default function TeamDashboard({ embedded = false }: Props) {
       .from('tasks')
       .select('*, project:projects(*, client:clients(*)), links:task_links(*), comments:task_comments(content, created_at)')
       .eq('assigned_to', user!.id)
+      .is('archived_at', null)
       .order('priority', { ascending: true })
       .order('commitment_date', { ascending: true })
     setTasks(data || [])
@@ -235,6 +236,7 @@ export default function TeamDashboard({ embedded = false }: Props) {
       .from('tasks')
       .select('*, project:projects(*, client:clients(*)), links:task_links(*)')
       .eq('review_status', 'pendiente_revision')
+      .is('archived_at', null)
       .or(`reviewer_id.eq.${user!.id},approver_ids.cs.{${user!.id}}`)
       .order('created_at', { ascending: false })
     setMyReviewTasks((data as any) || [])
@@ -244,6 +246,7 @@ export default function TeamDashboard({ embedded = false }: Props) {
     const { data } = await supabase
       .from('tasks')
       .select('*, project:projects(*, client:clients(*)), links:task_links(*)')
+      .is('archived_at', null)
       .or('review_status.eq.pendiente_revision,review_status.eq.pendiente_trafficker,client_approval.eq.cambios_solicitados')
       .order('created_at', { ascending: false })
     setReviewTasks((data as any) || [])

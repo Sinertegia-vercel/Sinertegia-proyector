@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
-import { X, ExternalLink, Send, CheckCircle, RotateCcw, ShieldCheck, Plus, Trash2, MessageSquare, Pencil, Upload, FileCode, Image as ImageIcon, File as FileIcon, ListChecks, Timer, Play, Square, Link2, AlertTriangle, ChevronDown, SlidersHorizontal, UserX } from 'lucide-react'
+import { X, ExternalLink, Send, CheckCircle, RotateCcw, ShieldCheck, Plus, Trash2, MessageSquare, Pencil, Upload, FileCode, Image as ImageIcon, File as FileIcon, ListChecks, Timer, Play, Square, Link2, AlertTriangle, ChevronDown, SlidersHorizontal, UserX, Archive } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import type { Task, User, Comment, Subtask, TimeEntry } from '../../types'
 import { isClientAttributableDelay, delayDaysFor } from '../../lib/taskDelays'
+import EditTaskModal from '../admin/EditTaskModal'
+import ArchiveTaskModal from '../admin/ArchiveTaskModal'
 
 interface Props {
   task: Task
@@ -16,6 +18,8 @@ interface Props {
 export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone, reviewAttention = false }: Props) {
   const { user } = useAuth()
   const isAdmin = user?.role === 'admin'
+  // Editar/archivar: rol admin o super admin (igual que is_active_admin() en SQL).
+  const canManageTasks = isAdmin || !!user?.is_super_admin
   const isTeam = user?.role === 'team'
   const approverIds = task.approver_ids?.length ? task.approver_ids : (task.approver_id ? [task.approver_id] : [])
   const isReviewer = user?.id === task.reviewer_id || (!!user?.id && approverIds.includes(user.id))
@@ -43,6 +47,8 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone,
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [commentsOpen, setCommentsOpen] = useState(false)
   const [submitAttempted, setSubmitAttempted] = useState(false)
+  const [showEditTask, setShowEditTask] = useState(false)
+  const [showArchiveTask, setShowArchiveTask] = useState(false)
 
   // Subtareas
   const [subtasks, setSubtasks] = useState<Subtask[]>([])
@@ -132,6 +138,7 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone,
       .select('id, title, status')
       .eq('project_id', task.project_id)
       .neq('id', task.id)
+      .is('archived_at', null)
     setProjectTasks((data as any) || [])
   }
 
@@ -501,6 +508,19 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone,
                 </div>
               )
             })()}
+
+            {canManageTasks && !task.archived_at && (
+              <>
+                <button type="button" onClick={() => setShowEditTask(true)} title="Editar tarea"
+                  className="text-blue-500 hover:text-blue-700 transition p-1.5 rounded-lg hover:bg-blue-50">
+                  <Pencil size={16} />
+                </button>
+                <button type="button" onClick={() => setShowArchiveTask(true)} title="Archivar tarea"
+                  className="text-amber-500 hover:text-amber-700 transition p-1.5 rounded-lg hover:bg-amber-50">
+                  <Archive size={16} />
+                </button>
+              </>
+            )}
 
             <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 transition p-1 rounded-lg hover:bg-gray-100">
               <X size={18} />
@@ -1041,6 +1061,13 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone,
 
         </div>
       </div>
+
+      {showEditTask && (
+        <EditTaskModal task={task} onClose={() => setShowEditTask(false)} onSaved={() => { setShowEditTask(false); onUpdate(); onClose() }} />
+      )}
+      {showArchiveTask && (
+        <ArchiveTaskModal task={task} onClose={() => setShowArchiveTask(false)} onArchived={() => { setShowArchiveTask(false); onUpdate(); onClose() }} />
+      )}
     </div>
   )
 }

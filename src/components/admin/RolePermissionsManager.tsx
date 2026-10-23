@@ -322,6 +322,7 @@ export default function RolePermissionsManager() {
         .select('id', { count: 'exact', head: true })
         .eq('assigned_to', selected.userId)
         .neq('status', 'completada')
+        .is('archived_at', null)
       if (taskError) {
         setError('No fue posible revisar las tareas activas de esta persona.')
         setSaving('')
@@ -349,6 +350,7 @@ export default function RolePermissionsManager() {
         .update({ assigned_to: reassignTo })
         .eq('assigned_to', selected.userId)
         .neq('status', 'completada')
+        .is('archived_at', null)
       if (taskError) {
         setError('No se pudieron reasignar las tareas activas. La persona no fue eliminada.')
         setSaving('')

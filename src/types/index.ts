@@ -153,6 +153,9 @@ export interface Task {
   delay_reason?: string
   delay_marked_at?: string
   delay_marked_by?: string
+  archived_at?: string | null
+  archived_by?: string | null
+  archive_reason?: string | null
   created_by: string
   created_at: string
   updated_at: string

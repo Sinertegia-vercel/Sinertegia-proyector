@@ -85,6 +85,7 @@ export default function ClientDeliverables({ fixedClientId, onlyApproved = false
       .from('tasks')
       .select('id, title, status, review_status, department, updated_at, project:projects(id, name), assignee:users!assigned_to(full_name), links:task_links(id, label, url), comments:task_comments(id, user_id, content, created_at, user:users!user_id(full_name, role))')
       .in('project_id', projectIds)
+      .is('archived_at', null)
       .order('department')
       .order('created_at')
 

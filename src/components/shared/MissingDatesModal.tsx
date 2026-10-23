@@ -45,6 +45,7 @@ export default function MissingDatesModal() {
       .select('id, title, department, status, review_status, commitment_date, assigned_to, project_id, phase, created_at, updated_at, project:projects(status, launch_date, name, client:clients(name))')
       .eq('assigned_to', user.id)
       .is('commitment_date', null)
+      .is('archived_at', null)
       .neq('department', 'cliente')
       .then(({ data, error }) => {
         if (cancelled) return

@@ -78,7 +78,7 @@ export default function UserProfile({ onClose, onChangePhoto, onChangePassword, 
   useEffect(() => {
     if (!user) return
     void supabase.auth.mfa.listFactors().then(({ data }) => Promise.all((data?.totp || []).filter(item => item.status !== 'verified').map(item => supabase.auth.mfa.unenroll({ factorId: item.id }))))
-    supabase.from('tasks').select('status, review_status, commitment_date, completion_date').eq('assigned_to', user.id).then(({ data }) => {
+    supabase.from('tasks').select('status, review_status, commitment_date, completion_date').eq('assigned_to', user.id).is('archived_at', null).then(({ data }) => {
       const rows = data || []; const completed = rows.filter(t => t.status === 'completada')
       const onTime = completed.length ? Math.round(completed.filter(t => !t.commitment_date || (t.completion_date && t.completion_date <= t.commitment_date)).length / completed.length * 100) : 0
       setStats({ completed: completed.length, review: rows.filter(t => t.review_status === 'pendiente_revision' || t.review_status === 'en_revision').length, onTime })
