@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import type { Task, User, Department } from '../../types'
 import UserAvatar from '../shared/UserAvatar'
 import { resolvedWorkSchedule, scheduleForDate } from '../../lib/workSchedule'
+import { countsForTeamOnTimeMetric, wasDeliveredOnTime } from '../../lib/taskDelays'
 
 interface Props {
   teamMembers: User[]
@@ -185,16 +186,25 @@ export default function TeamPerformance({ teamMembers, tasks }: Props) {
     const avgRating = memberRatings.length > 0
       ? memberRatings.reduce((acc, r) => acc + r.stars, 0) / memberRatings.length : 0
 
+    // 6. Entregas a tiempo (completion_date <= commitment_date), excluyendo las tareas
+    // del departamento cliente y las que ya quedaron marcadas como retraso del cliente.
+    const countedTasks = memberTasks.filter(countsForTeamOnTimeMetric)
+    const countedCompleted = countedTasks.filter(t => t.status === 'completada' && t.commitment_date)
+    const onTimeDeliveries = countedCompleted.filter(wasDeliveredOnTime)
+    const entregasATiempoRate = countedCompleted.length > 0
+      ? Math.round((onTimeDeliveries.length / countedCompleted.length) * 100) : 0
+
     // Score general (promedio ponderado)
     const score = Math.round(
-      (onTimeRate * 0.2) +
+      (onTimeRate * 0.1) +
+      (entregasATiempoRate * 0.1) +
       (noRetrabajoRate * 0.25) +
       (Math.min(delivered * 10, 100) * 0.2) +
       (avgRating * 20 * 0.2) +
       ((expectedHours > 0 ? Math.min(totalHours / expectedHours * 100, 100) : 0) * 0.15)
     )
 
-    return { regularMins, overtimeMins, totalHours, onTimeRate, delivered, noRetrabajoRate, avgRating, score, sessionCount: memberSessions.length, scheduleLabel }
+    return { regularMins, overtimeMins, totalHours, onTimeRate, delivered, noRetrabajoRate, entregasATiempoRate, countedCompletedCount: countedCompleted.length, avgRating, score, sessionCount: memberSessions.length, scheduleLabel }
   }
 
   const allKPIs = teamMembers.map(m => ({ member: m, kpis: getMemberKPIs(m) }))
@@ -313,6 +323,12 @@ export default function TeamPerformance({ teamMembers, tasks }: Props) {
                 </th>
                 <th className="text-center px-4 py-3 font-semibold text-gray-500">
                   <div className="flex flex-col items-center">
+                    <span className="text-base">📆</span>
+                    Entregas a tiempo
+                  </div>
+                </th>
+                <th className="text-center px-4 py-3 font-semibold text-gray-500">
+                  <div className="flex flex-col items-center">
                     <span className="text-base">🔄</span>
                     Sin retrabajo
                   </div>
@@ -363,6 +379,13 @@ export default function TeamPerformance({ teamMembers, tasks }: Props) {
                     {/* Trabajos entregados */}
                     <td className="px-4 py-3 text-center">
                       <span className="font-bold text-gray-800">{kpis.delivered}</span>
+                    </td>
+
+                    {/* Entregas a tiempo */}
+                    <td className="px-4 py-3 text-center">
+                      <span className={`font-bold text-sm ${kpis.countedCompletedCount > 0 ? scoreColor(kpis.entregasATiempoRate).text : 'text-gray-400'}`}>
+                        {kpis.countedCompletedCount > 0 ? `${kpis.entregasATiempoRate}%` : '—'}
+                      </span>
                     </td>
 
                     {/* Sin retrabajo */}
@@ -442,6 +465,14 @@ export default function TeamPerformance({ teamMembers, tasks }: Props) {
                 <span className="font-bold text-gray-800">{kpis.delivered}</span>
               </div>
 
+              {/* Entregas a tiempo */}
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-500">📆 Entregas a tiempo</span>
+                <span className={`font-bold ${kpis.countedCompletedCount > 0 ? scoreColor(kpis.entregasATiempoRate).text : 'text-gray-400'}`}>
+                  {kpis.countedCompletedCount > 0 ? `${kpis.entregasATiempoRate}%` : '—'}
+                </span>
+              </div>
+
               {/* Sin retrabajo */}
               <div>
                 <div className="flex items-center justify-between text-xs mb-1">
@@ -474,7 +505,7 @@ export default function TeamPerformance({ teamMembers, tasks }: Props) {
       </div>
 
       <p className="text-xs text-gray-400 mt-4">
-        Score calculado con: 20% puntualidad · 25% sin retrabajo · 20% entregas · 20% calificación cliente · 15% horas
+        Score calculado con: 10% puntualidad · 10% entregas a tiempo · 25% sin retrabajo · 20% entregas · 20% calificación cliente · 15% horas
       </p>
 
       {/* Modal: agregar integrante al equipo */}

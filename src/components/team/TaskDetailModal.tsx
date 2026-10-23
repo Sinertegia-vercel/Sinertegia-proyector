@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
-import { X, ExternalLink, Send, CheckCircle, RotateCcw, ShieldCheck, Plus, Trash2, MessageSquare, Pencil, Upload, FileCode, Image as ImageIcon, File as FileIcon, ListChecks, Timer, Play, Square, Link2, AlertTriangle, ChevronDown, SlidersHorizontal } from 'lucide-react'
+import { X, ExternalLink, Send, CheckCircle, RotateCcw, ShieldCheck, Plus, Trash2, MessageSquare, Pencil, Upload, FileCode, Image as ImageIcon, File as FileIcon, ListChecks, Timer, Play, Square, Link2, AlertTriangle, ChevronDown, SlidersHorizontal, UserX } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import type { Task, User, Comment, Subtask, TimeEntry } from '../../types'
+import { isClientAttributableDelay, delayDaysFor } from '../../lib/taskDelays'
 
 interface Props {
   task: Task
@@ -56,6 +57,12 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone,
   // Dependencias
   const [projectTasks, setProjectTasks] = useState<Task[]>([])
   const [dependsOn, setDependsOn] = useState(task.depends_on_task_id || '')
+
+  // Retraso atribuible al cliente — "no asistió / reprogramó" en la sesión de grabación
+  const [markingNoShow, setMarkingNoShow] = useState(false)
+  const [noShowReason, setNoShowReason] = useState('')
+  const [markingDelay, setMarkingDelay] = useState(false)
+  const isRecordingSessionTask = task.department === 'cliente' && task.title === 'Asistir a la sesión de grabación'
 
   useEffect(() => {
     supabase.from('users').select('*')
@@ -241,6 +248,33 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone,
   async function saveDependsOn(value: string) {
     setDependsOn(value)
     await supabase.from('tasks').update({ depends_on_task_id: value || null }).eq('id', task.id)
+    onUpdate()
+  }
+
+  // ─── Admin marca que el cliente no asistió / reprogramó la sesión de grabación ──────────
+  async function markClientNoShow() {
+    if (!noShowReason.trim() || !user) return
+    setMarkingDelay(true)
+    const dependents = projectTasks.filter(t => t.depends_on_task_id === task.id)
+    const affectedIds = [task.id, ...dependents.map(t => t.id)]
+    await supabase.from('tasks').update({
+      delay_responsible: 'cliente',
+      delay_reason: noShowReason.trim(),
+      delay_marked_at: new Date().toISOString(),
+      delay_marked_by: user.id,
+    }).in('id', affectedIds)
+    await supabase.from('project_delay_events').insert(
+      affectedIds.map(id => ({
+        project_id: task.project_id,
+        task_id: id,
+        responsible: 'cliente',
+        reason: noShowReason.trim(),
+        created_by: user.id,
+      }))
+    )
+    setMarkingDelay(false)
+    setMarkingNoShow(false)
+    setNoShowReason('')
     onUpdate()
   }
 
@@ -504,6 +538,53 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone,
             <p className="text-[11px] font-medium text-gray-500">Preparando entrega <span className="mx-1 text-gray-300">→</span> Revisión <span className="mx-1 text-gray-300">→</span> Autorización</p>
             <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${stepColor}`}>{stepLabel}</span>
           </div>
+
+          {/* ── Retraso atribuible al cliente/agencia ── */}
+          {isClientAttributableDelay(task) && (
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2">
+              <div className="flex items-center gap-2">
+                <AlertTriangle size={14} className="text-orange-500 shrink-0" />
+                <p className="text-xs font-semibold text-orange-700">Retraso atribuible al cliente · {delayDaysFor(task)} día{delayDaysFor(task) === 1 ? '' : 's'}</p>
+              </div>
+              {isAdmin && task.delay_responsible === 'cliente' && (
+                <button type="button" onClick={async () => {
+                  await supabase.from('tasks').update({ delay_responsible: 'agencia', delay_reason: 'Corregido por un administrador' }).eq('id', task.id)
+                  await supabase.from('project_delay_events').insert({ project_id: task.project_id, task_id: task.id, responsible: 'agencia', reason: 'Corregido por un administrador', created_by: user?.id })
+                  onUpdate()
+                }} className="shrink-0 text-xs font-semibold text-orange-600 underline hover:text-orange-800">
+                  No fue el cliente
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* ── Admin: el cliente no asistió / reprogramó la sesión de grabación ── */}
+          {isAdmin && isRecordingSessionTask && task.status !== 'completada' && task.delay_responsible !== 'cliente' && (
+            <div className="rounded-xl border border-dashed border-red-200 bg-red-50/50 p-3 space-y-2">
+              {!markingNoShow ? (
+                <button type="button" onClick={() => setMarkingNoShow(true)}
+                  className="flex items-center gap-1.5 text-xs font-semibold text-red-700 border border-red-200 bg-white hover:bg-red-50 px-3 py-2 rounded-lg transition">
+                  <UserX size={13} /> El cliente no asistió / reprogramó
+                </button>
+              ) : (
+                <>
+                  <textarea value={noShowReason} onChange={e => setNoShowReason(e.target.value)} rows={2}
+                    placeholder="Motivo (para el historial de retrasos)..."
+                    className="w-full border border-red-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300 resize-none" />
+                  <div className="flex gap-2">
+                    <button type="button" onClick={markClientNoShow} disabled={markingDelay || !noShowReason.trim()}
+                      className="flex-1 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold py-2 rounded-lg transition disabled:opacity-50">
+                      {markingDelay ? 'Marcando...' : 'Confirmar — marcar como retraso del cliente'}
+                    </button>
+                    <button type="button" onClick={() => { setMarkingNoShow(false); setNoShowReason('') }}
+                      className="px-3 py-2 border border-gray-200 text-xs text-gray-600 rounded-lg hover:bg-gray-50 transition">
+                      Cancelar
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
 
           {/* ── Fecha compromiso ── */}
           {(isTeam || isAdmin) && step === 1 && (

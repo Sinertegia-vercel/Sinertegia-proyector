@@ -1,10 +1,33 @@
 import type { Department, Priority } from '../types'
 
+export type Modalidad = 'oficina' | 'remota'
+
+// Fases de la hoja de ruta, en orden. Producción (video/páginas) corre en paralelo
+// y se muestra agrupada como "Producción" en las vistas de hoja de ruta.
+export const PHASES = [
+  'entrada', 'estrategia', 'guiones', 'produccion_video', 'produccion_paginas',
+  'revision', 'lanzamiento', 'optimizacion',
+] as const
+export type Phase = typeof PHASES[number]
+
+export const PHASE_LABELS: Record<Phase, string> = {
+  entrada: 'Entrada',
+  estrategia: 'Estrategia',
+  guiones: 'Guiones',
+  produccion_video: 'Producción · Video',
+  produccion_paginas: 'Producción · Páginas',
+  revision: 'Revisión',
+  lanzamiento: 'Lanzamiento',
+  optimizacion: 'Optimización',
+}
+
 export interface TemplateTask {
   title: string
   department: Department
   priority: Priority
+  phase: Phase
   group?: string // sub-grupo visual (solo para el modal de plantilla)
+  modalidad?: Modalidad // solo para las tareas de grabación/cliente que dependen de la modalidad elegida
 }
 
 export interface ProjectTemplate {
@@ -20,6 +43,7 @@ export interface StoredTemplateTask {
   department: Department
   priority: Priority
   group?: string
+  phase?: Phase | null
 }
 
 function taskKey(task: Pick<StoredTemplateTask, 'title' | 'department'>) {
@@ -42,6 +66,7 @@ export function resolveTemplateTasks(
   const merged = [...baseTasks, ...storedTasks.map(task => ({
     ...task,
     group: task.group || baseByKey.get(taskKey(task))?.group,
+    phase: task.phase || baseByKey.get(taskKey(task))?.phase || inferPhase(task.title, task.department),
   }))]
   const seen = new Set<string>()
   return merged.filter(task => {
@@ -58,98 +83,140 @@ export function resolveTemplateTasks(
 
 const baseTasks: TemplateTask[] = [
   // ── Cliente ──
-  { title: 'Llenar los 3 documentos', department: 'cliente', priority: 'alta' },
-  { title: 'Reunión con el líder del proyecto para revisar guiones', department: 'cliente', priority: 'alta' },
-  { title: 'Grabar VSL de webinar, Gracias y 12 anuncios', department: 'cliente', priority: 'alta' },
-  { title: 'Compartir la grabación de video de VSL, Gracias, 12 anuncios', department: 'cliente', priority: 'alta' },
-  { title: 'Crear Presentación', department: 'cliente', priority: 'alta' },
-  { title: 'Revisar el embudo con el equipo para dar check final', department: 'cliente', priority: 'alta' },
-  { title: 'Compartir con el equipo de BGI los links para autorizarlos', department: 'cliente', priority: 'alta' },
-  { title: 'Solicitar reunión de revisión de presentación con Alfredo Mota', department: 'cliente', priority: 'alta' },
+  { title: 'Llenar los 3 documentos', department: 'cliente', priority: 'alta', phase: 'entrada' },
+  { title: 'Reunión con el líder del proyecto para revisar guiones', department: 'cliente', priority: 'alta', phase: 'guiones' },
+  { title: 'Revisar el embudo con el equipo para dar check final', department: 'cliente', priority: 'alta', phase: 'revision' },
+  { title: 'Compartir con el equipo de BGI los links para autorizarlos', department: 'cliente', priority: 'alta', phase: 'revision' },
   // ── Líder (ScrumMaster) ──
-  { title: 'Crear grupo de WhatsApp con cliente y equipo', department: 'lider', priority: 'alta' },
-  { title: 'Enviar 3 documentos para llenar', department: 'lider', priority: 'alta' },
-  { title: 'Agendar reunión inicial con cliente y equipo', department: 'lider', priority: 'alta' },
-  { title: 'Recolección de accesos', department: 'lider', priority: 'alta' },
-  { title: 'Reunión con el equipo interno, para confirmar fechas de entrega', department: 'lider', priority: 'alta' },
-  { title: 'Validar guiones VSL, Gracias, 12 anuncios', department: 'lider', priority: 'alta' },
-  { title: 'Agendar reunión con el cliente para el feedback y entrega de guiones', department: 'lider', priority: 'alta' },
-  { title: 'Entregar al cliente para feedback los guiones', department: 'lider', priority: 'alta' },
-  { title: 'Agendar sesión de grabación', department: 'lider', priority: 'alta' },
-  { title: 'Revisar con el equipo de webmaster el embudo completo', department: 'lider', priority: 'alta' },
-  { title: 'Solicitar reunión con el experto para dar check final del embudo', department: 'lider', priority: 'alta' },
+  { title: 'Crear grupo de WhatsApp con cliente y equipo', department: 'lider', priority: 'alta', phase: 'entrada' },
+  { title: 'Enviar 3 documentos para llenar', department: 'lider', priority: 'alta', phase: 'entrada' },
+  { title: 'Agendar reunión inicial con cliente y equipo', department: 'lider', priority: 'alta', phase: 'entrada' },
+  { title: 'Recolección de accesos', department: 'lider', priority: 'alta', phase: 'entrada' },
+  { title: 'Reunión con el equipo interno, para confirmar fechas de entrega', department: 'lider', priority: 'alta', phase: 'entrada' },
+  { title: 'Validar guiones VSL, Gracias, 12 anuncios', department: 'lider', priority: 'alta', phase: 'guiones' },
+  { title: 'Agendar reunión con el cliente para el feedback y entrega de guiones', department: 'lider', priority: 'alta', phase: 'guiones' },
+  { title: 'Entregar al cliente para feedback los guiones', department: 'lider', priority: 'alta', phase: 'guiones' },
+  { title: 'Agendar sesión de grabación', department: 'lider', priority: 'alta', phase: 'produccion_video' },
+  { title: 'Revisar con el equipo de webmaster el embudo completo', department: 'lider', priority: 'alta', phase: 'revision' },
+  { title: 'Solicitar reunión con el experto para dar check final del embudo', department: 'lider', priority: 'alta', phase: 'revision' },
   // ── Webmaster ──
-  { title: 'Montar funnel completo en GHL', department: 'webmaster', priority: 'alta' },
-  { title: 'Cambiar diseño visual de Pág. Gracias', department: 'webmaster', priority: 'alta' },
-  { title: 'Cambiar diseño visual de Pág. Ingreso al Webinar', department: 'webmaster', priority: 'alta' },
-  { title: 'Cambiar diseño visual y de texto a la Página de Oferta', department: 'webmaster', priority: 'alta' },
-  { title: 'Instalar "Pixel" de Meta ADS', department: 'webmaster', priority: 'alta' },
-  { title: 'Crear los "custom value" en GHL', department: 'webmaster', priority: 'alta' },
-  { title: 'Crear grupo de WhatsApp en Funnelchat', department: 'webmaster', priority: 'alta' },
-  { title: 'Crear el Evento en Addevent', department: 'webmaster', priority: 'alta' },
-  { title: 'Crear la automatización de correos', department: 'webmaster', priority: 'alta' },
-  { title: 'Agregar los copys en correo', department: 'webmaster', priority: 'alta' },
-  { title: 'Agregar video de gracias y VSL', department: 'webmaster', priority: 'alta' },
-  { title: 'Solicitar revisión de embudo con el líder', department: 'webmaster', priority: 'alta' },
-  { title: 'Programar los mensajes de WhatsApp en Funnelchat', department: 'webmaster', priority: 'alta' },
-  { title: 'Reset de timers de embudo', department: 'webmaster', priority: 'alta' },
+  { title: 'Montar funnel completo en GHL', department: 'webmaster', priority: 'alta', phase: 'produccion_paginas' },
+  { title: 'Cambiar diseño visual de Pág. Gracias', department: 'webmaster', priority: 'alta', phase: 'produccion_paginas' },
+  { title: 'Cambiar diseño visual y de texto a la Página de Oferta', department: 'webmaster', priority: 'alta', phase: 'produccion_paginas' },
+  { title: 'Instalar "Pixel" de Meta ADS', department: 'webmaster', priority: 'alta', phase: 'produccion_paginas' },
+  { title: 'Crear los "custom value" en GHL', department: 'webmaster', priority: 'alta', phase: 'produccion_paginas' },
+  { title: 'Crear grupo de WhatsApp en Funnelchat', department: 'webmaster', priority: 'alta', phase: 'produccion_paginas' },
+  { title: 'Crear la automatización de correos', department: 'webmaster', priority: 'alta', phase: 'produccion_paginas' },
+  { title: 'Agregar los copys en correo', department: 'webmaster', priority: 'alta', phase: 'produccion_paginas' },
+  { title: 'Agregar video de gracias y VSL', department: 'webmaster', priority: 'alta', phase: 'produccion_paginas' },
+  { title: 'Solicitar revisión de embudo con el líder', department: 'webmaster', priority: 'alta', phase: 'revision' },
+  { title: 'Programar los mensajes de WhatsApp en Funnelchat', department: 'webmaster', priority: 'alta', phase: 'produccion_paginas' },
+  { title: 'Reset de timers de embudo', department: 'webmaster', priority: 'alta', phase: 'produccion_paginas' },
   // ── Copy ──
-  { title: 'Crear carpeta de ChatGPT del cliente', department: 'copy', priority: 'alta' },
-  { title: 'Subir archivo de Preguntas de Poder', department: 'copy', priority: 'alta' },
-  { title: 'Subir ADN de Marca (si aplica)', department: 'copy', priority: 'media' },
-  { title: 'Subir el NTPVS a la carpeta del experto', department: 'copy', priority: 'alta' },
-  { title: 'Hacer investigación en Comet (IG, TikTok, YT)', department: 'copy', priority: 'alta' },
-  { title: 'Crear prompt experto: Mapa Emocional', department: 'copy', priority: 'alta' },
-  { title: 'Crear prompt experto: Guiones VSL y Gracias', department: 'copy', priority: 'alta' },
-  { title: 'Crear prompt: Meta Ads (guiones de video)', department: 'copy', priority: 'alta' },
-  { title: 'Crear prompt experto: LP', department: 'copy', priority: 'alta' },
-  { title: 'Crear prompt: Emails + WhatsApp', department: 'copy', priority: 'alta' },
-  { title: 'Entregar textos a la Diseñadora de páginas web', department: 'copy', priority: 'alta' },
-  { title: 'Entregar textos a la Web Master de Correo y WhatsApp', department: 'copy', priority: 'alta' },
-  { title: 'Crear prompt: Copy In / Out para Ads', department: 'copy', priority: 'alta' },
-  { title: 'Entregar textos de Copy In / Out para Ads a la diseñadora de ADS', department: 'copy', priority: 'alta' },
+  { title: 'Crear carpeta de ChatGPT del cliente', department: 'copy', priority: 'alta', phase: 'estrategia' },
+  { title: 'Subir archivo de Preguntas de Poder', department: 'copy', priority: 'alta', phase: 'estrategia' },
+  { title: 'Subir ADN de Marca (si aplica)', department: 'copy', priority: 'media', phase: 'estrategia' },
+  { title: 'Subir el NTPVS a la carpeta del experto', department: 'copy', priority: 'alta', phase: 'estrategia' },
+  { title: 'Hacer investigación en Comet (IG, TikTok, YT)', department: 'copy', priority: 'alta', phase: 'estrategia' },
+  { title: 'Crear prompt experto: Mapa Emocional', department: 'copy', priority: 'alta', phase: 'estrategia' },
+  { title: 'Crear prompt experto: Guiones VSL y Gracias', department: 'copy', priority: 'alta', phase: 'guiones' },
+  { title: 'Crear prompt: Meta Ads (guiones de video)', department: 'copy', priority: 'alta', phase: 'guiones' },
+  { title: 'Crear prompt experto: LP', department: 'copy', priority: 'alta', phase: 'produccion_paginas' },
+  { title: 'Crear prompt: Emails + WhatsApp', department: 'copy', priority: 'alta', phase: 'produccion_paginas' },
+  { title: 'Entregar textos a la Diseñadora de páginas web', department: 'copy', priority: 'alta', phase: 'produccion_paginas' },
+  { title: 'Entregar textos a la Web Master de Correo y WhatsApp', department: 'copy', priority: 'alta', phase: 'produccion_paginas' },
+  { title: 'Crear prompt: Copy In / Out para Ads', department: 'copy', priority: 'alta', phase: 'produccion_paginas' },
+  { title: 'Entregar textos de Copy In / Out para Ads a la diseñadora de ADS', department: 'copy', priority: 'alta', phase: 'produccion_paginas' },
   // ── Diseño — Páginas web ──
-  { title: 'Diseñar Landing Page (LP)', department: 'diseno', priority: 'alta', group: 'diseno_web' },
-  { title: 'Diseñar Página de Gracias', department: 'diseno', priority: 'alta', group: 'diseno_web' },
-  { title: 'Diseñar miniatura del video de LP y Gracias', department: 'diseno', priority: 'alta', group: 'diseno_web' },
-  { title: 'Diseñar imagen mockup para WhatsApp en página de gracias', department: 'diseno', priority: 'alta', group: 'diseno_web' },
+  { title: 'Diseñar Landing Page (LP)', department: 'diseno', priority: 'alta', group: 'diseno_web', phase: 'produccion_paginas' },
+  { title: 'Diseñar Página de Gracias', department: 'diseno', priority: 'alta', group: 'diseno_web', phase: 'produccion_paginas' },
+  { title: 'Diseñar miniatura del video de LP y Gracias', department: 'diseno', priority: 'alta', group: 'diseno_web', phase: 'produccion_paginas' },
+  { title: 'Diseñar imagen mockup para WhatsApp en página de gracias', department: 'diseno', priority: 'alta', group: 'diseno_web', phase: 'produccion_paginas' },
   // ── Diseño — Imágenes / Ads ──
-  { title: 'Diseñar imágenes para correos', department: 'diseno', priority: 'alta', group: 'diseno_ads' },
-  { title: 'Diseñar Mockup para página de Oferta', department: 'diseno', priority: 'alta', group: 'diseno_ads' },
-  { title: 'Diseñar imágenes para grupo de WhatsApp', department: 'diseno', priority: 'alta', group: 'diseno_ads' },
-  { title: 'Diseñar imágenes para mensajes de WhatsApp', department: 'diseno', priority: 'alta', group: 'diseno_ads' },
-  { title: 'Diseñar 3 imágenes tipo carruseles para Meta Ads', department: 'diseno', priority: 'alta', group: 'diseno_ads' },
-  { title: 'Diseñar 3 imágenes simples para Meta Ads', department: 'diseno', priority: 'alta', group: 'diseno_ads' },
+  { title: 'Diseñar imágenes para correos', department: 'diseno', priority: 'alta', group: 'diseno_ads', phase: 'produccion_paginas' },
+  { title: 'Diseñar Mockup para página de Oferta', department: 'diseno', priority: 'alta', group: 'diseno_ads', phase: 'produccion_paginas' },
+  { title: 'Diseñar imágenes para grupo de WhatsApp', department: 'diseno', priority: 'alta', group: 'diseno_ads', phase: 'produccion_paginas' },
+  { title: 'Diseñar imágenes para mensajes de WhatsApp', department: 'diseno', priority: 'alta', group: 'diseno_ads', phase: 'produccion_paginas' },
+  { title: 'Diseñar 3 imágenes tipo carruseles para Meta Ads', department: 'diseno', priority: 'alta', group: 'diseno_ads', phase: 'produccion_paginas' },
+  { title: 'Diseñar 3 imágenes simples para Meta Ads', department: 'diseno', priority: 'alta', group: 'diseno_ads', phase: 'produccion_paginas' },
   // ── Edición — Videos ──
-  { title: 'Editar VSL principal', department: 'edicion', priority: 'alta', group: 'edicion_video' },
-  { title: 'Editar video de Gracias', department: 'edicion', priority: 'alta', group: 'edicion_video' },
-  { title: 'Editar 6 anuncios — ronda 1 (2 fríos, 2 templados, 2 calientes)', department: 'edicion', priority: 'alta', group: 'edicion_video' },
-  { title: 'Editar 6 anuncios — ronda 2 (2 fríos, 2 templados, 2 calientes)', department: 'edicion', priority: 'alta', group: 'edicion_video' },
+  { title: 'Editar VSL principal', department: 'edicion', priority: 'alta', group: 'edicion_video', phase: 'produccion_video' },
+  { title: 'Editar video de Gracias', department: 'edicion', priority: 'alta', group: 'edicion_video', phase: 'produccion_video' },
+  { title: 'Editar 6 anuncios — ronda 1 (2 fríos, 2 templados, 2 calientes)', department: 'edicion', priority: 'alta', group: 'edicion_video', phase: 'produccion_video' },
+  { title: 'Editar 6 anuncios — ronda 2 (2 fríos, 2 templados, 2 calientes)', department: 'edicion', priority: 'alta', group: 'edicion_video', phase: 'produccion_video' },
   // ── Trafficker ──
-  { title: 'Revisar cuenta publicitaria y BM', department: 'trafficker', priority: 'alta' },
-  { title: 'Crear Pixel de Meta', department: 'trafficker', priority: 'alta' },
-  { title: 'Compartir Pixel a Web Master', department: 'trafficker', priority: 'alta' },
-  { title: 'Montar campañas en Meta Ads', department: 'trafficker', priority: 'alta' },
-  { title: 'Lanzar campañas', department: 'trafficker', priority: 'alta' },
+  { title: 'Revisar cuenta publicitaria y BM', department: 'trafficker', priority: 'alta', phase: 'entrada' },
+  { title: 'Crear Pixel de Meta', department: 'trafficker', priority: 'alta', phase: 'entrada' },
+  { title: 'Compartir Pixel a Web Master', department: 'trafficker', priority: 'alta', phase: 'entrada' },
+  { title: 'Montar campañas en Meta Ads', department: 'trafficker', priority: 'alta', phase: 'lanzamiento' },
+  { title: 'Lanzar campañas', department: 'trafficker', priority: 'alta', phase: 'lanzamiento' },
   // ── Grabación (Producción) ──
-  { title: 'Grabar 12 anuncios', department: 'grabacion', priority: 'alta' },
-  { title: 'Grabar VSL y Video de Gracias', department: 'grabacion', priority: 'alta' },
-  { title: 'Encarpetar', department: 'grabacion', priority: 'media' },
+  { title: 'Encarpetar', department: 'grabacion', priority: 'media', phase: 'produccion_video' },
 ]
 
-const vslTasks: TemplateTask[] = baseTasks
+// Tareas exclusivas de VSL (ninguna por ahora: VSL usa solo la base común).
+const soloVslTasks: TemplateTask[] = []
 
-const webinarTasks: TemplateTask[] = [
-  ...baseTasks.filter(t => t.group !== 'diseno_web'), // reemplazamos diseno_web con versión webinar
-  // Diseño — Páginas web (webinar agrega: presentación del webinar)
-  { title: 'Diseñar Landing Page (LP)', department: 'diseno', priority: 'alta', group: 'diseno_web' },
-  { title: 'Diseñar Página de Gracias', department: 'diseno', priority: 'alta', group: 'diseno_web' },
-  { title: 'Diseñar miniatura del video de LP y Gracias', department: 'diseno', priority: 'alta', group: 'diseno_web' },
-  { title: 'Diseñar imagen mockup para WhatsApp en página de gracias', department: 'diseno', priority: 'alta', group: 'diseno_web' },
-  { title: 'Diseñar presentación de webinar (solo diseño, no estructura)', department: 'diseno', priority: 'alta', group: 'diseno_web' },
-  // Edición — Presentación (solo webinar)
-  { title: 'Video de Edificación - Presentación', department: 'edicion', priority: 'alta', group: 'edicion_presentacion' },
+// Tareas exclusivas de Webinar: presentación del cliente, su página de ingreso,
+// el evento de Addevent, el diseño de la presentación y el video de edificación.
+const soloWebinarTasks: TemplateTask[] = [
+  { title: 'Crear Presentación', department: 'cliente', priority: 'alta', phase: 'produccion_video' },
+  { title: 'Solicitar reunión de revisión de presentación con Alfredo Mota', department: 'cliente', priority: 'alta', phase: 'produccion_video' },
+  { title: 'Cambiar diseño visual de Pág. Ingreso al Webinar', department: 'webmaster', priority: 'alta', phase: 'produccion_paginas' },
+  { title: 'Crear el Evento en Addevent', department: 'webmaster', priority: 'alta', phase: 'produccion_paginas' },
+  { title: 'Diseñar presentación de webinar (solo diseño, no estructura)', department: 'diseno', priority: 'alta', group: 'diseno_web', phase: 'produccion_video' },
+  { title: 'Video de Edificación - Presentación', department: 'edicion', priority: 'alta', group: 'edicion_presentacion', phase: 'produccion_video' },
 ]
+
+// Títulos exclusivos de Webinar — se usan para inferir la plantilla de un proyecto
+// existente cuando no hay un campo explícito que lo indique.
+export const WEBINAR_ONLY_TITLES = new Set(soloWebinarTasks.map(task => task.title))
+
+const vslTasks: TemplateTask[] = [...baseTasks, ...soloVslTasks]
+const webinarTasks: TemplateTask[] = [...baseTasks, ...soloWebinarTasks]
+
+// Tareas de grabación/cliente que dependen de la modalidad elegida al crear el proyecto.
+// En oficina, Grabación es la responsable de grabar y el cliente solo asiste a la sesión.
+// En remota, el cliente es el responsable de grabar y compartir, y Grabación solo apoya.
+const modalidadTasks: TemplateTask[] = [
+  { title: 'Grabar 12 anuncios', department: 'grabacion', priority: 'alta', modalidad: 'oficina', phase: 'produccion_video' },
+  { title: 'Grabar VSL y Video de Gracias', department: 'grabacion', priority: 'alta', modalidad: 'oficina', phase: 'produccion_video' },
+  { title: 'Asistir a la sesión de grabación', department: 'cliente', priority: 'alta', modalidad: 'oficina', phase: 'produccion_video' },
+  { title: 'Grabar VSL, Gracias y 12 anuncios', department: 'cliente', priority: 'alta', modalidad: 'remota', phase: 'produccion_video' },
+  { title: 'Compartir la grabación de video de VSL, Gracias, 12 anuncios', department: 'cliente', priority: 'alta', modalidad: 'remota', phase: 'produccion_video' },
+  { title: 'Enviar guía de grabación al cliente y revisar material recibido', department: 'grabacion', priority: 'media', modalidad: 'remota', phase: 'produccion_video' },
+]
+
+/** Tareas de grabación/cliente para la modalidad elegida (se agregan aparte de resolveTemplateTasks). */
+export function tasksForModalidad(modalidad: Modalidad): TemplateTask[] {
+  return modalidadTasks.filter(task => task.modalidad === modalidad)
+}
+
+// ── Fase por título (para tareas guardadas sin fase o de proyectos viejos) ──
+const TITLE_PHASE_MAP = new Map<string, Phase>()
+;[...baseTasks, ...soloWebinarTasks, ...modalidadTasks].forEach(task => {
+  TITLE_PHASE_MAP.set(task.title.trim().toLocaleLowerCase('es-MX'), task.phase)
+})
+
+const DEPARTMENT_FALLBACK_PHASE: Record<Department, Phase> = {
+  cliente: 'entrada',
+  lider: 'entrada',
+  webmaster: 'produccion_paginas',
+  copy: 'estrategia',
+  diseno: 'produccion_paginas',
+  edicion: 'produccion_video',
+  trafficker: 'lanzamiento',
+  grabacion: 'produccion_video',
+}
+
+/**
+ * Asigna una fase a una tarea existente sin escribir en la base: primero busca el título
+ * exacto en las plantillas (cubre el 100% de las tareas de VSL/Webinar), y si no lo
+ * encuentra (tarea personalizada o de un embudo "otro") cae al departamento.
+ */
+export function inferPhase(title: string, department: Department): Phase {
+  return TITLE_PHASE_MAP.get(title.trim().toLocaleLowerCase('es-MX')) || DEPARTMENT_FALLBACK_PHASE[department] || 'entrada'
+}
 
 export const PROJECT_TEMPLATES: ProjectTemplate[] = [
   {

@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { ExternalLink, Send, Camera, Loader2, PlusCircle, CheckCircle, X, ChevronDown, CheckCheck, ClipboardList, LayoutGrid, CalendarDays, Map as MapIcon, MessageCircle, Link2, Clock3, Eye, Sparkles, UserRound, LogOut } from 'lucide-react'
+import { ExternalLink, Send, Camera, Loader2, PlusCircle, CheckCircle, X, ChevronDown, CheckCheck, ClipboardList, LayoutGrid, CalendarDays, Map as MapIcon, Route, MessageCircle, Link2, Clock3, Eye, Sparkles, UserRound, LogOut, Upload, FileUp, History } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import type { Task, Project, Client } from '../../types'
@@ -15,16 +15,36 @@ import TopBarActions from '../shared/TopBarActions'
 import StarRating from './StarRating'
 import UserProfile from '../shared/UserProfile'
 import { DEPT_LABELS, DEPT_COLORS, DEPT_ORDER } from '../../data/projectTemplates'
+import ClientRoadmapView from '../roadmap/ClientRoadmapView'
 import '../../styles/DashboardV2.css'
 
-type Tab = 'mistareas' | 'progreso' | 'area' | 'calendario' | 'roadmap' | 'chat' | 'entregables' | 'profile'
+interface DelayEvent {
+  id: string
+  task_id: string | null
+  responsible: 'cliente' | 'agencia'
+  days: number | null
+  reason: string | null
+  created_at: string
+}
+
+function dueLabel(commitmentDate: string): { text: string; late: boolean } {
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const due = new Date(commitmentDate + 'T00:00:00')
+  const diffDays = Math.round((due.getTime() - today.getTime()) / 86400000)
+  if (diffDays < 0) return { text: `Vencida hace ${Math.abs(diffDays)} día${Math.abs(diffDays) === 1 ? '' : 's'}`, late: true }
+  if (diffDays === 0) return { text: 'Vence hoy', late: false }
+  return { text: `Vence en ${diffDays} día${diffDays === 1 ? '' : 's'}`, late: false }
+}
+
+type Tab = 'mistareas' | 'progreso' | 'area' | 'calendario' | 'roadmap' | 'mihojaderuta' | 'chat' | 'entregables' | 'profile'
 
 const CLIENT_NAV_ITEMS = [
-  { id: 'mistareas' as Tab, label: 'Mis tareas', icon: CheckCheck },
+  { id: 'mistareas' as Tab, label: 'Mis pendientes', icon: CheckCheck },
   { id: 'progreso' as Tab, label: 'Todas las tareas', icon: ClipboardList },
   { id: 'area' as Tab, label: 'Por área', icon: LayoutGrid },
   { id: 'calendario' as Tab, label: 'Calendario', icon: CalendarDays },
   { id: 'roadmap' as Tab, label: 'Hoja de Ruta', icon: MapIcon },
+  { id: 'mihojaderuta' as Tab, label: 'Mi hoja de ruta', icon: Route },
   { id: 'chat' as Tab, label: 'Chat con el equipo', icon: MessageCircle },
   { id: 'entregables' as Tab, label: 'Entregables', icon: Link2 },
 ]
@@ -65,6 +85,14 @@ export default function ClientPortal() {
   const [submittingFeedback, setSubmittingFeedback] = useState(false)
   const [reviewPanelOpen, setReviewPanelOpen] = useState(true)
   const [hiddenSections, setHiddenSections] = useState<Set<string>>(new Set())
+
+  // Mis pendientes: entrega y marcado de tareas del departamento cliente
+  const [deliveringTaskId, setDeliveringTaskId] = useState<string | null>(null)
+  const [deliverLinkUrl, setDeliverLinkUrl] = useState('')
+  const [deliverError, setDeliverError] = useState('')
+  const [completingTaskId, setCompletingTaskId] = useState<string | null>(null)
+  const [delayEvents, setDelayEvents] = useState<DelayEvent[]>([])
+  const [delayHistoryOpen, setDelayHistoryOpen] = useState(false)
 
   useEffect(() => {
     if (user) fetchData()
@@ -146,6 +174,15 @@ export default function ClientPortal() {
     setTasks(tsk || [])
     if (proj && proj.length > 0) setSelectedProject(proj[0])
 
+    if (proj && proj.length > 0) {
+      const { data: events } = await supabase
+        .from('project_delay_events')
+        .select('id, task_id, responsible, days, reason, created_at')
+        .in('project_id', proj.map(p => p.id))
+        .order('created_at', { ascending: false })
+      setDelayEvents((events as DelayEvent[]) || [])
+    }
+
     const { data: reqs } = await supabase
       .from('task_requests')
       .select('*, assignee:users!assigned_to(full_name)')
@@ -203,6 +240,39 @@ export default function ClientPortal() {
     }
     setUploadingCover(false)
     setUploadStatus('')
+  }
+
+  async function deliverLink(taskId: string) {
+    const url = deliverLinkUrl.trim()
+    if (!url) return
+    try { new URL(url) } catch { setDeliverError('Escribe un link válido, por ejemplo https://drive.google.com/...'); return }
+    setDeliverError('')
+    const { error } = await supabase.from('task_links').insert({ task_id: taskId, label: 'Entregable del cliente', url })
+    if (error) { setDeliverError('No se pudo guardar el link. Intenta de nuevo.'); return }
+    setDeliverLinkUrl('')
+    fetchData()
+  }
+
+  async function deliverFile(taskId: string, file: File) {
+    if (file.size > 20 * 1024 * 1024) { setDeliverError('El archivo debe pesar máximo 20 MB'); return }
+    setDeliverError('')
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, '_')
+    const path = `task-deliverables/${taskId}/${Date.now()}_${safeName}`
+    const { error: uploadError } = await supabase.storage.from('chat-files').upload(path, file, { contentType: file.type || undefined })
+    if (uploadError) { setDeliverError('No se pudo subir el archivo'); return }
+    const { data: { publicUrl } } = supabase.storage.from('chat-files').getPublicUrl(path)
+    const { error: linkError } = await supabase.from('task_links').insert({ task_id: taskId, label: file.name, url: publicUrl })
+    if (linkError) { setDeliverError('El archivo subió, pero no se pudo vincular a la tarea'); return }
+    fetchData()
+  }
+
+  async function markTaskDelivered(taskId: string) {
+    setCompletingTaskId(taskId)
+    const { error } = await supabase.rpc('client_complete_task', { p_task_id: taskId })
+    setCompletingTaskId(null)
+    if (error) { setDeliverError('No se pudo marcar la tarea como entregada. Intenta de nuevo.'); return }
+    setDeliveringTaskId(null)
+    fetchData()
   }
 
   async function sendComment(taskId: string) {
@@ -299,6 +369,17 @@ export default function ClientPortal() {
   )
   const clientApproved = tasks.filter(t => t.client_approval === 'aprobada')
 
+  // Mis pendientes: tareas del departamento cliente, ordenadas por fecha compromiso.
+  const myPendingTasks = projectTasks
+    .filter(t => t.department === 'cliente' && t.status !== 'completada')
+    .sort((a, b) => {
+      if (!a.commitment_date && !b.commitment_date) return 0
+      if (!a.commitment_date) return 1
+      if (!b.commitment_date) return -1
+      return a.commitment_date.localeCompare(b.commitment_date)
+    })
+  const projectDelayEvents = delayEvents.filter(e => projectTasks.some(t => t.id === e.task_id) || !e.task_id)
+
   if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Cargando tu proyecto...</div>
 
   return (
@@ -318,6 +399,11 @@ export default function ClientPortal() {
               className={`v2-nav-item ${activeTab === id ? 'active' : ''}`}>
               <Icon size={17} />
               {label}
+              {id === 'mistareas' && myPendingTasks.length > 0 && (
+                <span className="ml-auto grid h-5 min-w-5 place-items-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                  {myPendingTasks.length}
+                </span>
+              )}
             </button>
           ))}
           <div className="mt-auto border-t border-white/10 pt-3">
@@ -487,49 +573,113 @@ export default function ClientPortal() {
         </div>
       )}
 
-      {/* ── Tab: Mis tareas ── */}
+      {/* ── Tab: Mis pendientes ── */}
       {activeTab === 'mistareas' && (
         <div className="space-y-6">
           {/* Tareas asignadas al cliente (departamento cliente) */}
           <div>
             <h3 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-blue-500 inline-block" />
-              Tareas que debes completar
+              Mis pendientes
+              {myPendingTasks.length > 0 && (
+                <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full">{myPendingTasks.length}</span>
+              )}
             </h3>
-            {projectTasks.filter(t => t.department === 'cliente').length === 0 ? (
+            {myPendingTasks.length === 0 ? (
               <div className="bg-gray-50 rounded-xl p-6 text-center text-gray-400 text-sm">
                 No tienes tareas pendientes por ahora
               </div>
             ) : (
               <div className="space-y-2">
-                {projectTasks.filter(t => t.department === 'cliente').map(task => {
-                  const isLate = task.commitment_date && task.status !== 'completada' && new Date(task.commitment_date) < new Date()
+                {myPendingTasks.map(task => {
+                  const due = task.commitment_date ? dueLabel(task.commitment_date) : null
+                  const isDelivering = deliveringTaskId === task.id
                   return (
-                    <div key={task.id} className={`bg-white border rounded-xl p-4 flex items-start gap-3 shadow-sm ${isLate ? 'border-red-200' : 'border-gray-200'}`}>
-                      <div className="shrink-0 mt-0.5">
-                        {task.status === 'completada' ? <span className="text-green-500 text-xl">✓</span>
-                          : task.status === 'en_progreso' ? <span className="text-blue-500 text-xl">▶</span>
-                          : <span className="text-gray-300 text-xl">○</span>}
+                    <div key={task.id} className={`bg-white border rounded-xl p-4 shadow-sm ${due?.late ? 'border-red-200' : 'border-gray-200'}`}>
+                      <div className="flex items-start gap-3">
+                        <div className="shrink-0 mt-0.5">
+                          {task.status === 'en_progreso' ? <span className="text-blue-500 text-xl">▶</span> : <span className="text-gray-300 text-xl">○</span>}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm text-gray-800">{task.title}</p>
+                          {task.description && <p className="text-xs text-gray-500 mt-0.5">{task.description}</p>}
+                          {due && (
+                            <p className={`text-xs mt-1 font-medium ${due.late ? 'text-red-600' : 'text-gray-400'}`}>
+                              {due.late ? '⚠ ' : ''}{due.text}
+                              {task.delay_responsible === 'cliente' && <span className="ml-1 text-red-500">· Retraso atribuible a ti</span>}
+                            </p>
+                          )}
+                          {task.links && task.links.length > 0 && (
+                            <p className="text-xs text-blue-500 mt-1">{task.links.length} archivo{task.links.length > 1 ? 's' : ''} entregado{task.links.length > 1 ? 's' : ''}</p>
+                          )}
+                        </div>
+                        <StatusBadge status={task.status} />
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className={`font-medium text-sm ${task.status === 'completada' ? 'line-through text-gray-400' : 'text-gray-800'}`}>
-                          {task.title}
-                        </p>
-                        {task.description && <p className="text-xs text-gray-500 mt-0.5">{task.description}</p>}
-                        {task.commitment_date && (
-                          <p className={`text-xs mt-1 font-medium ${isLate ? 'text-red-600' : 'text-gray-400'}`}>
-                            {isLate ? '⚠ Vencida — ' : 'Fecha límite: '}
-                            {new Date(task.commitment_date + 'T00:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'long' })}
-                          </p>
-                        )}
+
+                      <div className="mt-3 flex gap-2">
+                        <button onClick={() => { setDeliveringTaskId(isDelivering ? null : task.id); setDeliverError(''); setDeliverLinkUrl('') }}
+                          className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 border border-blue-200 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition">
+                          <Upload size={13} /> Subir archivo o link
+                        </button>
+                        <button onClick={() => markTaskDelivered(task.id)} disabled={completingTaskId === task.id}
+                          className="flex items-center gap-1.5 text-xs font-semibold text-white bg-green-600 hover:bg-green-700 px-3 py-1.5 rounded-lg transition disabled:opacity-60">
+                          <CheckCircle size={13} /> {completingTaskId === task.id ? 'Marcando...' : 'Marcar como entregado'}
+                        </button>
                       </div>
-                      <StatusBadge status={task.status} />
+
+                      {isDelivering && (
+                        <div className="mt-3 bg-blue-50 border border-blue-100 rounded-lg p-3 space-y-2">
+                          <div className="flex gap-2">
+                            <input value={deliverLinkUrl} onChange={e => setDeliverLinkUrl(e.target.value)}
+                              placeholder="https://..." type="url"
+                              className="flex-1 border border-blue-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                            <button onClick={() => deliverLink(task.id)} disabled={!deliverLinkUrl.trim()}
+                              className="px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 transition disabled:opacity-50">
+                              Agregar link
+                            </button>
+                          </div>
+                          <label className="flex items-center justify-center gap-2 border border-dashed border-blue-300 rounded-lg px-3 py-2 text-xs text-blue-500 hover:bg-blue-100 cursor-pointer transition">
+                            <FileUp size={13} /> Subir archivo
+                            <input type="file" className="hidden" onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) deliverFile(task.id, f) }} />
+                          </label>
+                          {deliverError && <p className="text-xs text-red-500">{deliverError}</p>}
+                        </div>
+                      )}
                     </div>
                   )
                 })}
               </div>
             )}
           </div>
+
+          {/* Historial de retrasos */}
+          {projectDelayEvents.length > 0 && (
+            <div>
+              <button type="button" onClick={() => setDelayHistoryOpen(open => !open)}
+                className="w-full flex items-center justify-between bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-left hover:bg-gray-100 transition">
+                <span className="font-semibold text-gray-800 flex items-center gap-2">
+                  <History size={15} className="text-gray-500" /> Historial de retrasos
+                  <span className="bg-gray-200 text-gray-700 text-xs font-bold px-2 py-0.5 rounded-full">{projectDelayEvents.length}</span>
+                </span>
+                <ChevronDown size={16} className={`text-gray-400 transition-transform ${delayHistoryOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {delayHistoryOpen && (
+                <div className="divide-y divide-gray-100 bg-white border border-gray-200 border-t-0 rounded-b-xl">
+                  {projectDelayEvents.map(ev => (
+                    <div key={ev.id} className="px-4 py-3 flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm text-gray-700">{ev.reason || (ev.responsible === 'cliente' ? 'Retraso del cliente' : 'Retraso de la agencia')}</p>
+                        <p className="text-xs text-gray-400">{new Date(ev.created_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' })}{ev.days ? ` · ${ev.days} día${ev.days === 1 ? '' : 's'}` : ''}</p>
+                      </div>
+                      <span className={`shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full ${ev.responsible === 'cliente' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>
+                        {ev.responsible === 'cliente' ? 'Tuyo' : 'De la agencia'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Solicitudes enviadas */}
           <div>
@@ -886,6 +1036,14 @@ export default function ClientPortal() {
       {/* ── Tab: Hoja de Ruta ── */}
       {activeTab === 'roadmap' && (
         <RoadmapView tasks={projectTasks} title={selectedProject?.name} />
+      )}
+
+      {/* ── Tab: Mi hoja de ruta (fases, hitos y lanzamiento, sin nombres internos) ── */}
+      {activeTab === 'mihojaderuta' && selectedProject && (
+        <ClientRoadmapView project={selectedProject} tasks={projectTasks} delayEvents={projectDelayEvents} mode="cliente" />
+      )}
+      {activeTab === 'mihojaderuta' && !selectedProject && (
+        <div className="text-center py-12 text-gray-400"><p className="text-sm">Todavía no tienes un proyecto asignado.</p></div>
       )}
 
       {/* ── Tab: Chat con el equipo ── */}

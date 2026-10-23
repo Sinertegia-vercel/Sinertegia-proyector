@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Check, ChevronLeft, ChevronRight, Copy, Link, Mail, Plus, Search, UserPlus, Workflow, X } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, Copy, Link, Mail, Map as MapIcon, Plus, Search, UserPlus, Workflow, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import type { Client, User } from '../../types'
 import UserAvatar from '../shared/UserAvatar'
 
 interface Assignment { id: string; client_id: string; user_id: string; user: User }
-interface Props { clients: Client[]; teamMembers: User[]; onCreateProject: () => void; onOpenFunnels: () => void }
+interface Props { clients: Client[]; teamMembers: User[]; onCreateProject: () => void; onOpenFunnels: () => void; onOpenRoadmap?: (clientId: string) => void }
 type ClientFilter = 'todos' | 'sin_equipo' | 'con_equipo' | 'sin_acceso'
 
-export default function ClientAssignmentManager({ clients, teamMembers, onCreateProject, onOpenFunnels }: Props) {
+export default function ClientAssignmentManager({ clients, teamMembers, onCreateProject, onOpenFunnels, onOpenRoadmap }: Props) {
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [adding, setAdding] = useState<{ clientId: string; userId: string } | null>(null)
   const [loadingId, setLoadingId] = useState<string | null>(null)
@@ -118,6 +118,7 @@ export default function ClientAssignmentManager({ clients, teamMembers, onCreate
             {generatedLinks[client.id] && <div className="mb-3 flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2"><p className="flex-1 truncate font-mono text-xs text-green-700">{generatedLinks[client.id]}</p><button onClick={() => copyLink(client.id)} className="flex shrink-0 items-center gap-1 text-xs font-semibold text-green-700">{copiedId === client.id ? <><Check size={13} /> Copiado</> : <><Copy size={13} /> Copiar</>}</button></div>}
             {isAddingHere && <div className="mb-3 rounded-lg border border-blue-100 bg-blue-50/50 p-3">{assigned.length > 0 && <div className="mb-3 flex flex-wrap gap-2">{assigned.map(member => <span key={member.id} className="flex items-center gap-1 rounded-full bg-white px-2 py-1 text-xs text-gray-700"><UserAvatar name={member.full_name} avatarUrl={member.avatar_url} size={20} />{member.full_name}<button onClick={() => removeAssignment(client.id, member.id)} disabled={loadingId === `${member.id}${client.id}`} className="text-gray-400 hover:text-red-500"><X size={11} /></button></span>)}</div>}{available.length ? <div className="flex gap-2"><select value={adding.userId} onChange={event => setAdding({ clientId: client.id, userId: event.target.value })} className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"><option value="">Selecciona integrante</option>{available.map(member => <option key={member.id} value={member.id}>{member.full_name} · {member.department || 'Sin departamento'}</option>)}</select><button disabled={!adding.userId || loadingId === client.id} onClick={() => adding.userId && addAssignment(client.id, adding.userId)} className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-40">Agregar</button></div> : <p className="text-xs text-gray-500">Todo el equipo disponible ya está asignado.</p>}</div>}
             <div className="grid grid-cols-2 gap-2"><button onClick={() => generateInviteLink(client.id)} className="flex items-center justify-center gap-1.5 rounded-lg border border-blue-200 px-3 py-2 text-xs font-semibold text-blue-600 hover:bg-blue-50"><Link size={13} /> {access === 'Sin acceso' ? 'Invitar cliente' : 'Nueva invitación'}</button><button onClick={() => setAdding(isAddingHere ? null : { clientId: client.id, userId: '' })} className="flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700"><UserPlus size={13} /> {assigned.length ? 'Editar equipo' : 'Asignar equipo'}</button></div>
+            {onOpenRoadmap && <button onClick={() => onOpenRoadmap(client.id)} className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50"><MapIcon size={13} /> Ver hoja de ruta</button>}
           </article>
         })}
       </div>

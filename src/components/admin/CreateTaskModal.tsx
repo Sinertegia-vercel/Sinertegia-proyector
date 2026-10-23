@@ -90,6 +90,17 @@ export default function CreateTaskModal({ projects, teamMembers, defaultProjectI
     void loadAssignableMembers()
   }, [teamMembers, user])
 
+  const selectedProject = projects.find(p => p.id === form.project_id)
+  const projectClientUserId = selectedProject?.client?.user_id || ''
+
+  // Las tareas del departamento cliente siempre son del usuario cliente del proyecto —
+  // se fijan automáticamente y no se pueden reasignar a nadie del equipo.
+  useEffect(() => {
+    if (form.department === 'cliente' && form.assigned_to !== projectClientUserId) {
+      setForm(current => ({ ...current, assigned_to: projectClientUserId }))
+    }
+  }, [form.department, projectClientUserId])
+
   useEffect(() => {
     async function loadTemplateOptions() {
       setTemplatesLoading(true)
@@ -156,6 +167,10 @@ export default function CreateTaskModal({ projects, teamMembers, defaultProjectI
     e.preventDefault()
     if (!form.project_id || !form.title || !form.assigned_to || form.approver_ids.length === 0 || !form.department) {
       setError('Por favor completa todos los campos requeridos')
+      return
+    }
+    if (form.department === 'cliente' && (!projectClientUserId || form.assigned_to !== projectClientUserId)) {
+      setError('Este proyecto no tiene un usuario de cliente activo; invita al cliente al portal antes de crear tareas de su departamento.')
       return
     }
     if (referenceLinks.length === 0 && pendingFiles.length === 0) {
@@ -318,15 +333,27 @@ export default function CreateTaskModal({ projects, teamMembers, defaultProjectI
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide">Asignar a *</label>
-              <select value={form.assigned_to} onChange={e => setForm({ ...form, assigned_to: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <option value="">Selecciona persona</option>
-                {assignableMembers.map(member => (
-                  <option key={member.id} value={member.id}>
-                    {member.full_name}{member.id === user?.id ? ' (yo)' : ''}
-                  </option>
-                ))}
-              </select>
+              {form.department === 'cliente' ? (
+                projectClientUserId ? (
+                  <div className="w-full border border-blue-200 bg-blue-50 rounded-lg px-3 py-2 text-sm text-blue-700 font-medium">
+                    👤 {selectedProject?.client?.name || 'Cliente'} (siempre el cliente)
+                  </div>
+                ) : (
+                  <div className="w-full border border-red-200 bg-red-50 rounded-lg px-3 py-2 text-xs text-red-600">
+                    Este proyecto no tiene un usuario de cliente activo. Invítalo al portal antes de crear tareas de su departamento.
+                  </div>
+                )
+              ) : (
+                <select value={form.assigned_to} onChange={e => setForm({ ...form, assigned_to: e.target.value })}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="">Selecciona persona</option>
+                  {assignableMembers.map(member => (
+                    <option key={member.id} value={member.id}>
+                      {member.full_name}{member.id === user?.id ? ' (yo)' : ''}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide">Departamento *</label>
