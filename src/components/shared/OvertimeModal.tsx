@@ -1,10 +1,13 @@
 import { Clock } from 'lucide-react'
 import { useWorkSession } from '../../contexts/WorkSessionContext'
+import { useAuth } from '../../contexts/AuthContext'
+import { formatHour12, nowInCdmx, scheduleForDate } from '../../lib/workSchedule'
 
 export default function OvertimeModal() {
+  const { user } = useAuth()
   const { continueOvertime, declineOvertime, elapsedMinutes, sessionError, savingSession } = useWorkSession()
-  const isSaturday = new Date().getDay() === 6
-  const endLabel = isSaturday ? '2:00 pm' : '6:00 pm'
+  const schedule = user ? scheduleForDate(user, nowInCdmx()) : { enabled: true, start: 9, end: 18 }
+  const endLabel = schedule.enabled ? formatHour12(schedule.end) : 'tu horario de hoy'
   const hours = Math.floor(elapsedMinutes / 60)
   const mins = elapsedMinutes % 60
 
@@ -15,7 +18,9 @@ export default function OvertimeModal() {
           <div className="w-14 h-14 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-3">
             <Clock size={26} className="text-orange-500" />
           </div>
-          <h2 className="text-lg font-bold text-gray-900">Ya son las {endLabel}</h2>
+          <h2 className="text-lg font-bold text-gray-900">
+            {schedule.enabled ? `Ya son las ${endLabel}` : `Ya pasaste ${endLabel}`}
+          </h2>
           <p className="text-sm text-gray-500 mt-1">
             Llevas{' '}
             <span className="font-bold text-gray-800">{hours > 0 ? `${hours}h ` : ''}{mins}m</span>

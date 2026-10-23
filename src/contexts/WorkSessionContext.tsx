@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useState, useRef } f
 import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
 import type { User } from '../types'
-import { scheduleForDate } from '../lib/workSchedule'
+import { scheduleForDate, nowInCdmx } from '../lib/workSchedule'
 
 export interface WorkSession {
   id: string
@@ -13,6 +13,9 @@ export interface WorkSession {
   regular_minutes: number
   overtime_minutes: number
   date: string
+  late_minutes?: number
+  scheduled_start_min?: number | null
+  is_first_of_day?: boolean
 }
 
 interface WorkSessionContextType {
@@ -27,6 +30,8 @@ interface WorkSessionContextType {
   isInOvertime: boolean
   sessionError: string
   savingSession: boolean
+  lastCheckInNotice: string
+  dismissCheckInNotice: () => void
 }
 
 const WorkSessionContext = createContext<WorkSessionContextType>({
@@ -34,46 +39,11 @@ const WorkSessionContext = createContext<WorkSessionContextType>({
   checkIn: async () => {}, checkOut: async () => true,
   continueOvertime: () => {}, declineOvertime: () => {},
   elapsedMinutes: 0, isInOvertime: false, sessionError: '', savingSession: false,
+  lastCheckInNotice: '', dismissCheckInNotice: () => {},
 })
 
-function getScheduleHours(user: User, date = new Date()) {
+function getScheduleHours(user: User, date = nowInCdmx()) {
   return scheduleForDate(user, date)
-}
-
-function getLocalDateKey(date = new Date()) {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-function isSessionFromToday(session: WorkSession) {
-  const today = getLocalDateKey()
-  return session.date === today || getLocalDateKey(new Date(session.started_at)) === today
-}
-
-function calcMinutes(startedAt: string, endedAt: string, user: User) {
-  const start = new Date(startedAt)
-  const end = new Date(endedAt)
-  const schedule = getScheduleHours(user, start)
-  if (!schedule.enabled) {
-    return { regular_minutes: 0, overtime_minutes: Math.max(0, Math.round((end.getTime() - start.getTime()) / 60000)) }
-  }
-  const schedEnd = new Date(start)
-  schedEnd.setHours(schedule.end, 0, 0, 0)
-  const schedStart = new Date(start)
-  schedStart.setHours(schedule.start, 0, 0, 0)
-
-  // Minutos regulares: solapamiento con [9am, endHour]
-  const regStart = Math.max(start.getTime(), schedStart.getTime())
-  const regEnd = Math.min(end.getTime(), schedEnd.getTime())
-  const regular_minutes = regEnd > regStart ? Math.round((regEnd - regStart) / 60000) : 0
-
-  // Minutos extra: tiempo después del horario
-  const otStart = Math.max(start.getTime(), schedEnd.getTime())
-  const overtime_minutes = end.getTime() > otStart ? Math.round((end.getTime() - otStart) / 60000) : 0
-
-  return { regular_minutes, overtime_minutes }
 }
 
 export function WorkSessionProvider({ children }: { children: React.ReactNode }) {
@@ -86,9 +56,10 @@ export function WorkSessionProvider({ children }: { children: React.ReactNode })
   const savingRef = useRef(false)
   const [sessionError, setSessionError] = useState('')
   const [savingSession, setSavingSession] = useState(false)
+  const [lastCheckInNotice, setLastCheckInNotice] = useState('')
 
   const schedule = user ? getScheduleHours(user) : { enabled: true, start: 9, end: 18 }
-  const isInOvertime = !schedule.enabled || new Date().getHours() >= schedule.end
+  const isInOvertime = !schedule.enabled || nowInCdmx().getHours() >= schedule.end
 
   const loadTodaySession = useCallback(async () => {
     if (!user || user.role === 'client') {
@@ -101,12 +72,7 @@ export function WorkSessionProvider({ children }: { children: React.ReactNode })
       return
     }
 
-    const { data, error } = await supabase
-      .from('work_sessions')
-      .select('*')
-      .eq('user_id', user.id)
-      .is('ended_at', null)
-      .order('started_at', { ascending: true })
+    const { data, error } = await supabase.rpc('mi_sesion_hoy')
 
     if (error) {
       // Ante un fallo temporal no mostramos el check-in: hacerlo podría crear
@@ -116,28 +82,8 @@ export function WorkSessionProvider({ children }: { children: React.ReactNode })
       return
     }
 
-    const openSessions = (data || []) as WorkSession[]
-    const todaySessions = openSessions.filter(isSessionFromToday)
-    const staleSessions = openSessions.filter(session => !isSessionFromToday(session))
-
-    // Una sesión nunca debe cruzar al día siguiente. Si quedó abierta por
-    // cerrar la pestaña, se termina automáticamente a la hora de salida de
-    // esa persona para que el contador no acumule 24 horas.
-    await Promise.all(staleSessions.map(async session => {
-      const startedAt = new Date(session.started_at)
-      const scheduledEnd = new Date(startedAt)
-      const staleSchedule = getScheduleHours(user, startedAt)
-      if (staleSchedule.enabled) scheduledEnd.setHours(staleSchedule.end, 0, 0, 0)
-      else scheduledEnd.setTime(startedAt.getTime())
-      const endedAt = scheduledEnd.toISOString()
-      const mins = calcMinutes(session.started_at, endedAt, user)
-      await supabase.from('work_sessions').update({ ended_at: endedAt, ...mins }).eq('id', session.id)
-    }))
-
-    if (todaySessions.length > 0) {
-      // Si el error anterior creó duplicados, conservar la primera entrada
-      // mantiene la hora real en la que la persona comenzó a trabajar.
-      const session = todaySessions[0]
+    const session = ((data || []) as WorkSession[])[0] || null
+    if (session) {
       setCurrentSession(session)
       setElapsedMinutes(Math.max(0, Math.floor((Date.now() - new Date(session.started_at).getTime()) / 60000)))
       setNeedsCheckIn(false)
@@ -160,9 +106,8 @@ export function WorkSessionProvider({ children }: { children: React.ReactNode })
       const start = new Date(currentSession.started_at)
       setElapsedMinutes(Math.max(0, Math.floor((Date.now() - start.getTime()) / 60000)))
 
-      const now = new Date()
-      const todaySchedule = user ? getScheduleHours(user, now) : { enabled: true, start: 9, end: 18 }
-      const reachedOvertime = !todaySchedule.enabled || now.getHours() >= todaySchedule.end
+      const todaySchedule = user ? getScheduleHours(user) : { enabled: true, start: 9, end: 18 }
+      const reachedOvertime = !todaySchedule.enabled || nowInCdmx().getHours() >= todaySchedule.end
       if (reachedOvertime && overtimeAlerted.current !== currentSession.id) {
         overtimeAlerted.current = currentSession.id
         setShowOvertimeModal(true)
@@ -185,40 +130,30 @@ export function WorkSessionProvider({ children }: { children: React.ReactNode })
     setSavingSession(true)
     setSessionError('')
     try {
-      const { data: openRows, error: readError } = await supabase
-        .from('work_sessions')
-        .select('*')
-        .eq('user_id', user!.id)
-        .is('ended_at', null)
-        .order('started_at', { ascending: true })
-
-      if (readError) throw readError
-      const existingSession = ((openRows || []) as WorkSession[]).find(isSessionFromToday)
-      if (existingSession) {
-        const session = existingSession
-        setCurrentSession(session)
-        setElapsedMinutes(Math.max(0, Math.floor((Date.now() - new Date(session.started_at).getTime()) / 60000)))
-        setNeedsCheckIn(false)
-        return
-      }
-
-      const { data, error } = await supabase
-        .from('work_sessions')
-        .insert({ user_id: user!.id, location, date: getLocalDateKey() })
-        .select()
-        .single()
+      const { data, error } = await supabase.rpc('registrar_entrada', { p_location: location })
       if (error || !data) throw error || new Error('No se pudo registrar la entrada')
-      if (data) {
-        setCurrentSession(data as WorkSession)
-        setElapsedMinutes(0)
-        setNeedsCheckIn(false)
-      }
+      const session = data as WorkSession
+      setCurrentSession(session)
+      setElapsedMinutes(Math.max(0, Math.floor((Date.now() - new Date(session.started_at).getTime()) / 60000)))
+      const hora = new Date(session.started_at).toLocaleTimeString('es-MX', {
+        hour: '2-digit', minute: '2-digit', timeZone: 'America/Mexico_City',
+      })
+      setLastCheckInNotice(
+        session.is_first_of_day && (session.late_minutes || 0) > 0
+          ? `Entrada registrada a las ${hora} (hora del servidor) · ${session.late_minutes} min después de tu horario`
+          : `Entrada registrada a las ${hora} (hora del servidor) · a tiempo`
+      )
     } catch {
       setSessionError('No se pudo guardar la entrada. Intenta de nuevo.')
     } finally {
       savingRef.current = false
       setSavingSession(false)
     }
+  }
+
+  function dismissCheckInNotice() {
+    setLastCheckInNotice('')
+    setNeedsCheckIn(false)
   }
 
   async function checkOut() {
@@ -228,24 +163,8 @@ export function WorkSessionProvider({ children }: { children: React.ReactNode })
     setSavingSession(true)
     setSessionError('')
     try {
-      const now = new Date().toISOString()
-      const { data, error } = await supabase
-        .from('work_sessions').select('*').eq('user_id', user.id).is('ended_at', null)
-      if (error || !data) throw error || new Error('No se pudieron consultar las sesiones')
-
-      const todaySessions = (data as WorkSession[]).filter(session => isSessionFromToday(session) || session.id === currentSession.id)
-      if (!todaySessions.some(session => session.id === currentSession.id)) {
-        const { data: savedSession, error: savedError } = await supabase.from('work_sessions')
-          .select('ended_at').eq('id', currentSession.id).eq('user_id', user.id).single()
-        if (savedError || !savedSession?.ended_at) throw savedError || new Error('Salida sin confirmar')
-      }
-      for (const session of todaySessions) {
-        const mins = calcMinutes(session.started_at, now, user)
-        const { error: updateError } = await supabase.from('work_sessions')
-          .update({ ended_at: now, ...mins }).eq('id', session.id).eq('user_id', user.id)
-          .select('id').single()
-        if (updateError) throw updateError
-      }
+      const { error } = await supabase.rpc('registrar_salida')
+      if (error) throw error
       setCurrentSession(null)
       setElapsedMinutes(0)
       setShowOvertimeModal(false)
@@ -270,6 +189,7 @@ export function WorkSessionProvider({ children }: { children: React.ReactNode })
       currentSession, needsCheckIn, showOvertimeModal,
       checkIn, checkOut, continueOvertime, declineOvertime,
       elapsedMinutes, isInOvertime, sessionError, savingSession,
+      lastCheckInNotice, dismissCheckInNotice,
     }}>
       {children}
     </WorkSessionContext.Provider>

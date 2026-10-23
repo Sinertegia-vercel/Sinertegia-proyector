@@ -1,6 +1,7 @@
-import { Building2, Home, MonitorSmartphone } from 'lucide-react'
+import { Building2, CheckCircle2, Home, MonitorSmartphone } from 'lucide-react'
 import { useWorkSession } from '../../contexts/WorkSessionContext'
 import { useAuth } from '../../contexts/AuthContext'
+import { formatHour, nowInCdmx, scheduleForDate } from '../../lib/workSchedule'
 
 function isMobileDevice() {
   return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
@@ -9,15 +10,15 @@ function isMobileDevice() {
 
 export default function CheckInModal() {
   const { user } = useAuth()
-  const { checkIn, sessionError, savingSession } = useWorkSession()
+  const { checkIn, currentSession, sessionError, savingSession, lastCheckInNotice, dismissCheckInNotice } = useWorkSession()
 
-  const hora = new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
-  const fecha = new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })
-  const dia = new Date().getDay()
-  const hora24 = new Date().getHours()
-  const esDomingo = dia === 0
-  const esTarde = hora24 >= 18 || (dia === 6 && hora24 >= 14)
+  const ahora = nowInCdmx()
+  const hora = ahora.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+  const fecha = ahora.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })
   const esCelular = isMobileDevice()
+  const schedule = user ? scheduleForDate(user, ahora) : { enabled: true, start: 9, end: 18 }
+  const esTarde = schedule.enabled && ahora.getHours() >= schedule.end
+  const esDescanso = !schedule.enabled
 
   if (esCelular) {
     return (
@@ -40,6 +41,29 @@ export default function CheckInModal() {
     )
   }
 
+  if (currentSession && lastCheckInNotice) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center z-50 p-4"
+        style={{ background: 'linear-gradient(135deg, rgba(29,78,216,0.92) 0%, rgba(185,28,28,0.88) 100%)', backdropFilter: 'blur(4px)' }}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden text-center">
+          <div className="bg-gradient-to-r from-blue-700 to-red-600 px-6 py-5 text-white">
+            <CheckCircle2 size={36} className="mx-auto mb-1" />
+            <h2 className="text-xl font-bold">¡Listo, {user?.full_name?.split(' ')[0]}!</h2>
+          </div>
+          <div className="p-6">
+            <p className="text-sm text-gray-700 font-medium mb-4">{lastCheckInNotice}</p>
+            <button
+              onClick={dismissCheckInNotice}
+              className="w-full py-2.5 bg-gradient-to-r from-blue-700 to-red-600 text-white rounded-xl text-sm font-semibold hover:opacity-90 transition"
+            >
+              Continuar
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="fixed inset-0 flex items-center justify-center z-50 p-4"
       style={{ background: 'linear-gradient(135deg, rgba(29,78,216,0.92) 0%, rgba(185,28,28,0.88) 100%)', backdropFilter: 'blur(4px)' }}>
@@ -52,12 +76,12 @@ export default function CheckInModal() {
         </div>
 
         <div className="p-6">
-          {esDomingo && (
+          {esDescanso && (
             <div className="mb-4 bg-purple-50 border border-purple-200 rounded-lg px-3 py-2 text-xs text-purple-700 text-center font-medium">
-              😴 Hoy es domingo — día de descanso. Las horas se registrarán como extras.
+              😴 Hoy no tienes jornada asignada — día de descanso. Las horas se registrarán como extras.
             </div>
           )}
-          {!esDomingo && esTarde && (
+          {!esDescanso && esTarde && (
             <div className="mb-4 bg-orange-50 border border-orange-200 rounded-lg px-3 py-2 text-xs text-orange-700 text-center font-medium">
               ⏰ Estás entrando en horario de horas extras
             </div>
@@ -90,7 +114,7 @@ export default function CheckInModal() {
           </div>
 
           <p className="text-xs text-gray-400 text-center mt-4">
-            Horario: L-V 9:00–18:00 · Sáb 9:00–14:00
+            {schedule.enabled ? `Horario de hoy: ${formatHour(schedule.start)}–${formatHour(schedule.end)}` : 'Hoy no tienes jornada laboral asignada'}
           </p>
         </div>
       </div>

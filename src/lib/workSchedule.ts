@@ -28,3 +28,27 @@ export function scheduleForDate(user: Pick<User, 'work_schedule' | 'work_start' 
 }
 
 export function formatHour(hour: number) { return `${String(hour).padStart(2, '0')}:00` }
+
+export function formatHour12(hour: number) {
+  const h = ((hour + 11) % 12) + 1
+  return `${h}:00 ${hour >= 12 ? 'pm' : 'am'}`
+}
+
+// Devuelve un Date cuyos getFullYear/getMonth/getDate/getHours/getMinutes/getDay leen como la
+// hora de pared en America/Mexico_City, sin importar la zona horaria real del dispositivo.
+// Así el checador decide "qué día es hoy" y "a qué hora vamos" igual en cualquier equipo.
+export function nowInCdmx(): Date {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Mexico_City',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).formatToParts(new Date())
+  const get = (type: string) => Number(parts.find(p => p.type === type)?.value || 0)
+  return new Date(get('year'), get('month') - 1, get('day'), get('hour') % 24, get('minute'), get('second'))
+}
+
+export function cdmxDateKey(date = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Mexico_City', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(date)
+}

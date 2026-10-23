@@ -3,7 +3,7 @@ import { TrendingUp, TrendingDown, Clock, Building2, Star, ChevronLeft, ChevronR
 import { supabase } from '../../lib/supabase'
 import type { Task, User, Department } from '../../types'
 import UserAvatar from '../shared/UserAvatar'
-import { resolvedWorkSchedule, scheduleForDate } from '../../lib/workSchedule'
+import { resolvedWorkSchedule } from '../../lib/workSchedule'
 import { countsForTeamOnTimeMetric, wasDeliveredOnTime } from '../../lib/taskDelays'
 
 interface Props {
@@ -11,11 +11,17 @@ interface Props {
   tasks: Task[]
 }
 
-interface SessionRow {
+interface AsistenciaRow {
   user_id: string
-  started_at: string
-  regular_minutes: number
-  overtime_minutes: number
+  date: string
+  laborable: boolean
+  estado: 'a_tiempo' | 'retardo' | 'sin_registro' | 'pendiente' | 'descanso' | 'dia_extra'
+  minutos_regulares: number
+  minutos_extra: number
+}
+
+function toDateKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 interface RatingRow {
@@ -74,7 +80,7 @@ function formatWeekRange(monday: Date): string {
 }
 
 export default function TeamPerformance({ teamMembers, tasks }: Props) {
-  const [sessions, setSessions] = useState<SessionRow[]>([])
+  const [asistencia, setAsistencia] = useState<AsistenciaRow[]>([])
   const [ratings, setRatings] = useState<RatingRow[]>([])
   const [period, setPeriod] = useState<'semana' | 'mes'>('semana')
   const [weekStart, setWeekStart] = useState<Date>(() => getMondayOf(new Date()))
@@ -102,7 +108,7 @@ export default function TeamPerformance({ teamMembers, tasks }: Props) {
     setInviteForm({ email: '', full_name: '', role: 'team', department: '' }); setInviteLink(''); setInviteError('')
   }
   useEffect(() => {
-    fetchSessions()
+    fetchAsistencia()
     fetchRatings()
   }, [period, weekStart])
 
@@ -110,25 +116,20 @@ export default function TeamPerformance({ teamMembers, tasks }: Props) {
   function nextWeek() { const d = new Date(weekStart); d.setDate(d.getDate() + 7); setWeekStart(d) }
   const isCurrentWeek = getMondayOf(new Date()).toDateString() === weekStart.toDateString()
 
-  async function fetchSessions() {
+  async function fetchAsistencia() {
     let fromStr: string
-    let toStr: string | undefined
+    let toStr: string
     if (period === 'semana') {
-      fromStr = weekStart.toISOString().split('T')[0]
+      fromStr = toDateKey(weekStart)
       const end = new Date(weekStart); end.setDate(weekStart.getDate() + 6)
-      toStr = end.toISOString().split('T')[0]
+      toStr = toDateKey(end)
     } else {
       const now = new Date()
-      fromStr = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
+      fromStr = toDateKey(new Date(now.getFullYear(), now.getMonth(), 1))
+      toStr = toDateKey(new Date(now.getFullYear(), now.getMonth() + 1, 0))
     }
-    let query = supabase
-      .from('work_sessions')
-      .select('user_id, started_at, regular_minutes, overtime_minutes')
-      .gte('date', fromStr)
-      .not('ended_at', 'is', null)
-    if (toStr) query = query.lte('date', toStr)
-    const { data } = await query
-    setSessions((data as SessionRow[]) || [])
+    const { data } = await supabase.rpc('asistencia_rango', { p_from: fromStr, p_to: toStr, p_tolerancia: 5 })
+    setAsistencia((data as AsistenciaRow[]) || [])
   }
 
   async function fetchRatings() {
@@ -153,24 +154,19 @@ export default function TeamPerformance({ teamMembers, tasks }: Props) {
 
     const memberTasks = tasks.filter(t => t.assigned_to === memberId)
     const completed = memberTasks.filter(t => t.status === 'completada')
-    const memberSessions = sessions.filter(s => s.user_id === memberId)
+    const memberAsistencia = asistencia.filter(a => a.user_id === memberId)
 
     // 1. Horas trabajadas
-    const regularMins = memberSessions.reduce((acc, s) => acc + (s.regular_minutes || 0), 0)
-    const overtimeMins = memberSessions.reduce((acc, s) => acc + (s.overtime_minutes || 0), 0)
+    const regularMins = memberAsistencia.reduce((acc, a) => acc + (a.minutos_regulares || 0), 0)
+    const overtimeMins = memberAsistencia.reduce((acc, a) => acc + (a.minutos_extra || 0), 0)
     const totalHours = ((regularMins + overtimeMins) / 60)
 
-    // 2. Conectadas a tiempo según horario individual (gracia de 5 min)
-    const onTime = memberSessions.filter(s => {
-      const d = new Date(s.started_at)
-      const daySchedule = scheduleForDate(member, d)
-      if (!daySchedule.enabled) return false
-      const h = d.getHours()
-      const m = d.getMinutes()
-      return h < daySchedule.start || (h === daySchedule.start && m <= 5)
-    })
-    const onTimeRate = memberSessions.length > 0
-      ? Math.round((onTime.length / memberSessions.length) * 100) : 0
+    // 2. Puntualidad según asistencia_rango (horario individual, gracia de 5 min ya aplicada
+    // en el servidor). Faltar (sin_registro) sí baja el %; solo cuenta la primera entrada del día.
+    const diasEvaluados = memberAsistencia.filter(a => a.laborable && (a.estado === 'a_tiempo' || a.estado === 'retardo' || a.estado === 'sin_registro'))
+    const onTimeDias = diasEvaluados.filter(a => a.estado === 'a_tiempo')
+    const onTimeRate = diasEvaluados.length > 0
+      ? Math.round((onTimeDias.length / diasEvaluados.length) * 100) : 0
 
     // 3. Trabajos entregados
     const delivered = completed.length
@@ -204,7 +200,7 @@ export default function TeamPerformance({ teamMembers, tasks }: Props) {
       ((expectedHours > 0 ? Math.min(totalHours / expectedHours * 100, 100) : 0) * 0.15)
     )
 
-    return { regularMins, overtimeMins, totalHours, onTimeRate, delivered, noRetrabajoRate, entregasATiempoRate, countedCompletedCount: countedCompleted.length, avgRating, score, sessionCount: memberSessions.length, scheduleLabel }
+    return { regularMins, overtimeMins, totalHours, onTimeRate, delivered, noRetrabajoRate, entregasATiempoRate, countedCompletedCount: countedCompleted.length, avgRating, score, sessionCount: diasEvaluados.length, scheduleLabel }
   }
 
   const allKPIs = teamMembers.map(m => ({ member: m, kpis: getMemberKPIs(m) }))
@@ -365,7 +361,7 @@ export default function TeamPerformance({ teamMembers, tasks }: Props) {
                         {kpis.overtimeMins > 0 && (
                           <p className="text-xs text-orange-500 font-medium">+{(kpis.overtimeMins / 60).toFixed(1)}h extra</p>
                         )}
-                        <p className="text-xs text-gray-400">{kpis.sessionCount} sesiones</p>
+                        <p className="text-xs text-gray-400">{kpis.sessionCount} días</p>
                       </div>
                     </td>
 
@@ -497,7 +493,7 @@ export default function TeamPerformance({ teamMembers, tasks }: Props) {
               {/* Ubicaciones */}
               <div className="pt-2 border-t border-gray-100 flex items-center justify-between text-xs text-gray-400">
                 <span>🕘 {kpis.scheduleLabel}</span>
-                {kpis.sessionCount > 0 && <span className="flex items-center gap-1"><Building2 size={11} />{kpis.sessionCount} ses.</span>}
+                {kpis.sessionCount > 0 && <span className="flex items-center gap-1"><Building2 size={11} />{kpis.sessionCount} días</span>}
               </div>
             </div>
           </div>
