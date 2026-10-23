@@ -113,7 +113,7 @@ export default function EditTaskModal({ task, onClose, onSaved }: Props) {
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
     if (!form.title.trim()) { setError('El título no puede estar vacío'); return }
-    if (form.approver_ids.length === 0) { setError('Selecciona al menos una persona que revise y autorice'); return }
+    if (form.department !== 'cliente' && form.approver_ids.length === 0) { setError('Selecciona al menos una persona que revise y autorice'); return }
     if (form.department === 'cliente' && (!projectClientUserId || form.assigned_to !== projectClientUserId)) {
       setError('Este proyecto no tiene un usuario de cliente activo; invita al cliente al portal antes de mover tareas a su departamento.')
       return

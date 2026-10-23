@@ -42,7 +42,8 @@ const REVIEW_BADGES: Record<string, { label: string; color: string }> = {
 
 export default function ProjectDetail({ project, tasks, teamMembers, projects, onBack, onUpdate }: Props) {
   const { user } = useAuth()
-  const isAdmin = user?.role === 'admin'
+  // Admin = rol admin o super admin (igual que is_active_admin() en SQL).
+  const isAdmin = user?.role === 'admin' || !!user?.is_super_admin
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [archivingTask, setArchivingTask] = useState<Task | null>(null)

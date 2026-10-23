@@ -56,6 +56,7 @@ as $$
 declare
   v_old public.tasks%rowtype;
   v_row public.tasks%rowtype;
+  v_new public.tasks%rowtype;
   v_key text;
   v_allowed text[] := array[
     'title', 'description', 'assigned_to', 'department', 'priority', 'phase',
@@ -88,27 +89,39 @@ begin
     raise exception 'El título no puede estar vacío';
   end if;
 
-  if p_changes ? 'depends_on_task_id'
-     and (p_changes->>'depends_on_task_id') is not null
-     and (p_changes->>'depends_on_task_id')::uuid = p_task_id then
-    raise exception 'Una tarea no puede depender de sí misma';
+  if p_changes ? 'depends_on_task_id' and (p_changes->>'depends_on_task_id') is not null then
+    if (p_changes->>'depends_on_task_id')::uuid = p_task_id then
+      raise exception 'Una tarea no puede depender de sí misma';
+    end if;
+    if exists (
+      select 1 from public.tasks d
+      where d.id = (p_changes->>'depends_on_task_id')::uuid
+        and d.depends_on_task_id = p_task_id
+    ) then
+      raise exception 'Dependencia circular: esa tarea ya depende de esta';
+    end if;
   end if;
 
+  -- jsonb_populate_record aplica SOLO las llaves presentes (una llave con null sí
+  -- limpia el campo) y convierte cada valor al tipo real de la columna (text, enum,
+  -- date, uuid, uuid[]), sin depender de cómo se crearon las columnas en Supabase.
+  v_new := jsonb_populate_record(v_old, coalesce(p_changes, '{}'::jsonb));
+
   update public.tasks set
-    title = case when p_changes ? 'title' then trim(p_changes->>'title') else title end,
-    description = case when p_changes ? 'description' then (p_changes->>'description') else description end,
-    assigned_to = case when p_changes ? 'assigned_to' then (p_changes->>'assigned_to')::uuid else assigned_to end,
-    department = case when p_changes ? 'department' then (p_changes->>'department') else department end,
-    priority = case when p_changes ? 'priority' then (p_changes->>'priority') else priority end,
-    phase = case when p_changes ? 'phase' then (p_changes->>'phase') else phase end,
-    start_date = case when p_changes ? 'start_date' then (p_changes->>'start_date')::date else start_date end,
-    needed_date = case when p_changes ? 'needed_date' then (p_changes->>'needed_date')::date else needed_date end,
-    commitment_date = case when p_changes ? 'commitment_date' then (p_changes->>'commitment_date')::date else commitment_date end,
-    approver_ids = case when p_changes ? 'approver_ids' then
-        (select coalesce(array_agg(value::uuid), '{}'::uuid[]) from jsonb_array_elements_text(coalesce(p_changes->'approver_ids', '[]'::jsonb)))
-      else approver_ids end,
-    depends_on_task_id = case when p_changes ? 'depends_on_task_id' then (p_changes->>'depends_on_task_id')::uuid else depends_on_task_id end,
-    project_id = case when p_changes ? 'project_id' then (p_changes->>'project_id')::uuid else project_id end,
+    title = trim(v_new.title),
+    description = v_new.description,
+    assigned_to = v_new.assigned_to,
+    department = v_new.department,
+    priority = v_new.priority,
+    phase = v_new.phase,
+    start_date = v_new.start_date,
+    needed_date = v_new.needed_date,
+    commitment_date = v_new.commitment_date,
+    approver_ids = coalesce(v_new.approver_ids, '{}'::uuid[]),
+    -- approver_id (columna vieja, de un solo revisor) se mantiene igual al primero.
+    approver_id = case when p_changes ? 'approver_ids' then (coalesce(v_new.approver_ids, '{}'::uuid[]))[1] else approver_id end,
+    depends_on_task_id = v_new.depends_on_task_id,
+    project_id = v_new.project_id,
     updated_at = now()
   where id = p_task_id
   returning * into v_row;
@@ -293,10 +306,11 @@ grant execute on function public.admin_delete_team_task(uuid) to authenticated;
 -- un candado explícito).
 
 -- Copiado de sql/2026-07-15_subtareas_tiempo_dependencias_recordatorios.sql.
-create or replace function notify_upcoming_deadlines()
+create or replace function public.notify_upcoming_deadlines()
 returns void
 language plpgsql
 security definer
+set search_path = public
 as $$
 begin
   insert into notifications (user_id, title, message, type, task_id)

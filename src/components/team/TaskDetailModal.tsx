@@ -18,6 +18,8 @@ interface Props {
 export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone, reviewAttention = false }: Props) {
   const { user } = useAuth()
   const isAdmin = user?.role === 'admin'
+  // Editar/archivar: rol admin o super admin (igual que is_active_admin() en SQL).
+  const canManageTasks = isAdmin || !!user?.is_super_admin
   const isTeam = user?.role === 'team'
   const approverIds = task.approver_ids?.length ? task.approver_ids : (task.approver_id ? [task.approver_id] : [])
   const isReviewer = user?.id === task.reviewer_id || (!!user?.id && approverIds.includes(user.id))
@@ -507,7 +509,7 @@ export default function TaskDetailModal({ task, onClose, onUpdate, onReviewDone,
               )
             })()}
 
-            {isAdmin && (
+            {canManageTasks && !task.archived_at && (
               <>
                 <button type="button" onClick={() => setShowEditTask(true)} title="Editar tarea"
                   className="text-blue-500 hover:text-blue-700 transition p-1.5 rounded-lg hover:bg-blue-50">

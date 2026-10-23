@@ -37,7 +37,8 @@ function mergeMembers(currentUser: User | null, members: User[]) {
 
 export default function TeamTasksManager({ teamMembers, tasks, onTasksChange }: Props) {
   const { user } = useAuth()
-  const isAdmin = user?.role === 'admin'
+  // Admin = rol admin o super admin (igual que is_active_admin() en SQL).
+  const isAdmin = user?.role === 'admin' || !!user?.is_super_admin
   const [view, setView] = useState<TaskView>('activas')
   const [selectedMemberId, setSelectedMemberId] = useState('all')
   const [memberSearch, setMemberSearch] = useState('')
@@ -77,12 +78,13 @@ export default function TeamTasksManager({ teamMembers, tasks, onTasksChange }: 
   }
 
   useEffect(() => {
-    async function loadIfArchivedView() {
-      if (view === 'archivadas') await fetchArchivedTasks()
+    // Carga al abrir (para mostrar el conteo "Archivadas (N)") y al cambiar de pestaña.
+    async function loadArchived() {
+      if (isAdmin) await fetchArchivedTasks()
     }
-    void loadIfArchivedView()
+    void loadArchived()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view])
+  }, [view, isAdmin])
 
   async function restoreTask(task: Task) {
     setBusyTaskId(task.id)
@@ -199,6 +201,7 @@ export default function TeamTasksManager({ teamMembers, tasks, onTasksChange }: 
   function handleTaskArchived() {
     setArchivingTask(null)
     setSelectedTask(null)
+    void fetchArchivedTasks()
     void onTasksChange()
   }
 
