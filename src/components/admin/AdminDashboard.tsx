@@ -29,6 +29,7 @@ import {
   ListChecks,
   History,
   Route,
+  UserCheck2,
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import type { Task, Project, User, Client } from '../../types'
@@ -40,6 +41,7 @@ import TeamCapacity from './TeamCapacity'
 import TeamTasksManager from './TeamTasksManager'
 import TeamCalendar from './TeamCalendar'
 import TeamPerformance from './TeamPerformance'
+import AttendancePanel from './AttendancePanel'
 import CreateTaskModal from './CreateTaskModal'
 import CreateProjectModal from './CreateProjectModal'
 import TeamDashboard from '../team/TeamDashboard'
@@ -67,6 +69,7 @@ type View =
   | 'team_tasks'
   | 'calendar'
   | 'performance'
+  | 'attendance'
   | 'mytasks'
   | 'roadmap'
   | 'client_roadmaps'
@@ -96,6 +99,7 @@ const ADMIN_NAV_ITEMS = [
   { id: 'team_tasks', label: 'Tareas del equipo', icon: ListChecks },
   { id: 'calendar', label: 'Calendario', icon: Calendar },
   { id: 'performance', label: 'Rendimiento', icon: TrendingUp },
+  { id: 'attendance', label: 'Asistencia', icon: UserCheck2 },
   { id: 'mytasks', label: 'Mis tareas', icon: ClipboardList },
   { id: 'roadmap', label: 'Hoja de Ruta', icon: Map },
   { id: 'client_roadmaps', label: 'Hoja de ruta de clientes', icon: Route },
@@ -327,7 +331,7 @@ export default function AdminDashboard() {
   // No debe desaparecer por permisos heredados o registros antiguos.
   const permittedAdminItems = user?.is_super_admin
     ? ADMIN_NAV_ITEMS
-    : ADMIN_NAV_ITEMS.filter((item) => item.id === 'performance' || (item.id !== 'permisos' && adminPermissions[item.id] !== false))
+    : ADMIN_NAV_ITEMS.filter((item) => item.id === 'performance' || item.id === 'attendance' || (item.id !== 'permisos' && adminPermissions[item.id] !== false))
   const navItems = [
     ...permittedAdminItems.map((item) => ({
       ...item,
@@ -338,7 +342,7 @@ export default function AdminDashboard() {
   const navGroups = [
     {
       label: 'Operación',
-      ids: ['overview', 'team', 'team_tasks', 'calendar', 'performance'],
+      ids: ['overview', 'team', 'team_tasks', 'calendar', 'performance', 'attendance'],
     },
     { label: 'Trabajo', ids: ['mytasks', 'roadmap', 'client_roadmaps', 'requests'] },
     {
@@ -695,6 +699,9 @@ export default function AdminDashboard() {
 
             {/* Vista rendimiento */}
             {view === 'performance' && <TeamPerformance teamMembers={teamMembers} tasks={tasks} />}
+
+            {/* Vista asistencia */}
+            {view === 'attendance' && <AttendancePanel teamMembers={teamMembers} />}
 
             {/* Vista mis tareas */}
             {view === 'mytasks' && <TeamDashboard embedded />}

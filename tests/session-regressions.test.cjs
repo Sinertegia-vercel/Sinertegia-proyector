@@ -47,7 +47,7 @@ function harness(file, initial, replies = [], auth = {}, props = {}) {
     module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX,
   } }).outputText
   const exported = {}
-  const surface = { addEventListener() {}, removeEventListener() {} }
+  const surface = { addEventListener() {}, removeEventListener() {}, setTimeout: fn => { fn(); return 1 }, clearTimeout() {} }
   const context = {
     exports: exported, console, URLSearchParams,
     window: { ...surface, location: { search: auth.locationSearch || '' }, confirm: auth.confirm || (() => false) }, document: surface,
@@ -57,7 +57,7 @@ function harness(file, initial, replies = [], auth = {}, props = {}) {
       if (id === 'react/jsx-runtime') return { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) }
       if (id.endsWith('/supabase')) return { supabase: database }
       if (id.endsWith('/AuthContext')) return { useAuth: () => ({ user, ...auth }) }
-      if (id.endsWith('/workSchedule')) return { scheduleForDate: () => ({ enabled: true, start: 9, end: 0 }) }
+      if (id.endsWith('/workSchedule')) return { scheduleForDate: () => ({ enabled: true, start: 9, end: 0 }), nowInCdmx: () => new Date(), cdmxDateKey: () => '2026-01-01' }
       return {}
     },
   }
@@ -66,6 +66,10 @@ function harness(file, initial, replies = [], auth = {}, props = {}) {
     index = 0; refIndex = 0; effects.length = 0
     return (exported.default || exported.WorkSessionProvider || exported.AuthProvider)({ children: null, inviteToken: 'invite-1', ...props })
   } }
+}
+
+async function flush(times = 5) {
+  for (let i = 0; i < times; i++) await Promise.resolve()
 }
 
 function find(node, predicate) {
@@ -79,11 +83,9 @@ function find(node, predicate) {
 
 const active = { id: 'session-1', user_id: 'user-1', started_at: new Date().toISOString(), date: 'today' }
 const workFile = 'src/contexts/WorkSessionContext.tsx'
-for (const [label, replies] of [
-  ['read failure', [{ data: null, error: { message: 'offline' } }]],
-  ['write failure', [{ data: [active] }, { data: null, error: { message: 'denied' } }]],
-]) test(`Checkout preserves session on ${label}`, async () => {
-  const h = harness(workFile, [active, false, true, 60], replies)
+
+test('Checkout preserves the session when registrar_salida fails', async () => {
+  const h = harness(workFile, [active, false, true, 60], [{ data: null, error: { message: 'denied' } }])
   assert.equal(await h.render().props.value.checkOut(), false)
   const value = h.render().props.value
   assert.equal(value.currentSession.id, active.id)
@@ -93,17 +95,34 @@ for (const [label, replies] of [
   assert.equal(value.savingSession, false)
 })
 
-test('Successful checkout clears session only after persistence', async () => {
-  const h = harness(workFile, [active, false, true, 60], [{ data: [active] }, { data: { id: active.id } }])
+test('Successful checkout clears the session and calls registrar_salida once', async () => {
+  const h = harness(workFile, [active, false, true, 60], [{ data: 1, error: null }])
   assert.equal(await h.render().props.value.checkOut(), true)
   assert.equal(h.render().props.value.currentSession, null)
   assert.equal(h.render().props.value.showOvertimeModal, false)
+  assert.equal(h.calls.length, 1)
+  assert.equal(h.calls[0].rpc, 'registrar_salida')
 })
 
-test('Empty session lookup cannot falsely confirm checkout', async () => {
-  const h = harness(workFile, [active, false, true, 60], [{ data: [] }, { data: null, error: { message: 'not visible' } }])
-  assert.equal(await h.render().props.value.checkOut(), false)
-  assert.equal(h.render().props.value.currentSession.id, active.id)
+test('mi_sesion_hoy failure does not open check-in (avoids a duplicate entry)', async () => {
+  const h = harness(workFile, [null, false, false, 0], [{ data: null, error: { message: 'offline' } }])
+  h.render(); h.effects[0]()
+  await flush()
+  assert.equal(h.render().props.value.needsCheckIn, false)
+})
+
+test('mi_sesion_hoy with no open row asks for check-in; with one, restores it', async () => {
+  const empty = harness(workFile, [null, false, false, 0], [{ data: [], error: null }])
+  empty.render(); empty.effects[0]()
+  await flush()
+  assert.equal(empty.render().props.value.needsCheckIn, true)
+
+  const restored = harness(workFile, [null, false, false, 0], [{ data: [active], error: null }])
+  restored.render(); restored.effects[0]()
+  await flush()
+  const value = restored.render().props.value
+  assert.equal(value.currentSession.id, active.id)
+  assert.equal(value.needsCheckIn, false)
 })
 
 for (const file of ['src/components/team/TeamDashboard.tsx', 'src/components/client/ClientPortal.tsx']) {
@@ -137,12 +156,35 @@ for (const file of ['src/components/team/TeamDashboard.tsx', 'src/components/cli
   })
 }
 
-test('Check-in does not insert when existing-session lookup fails', async () => {
+test('Check-in reports the failure and keeps needsCheckIn true when registrar_entrada fails', async () => {
   const h = harness(workFile, [null, true, false, 0], [{ data: null, error: { message: 'offline' } }])
   await h.render().props.value.checkIn('oficina')
   assert.equal(h.calls.length, 1)
+  assert.equal(h.calls[0].rpc, 'registrar_entrada')
+  assert.equal(h.calls[0].args.p_location, 'oficina')
   assert.equal(h.render().props.value.needsCheckIn, true)
   assert.ok(h.render().props.value.sessionError)
+})
+
+test('Successful check-in keeps the modal open with a confirmation notice until dismissed', async () => {
+  const session = { id: 'session-2', user_id: 'user-1', started_at: new Date().toISOString(), date: '2026-01-01', is_first_of_day: true, late_minutes: 12 }
+  const h = harness(workFile, [null, true, false, 0], [{ data: session, error: null }])
+  await h.render().props.value.checkIn('oficina')
+  const value = h.render().props.value
+  assert.equal(value.currentSession.id, session.id)
+  assert.equal(value.needsCheckIn, true, 'the modal stays mounted to show the confirmation')
+  assert.match(value.lastCheckInNotice, /12 min después de tu horario/)
+  value.dismissCheckInNotice()
+  const dismissed = h.render().props.value
+  assert.equal(dismissed.needsCheckIn, false)
+  assert.equal(dismissed.lastCheckInNotice, '')
+})
+
+test('A second entry the same day (is_first_of_day false) never reports a retardo, even with a stale late_minutes', async () => {
+  const session = { id: 'session-3', user_id: 'user-1', started_at: new Date().toISOString(), date: '2026-01-01', is_first_of_day: false, late_minutes: 45 }
+  const h = harness(workFile, [null, true, false, 0], [{ data: session, error: null }])
+  await h.render().props.value.checkIn('oficina')
+  assert.match(h.render().props.value.lastCheckInNotice, /a tiempo/)
 })
 
 test('Overtime is shown after scheduled end and acknowledged once per session', () => {
@@ -152,6 +194,47 @@ test('Overtime is shown after scheduled end and acknowledged once per session', 
   h.render().props.value.continueOvertime()
   h.render(); h.effects[1]()
   assert.equal(h.render().props.value.showOvertimeModal, false)
+})
+
+test('cdmxDateKey uses the America/Mexico_City calendar day, independent of the host timezone', () => {
+  const workScheduleModule = loadModule('src/lib/workSchedule.ts')
+  // 05:30 UTC is 23:30 the PREVIOUS day in CDMX (UTC-6): a naive UTC-based date key would get this wrong.
+  const instant = new Date('2026-03-01T05:30:00Z')
+  assert.equal(workScheduleModule.cdmxDateKey(instant), '2026-02-28')
+  assert.notEqual(instant.toISOString().split('T')[0], workScheduleModule.cdmxDateKey(instant))
+})
+
+test('nowInCdmx exposes getDay/getHours as CDMX wall-clock time for schedule lookups', () => {
+  const workScheduleModule = loadModule('src/lib/workSchedule.ts')
+  const now = workScheduleModule.nowInCdmx()
+  assert.equal(typeof now.getDay(), 'number')
+  assert.ok(now.getHours() >= 0 && now.getHours() < 24)
+})
+
+test('WorkSessionContext delegates "today" and minute calculations to the server (no client-side calcMinutes)', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', workFile), 'utf8')
+  assert.doesNotMatch(source, /function calcMinutes/)
+  assert.doesNotMatch(source, /getLocalDateKey/)
+  assert.match(source, /supabase\.rpc\('mi_sesion_hoy'\)/)
+  assert.match(source, /supabase\.rpc\('registrar_entrada'/)
+  assert.match(source, /supabase\.rpc\('registrar_salida'\)/)
+  assert.match(source, /nowInCdmx/)
+})
+
+test('Attendance "sin_registro" lowers punctuality: TeamPerformance counts missed check-ins against the rate', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'src/components/admin/TeamPerformance.tsx'), 'utf8')
+  assert.match(source, /from\('asistencia_rango'\)|rpc\('asistencia_rango'/)
+  assert.match(source, /a\.estado === 'a_tiempo' \|\| a\.estado === 'retardo' \|\| a\.estado === 'sin_registro'/)
+  assert.match(source, /onTimeDias\.length \/ diasEvaluados\.length/)
+})
+
+test('AttendancePanel surfaces every attendance state including days with no check-in', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'src/components/admin/AttendancePanel.tsx'), 'utf8')
+  for (const estado of ['a_tiempo', 'retardo', 'sin_registro', 'pendiente', 'descanso']) {
+    assert.match(source, new RegExp(estado))
+  }
+  assert.match(source, /admin_corregir_sesion/)
+  assert.match(source, /asistencia_rango/)
 })
 
 for (const kind of ['Team', 'Client']) {

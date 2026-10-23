@@ -8,6 +8,56 @@ import { applyAppearance, readAppearance, saveAppearance, type AppearanceTheme, 
 import BirthdayDatePicker from './BirthdayDatePicker'
 import { formatHour, resolvedWorkSchedule, scheduleForDate, WEEK_DAYS } from '../../lib/workSchedule'
 
+interface AttendanceWeekRow {
+  date: string
+  entrada: string | null
+  estado: 'a_tiempo' | 'retardo' | 'sin_registro' | 'pendiente' | 'descanso' | 'dia_extra'
+  minutos_regulares: number
+  minutos_extra: number
+}
+
+const ATTENDANCE_ESTADO_LABELS: Record<string, { label: string; className: string }> = {
+  a_tiempo: { label: 'A tiempo', className: 'text-green-600' },
+  retardo: { label: 'Retardo', className: 'text-orange-600' },
+  sin_registro: { label: 'Sin registro', className: 'text-red-600' },
+  pendiente: { label: 'Pendiente', className: 'text-slate-400' },
+  descanso: { label: 'Descanso', className: 'text-slate-400' },
+  dia_extra: { label: 'Día extra', className: 'text-blue-600' },
+}
+
+function MyAttendanceCard({ userId }: { userId: string }) {
+  const [rows, setRows] = useState<AttendanceWeekRow[]>([])
+
+  useEffect(() => {
+    if (!userId) return
+    const now = new Date()
+    const diff = now.getDay() === 0 ? -6 : 1 - now.getDay()
+    const monday = new Date(now); monday.setDate(now.getDate() + diff)
+    const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6)
+    const key = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    supabase.rpc('asistencia_rango', { p_from: key(monday), p_to: key(sunday), p_tolerancia: 5 })
+      .then(({ data }) => setRows(((data || []) as (AttendanceWeekRow & { user_id: string })[]).filter(r => r.user_id === userId)))
+  }, [userId])
+
+  return <Card className="lg:col-span-2">
+    <h3 className="flex items-center gap-2 font-bold"><CalendarDays size={18} />Mi asistencia esta semana</h3>
+    <div className="mt-4 space-y-2">
+      {rows.length === 0 && <p className="text-sm text-slate-400">Sin datos esta semana.</p>}
+      {rows.map(r => {
+        const estado = ATTENDANCE_ESTADO_LABELS[r.estado] || { label: r.estado, className: 'text-slate-400' }
+        return (
+          <div key={r.date} className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm">
+            <span className="font-semibold text-slate-700 capitalize">{new Date(`${r.date}T12:00:00`).toLocaleDateString('es-MX', { weekday: 'short', day: 'numeric' })}</span>
+            <span className="text-slate-500">{r.entrada ? new Date(r.entrada).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Mexico_City' }) : '—'}</span>
+            <span className={`font-semibold ${estado.className}`}>{estado.label}</span>
+            <span className="text-slate-500">{(((r.minutos_regulares || 0) + (r.minutos_extra || 0)) / 60).toFixed(1)}h</span>
+          </div>
+        )
+      })}
+    </div>
+  </Card>
+}
+
 interface Props { onClose?: () => void; onChangePhoto: () => void; onChangePassword: () => void; embedded?: boolean }
 type Tab = 'datos' | 'laboral' | 'seguridad' | 'preferencias'
 const DEPTS: Record<string, string> = { edicion: 'Edición', grabacion: 'Grabación', diseno: 'Diseño', copy: 'Copy', webmaster: 'Webmaster', trafficker: 'Trafficker', lider: 'Líder', cliente: 'Cliente' }
@@ -65,7 +115,7 @@ export default function UserProfile({ onClose, onChangePhoto, onChangePassword, 
       <nav className="flex gap-1 overflow-x-auto border-b border-slate-200">{([{ key: 'datos', label: 'Datos personales' }, ...(!isClient ? [{ key: 'laboral' as Tab, label: 'Información laboral' }] : []), { key: 'seguridad', label: 'Seguridad' }, { key: 'preferencias', label: 'Apariencia' }] as { key: Tab; label: string }[]).map(item => <button key={item.key} onClick={() => setTab(item.key)} className={`whitespace-nowrap border-b-2 px-5 py-3 text-sm font-semibold ${tab === item.key ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500'}`}>{item.label}</button>)}</nav>
 
       {tab === 'datos' && <Card><h3 className="flex items-center gap-2 font-bold text-slate-900"><UserRound size={18} />Datos personales</h3><div className="grid gap-x-4 sm:grid-cols-2"><Field label="Nombres *"><input value={form.first_names} onChange={e => setForm({ ...form, first_names: e.target.value })} /></Field><Field label="Apellidos *"><input value={form.last_names} onChange={e => setForm({ ...form, last_names: e.target.value })} /></Field><Field label="Correo electrónico"><input value={user?.email || ''} readOnly className="bg-slate-50 text-slate-500" /></Field><Field label="Teléfono (+52) *"><input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="+52 10 dígitos" /></Field><Field label="Fecha de nacimiento *"><BirthdayDatePicker value={form.birth_date} onChange={birth_date => setForm({ ...form, birth_date })} /></Field><Field label="Zona horaria"><select value={form.timezone} onChange={e => setForm({ ...form, timezone: e.target.value })}><option value="America/Mexico_City">Ciudad de México (GMT-6)</option><option value="America/Cancun">Cancún (GMT-5)</option><option value="America/Tijuana">Tijuana (GMT-8)</option></select></Field><Field label="Dirección"><input value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} placeholder="Añadir dirección" /></Field></div><SaveButton saving={saving} onClick={saveProfile} />{message && <p className={`mt-3 text-xs font-semibold ${message.includes('correctamente') ? 'text-green-600' : 'text-red-600'}`}>{message}</p>}</Card>}
-      {tab === 'laboral' && <div className="grid gap-5 lg:grid-cols-2"><WorkInfo user={user} /><Card><h3 className="flex items-center gap-2 font-bold"><Clock3 size={18} />Horario asignado</h3><div className="mt-5 grid gap-2 sm:grid-cols-2">{WEEK_DAYS.map(day => { const schedule = resolvedWorkSchedule(user)[day.key]; return <div key={day.key} className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-sm"><span className="font-semibold text-slate-700">{day.label}</span><span className={schedule.enabled ? 'text-slate-600' : 'text-slate-400'}>{schedule.enabled ? `${formatHour(schedule.start)}–${formatHour(schedule.end)}` : 'Descanso'}</span></div> })}</div><p className="mt-3 text-xs text-slate-400">Puesto, departamento y horario solamente pueden modificarlos los administradores.</p></Card></div>}
+      {tab === 'laboral' && <div className="grid gap-5 lg:grid-cols-2"><WorkInfo user={user} /><Card><h3 className="flex items-center gap-2 font-bold"><Clock3 size={18} />Horario asignado</h3><div className="mt-5 grid gap-2 sm:grid-cols-2">{WEEK_DAYS.map(day => { const schedule = resolvedWorkSchedule(user)[day.key]; return <div key={day.key} className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-sm"><span className="font-semibold text-slate-700">{day.label}</span><span className={schedule.enabled ? 'text-slate-600' : 'text-slate-400'}>{schedule.enabled ? `${formatHour(schedule.start)}–${formatHour(schedule.end)}` : 'Descanso'}</span></div> })}</div><p className="mt-3 text-xs text-slate-400">Puesto, departamento y horario solamente pueden modificarlos los administradores.</p></Card>{user && <MyAttendanceCard userId={user.id} />}</div>}
       {tab === 'seguridad' && <div className="grid items-start gap-5 lg:grid-cols-[1.08fr_1fr]"><Card><h3 className="flex items-center gap-2 font-bold"><ShieldCheck size={18} />Seguridad de la cuenta</h3><div className="mt-5 flex flex-col gap-3 rounded-xl border border-slate-200 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-semibold">Contraseña</p><p className="text-xs text-slate-400">Para cambiarla debes confirmar un código enviado por correo.</p></div><button onClick={onChangePassword} className="flex w-full items-center justify-center gap-2 rounded-xl border border-purple-200 px-4 py-2 text-sm font-semibold text-purple-700 sm:w-auto"><KeyRound size={15} />Cambiar contraseña</button></div><div className="mt-3 rounded-xl border border-green-200 bg-green-50/60 p-4"><p className="flex items-center gap-2 text-sm font-semibold text-green-800"><MailCheck size={17} />Confirmación por correo</p><p className="mt-1 text-xs text-green-700">Los códigos de seguridad se enviarán a <strong>{user?.email}</strong>.</p></div><div className="mt-3 rounded-xl border border-slate-200 p-4"><p className="text-sm font-semibold">Último inicio de sesión</p><p className="mt-1 text-xs text-slate-500">{lastSignIn}</p></div></Card><ActivityCard lastSignIn={lastSignIn} /></div>}
       {tab === 'preferencias' && <AppearancePanel theme={form.theme} compact={form.compact_mode} textSize={form.text_size} saving={saving} onChange={(next) => { setForm({ ...form, theme: next.theme, compact_mode: next.compact, text_size: next.textSize }); applyAppearance(next) }} onReset={() => { const next = { theme: 'light' as const, compact: false, textSize: 'normal' as const }; setForm({ ...form, theme: next.theme, compact_mode: next.compact, text_size: next.textSize }); applyAppearance(next) }} onSave={saveProfile} />}
 
