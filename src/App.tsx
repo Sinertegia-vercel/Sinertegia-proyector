@@ -8,6 +8,7 @@ import ClientRegistrationPage from './components/auth/ClientRegistrationPage'
 import TeamRegistrationPage from './components/auth/TeamRegistrationPage'
 import CheckInModal from './components/shared/CheckInModal'
 import OvertimeModal from './components/shared/OvertimeModal'
+import MissingDatesModal from './components/shared/MissingDatesModal'
 import AppErrorBoundary from './components/shared/AppErrorBoundary'
 import RequiredTeamProfileModal, { missingRequiredProfileData, REQUIRED_PROFILE_START } from './components/shared/RequiredTeamProfileModal'
 import BirthdayCelebration from './components/shared/BirthdayCelebration'
@@ -63,6 +64,7 @@ function AppContent() {
       {/* Modales del reloj checador (equipo y admin) */}
       {user.role !== 'client' && needsCheckIn && <CheckInModal />}
       {user.role !== 'client' && showOvertimeModal && <OvertimeModal />}
+      {user.role === 'team' && <MissingDatesModal />}
       {mustCompleteTeamProfile && <RequiredTeamProfileModal onComplete={() => setProfileGateCompleted(true)} />}
       {user.role === 'team' && !mustCompleteTeamProfile && <BirthdayCelebration />}
     </div>

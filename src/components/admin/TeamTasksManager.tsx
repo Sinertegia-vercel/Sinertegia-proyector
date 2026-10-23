@@ -3,6 +3,7 @@ import { CheckCircle2, ClipboardList, Eye, MessageSquare, Search, Trash2, Users 
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import type { Task, TaskStatus, User } from '../../types'
+import { countUndatedByAssignee } from '../../lib/missingDates'
 import PriorityBadge from '../shared/PriorityBadge'
 import StatusBadge from '../shared/StatusBadge'
 import UserAvatar from '../shared/UserAvatar'
@@ -105,6 +106,8 @@ export default function TeamTasksManager({ teamMembers, tasks, onTasksChange }: 
 
   const activeCount = memberTasks.filter((task) => task.status !== 'completada').length
   const completedCount = memberTasks.filter((task) => task.status === 'completada').length
+  const undatedCounts = useMemo(() => countUndatedByAssignee(tasks), [tasks])
+  const totalUndated = [...undatedCounts.values()].reduce((sum, count) => sum + count, 0)
 
   async function completeTask(task: Task) {
     if (!window.confirm(`¿Marcar “${task.title}” como completada?\n\nNo será necesario que ${task.assignee?.full_name || 'el integrante'} la envíe a revisión.`)) return
@@ -142,9 +145,10 @@ export default function TeamTasksManager({ teamMembers, tasks, onTasksChange }: 
           <h1 className="text-2xl font-bold text-gray-950">Tareas del equipo</h1>
           <p className="mt-1 text-sm text-gray-500">Consulta y administra directamente las tareas de cada integrante.</p>
         </div>
-        <div className="grid w-full grid-cols-2 gap-2 sm:w-auto sm:gap-3">
+        <div className="grid w-full grid-cols-3 gap-2 sm:w-auto sm:gap-3">
           <div className="rounded-xl border border-gray-200 bg-white px-3 py-3 sm:px-4"><b className="text-xl text-blue-600">{activeCount}</b><span className="ml-2 text-sm text-gray-500">activas</span></div>
           <div className="rounded-xl border border-gray-200 bg-white px-3 py-3 sm:px-4"><b className="text-xl text-emerald-600">{completedCount}</b><span className="ml-2 text-sm text-gray-500">completadas</span></div>
+          <div className="rounded-xl border border-gray-200 bg-white px-3 py-3 sm:px-4"><b className={totalUndated > 0 ? 'text-xl text-amber-600' : 'text-xl text-emerald-600'}>{totalUndated}</b><span className="ml-2 text-sm text-gray-500">sin fecha en el equipo</span></div>
         </div>
       </div>
 
@@ -163,9 +167,14 @@ export default function TeamTasksManager({ teamMembers, tasks, onTasksChange }: 
           <div className="flex gap-2 overflow-x-auto pb-2 lg:block lg:max-h-[555px] lg:space-y-1 lg:overflow-x-hidden lg:overflow-y-auto lg:pb-0 lg:pr-1">
             {visibleMembers.map((member) => {
               const count = tasks.filter((task) => task.assigned_to === member.id && task.status !== 'completada').length
+              const undated = undatedCounts.get(member.id) || 0
               return <button key={member.id} type="button" onClick={() => setSelectedMemberId(member.id)} className={`flex min-w-[220px] items-center gap-3 rounded-xl px-3 py-3 text-left lg:w-full lg:min-w-0 ${selectedMemberId === member.id ? 'border border-blue-200 bg-blue-50' : 'border border-transparent hover:bg-white'}`}>
                 <UserAvatar name={member.full_name} avatarUrl={member.avatar_url} size={40} />
-                <span className="min-w-0 flex-1"><b className="block truncate text-sm text-gray-900">{member.full_name}</b><small className="block truncate capitalize text-gray-500">{member.department || 'Sin departamento'}</small></span>
+                <span className="min-w-0 flex-1">
+                  <b className="block truncate text-sm text-gray-900">{member.full_name}</b>
+                  <small className="block truncate capitalize text-gray-500">{member.department || 'Sin departamento'}</small>
+                  <small className={`block font-semibold ${undated > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>{undated > 0 ? `Sin fecha: ${undated}` : 'Al día ✅'}</small>
+                </span>
                 <span className="rounded-full bg-gray-200 px-2 py-0.5 text-xs font-semibold text-gray-600">{count}</span>
               </button>
             })}
