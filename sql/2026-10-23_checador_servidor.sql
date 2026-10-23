@@ -440,19 +440,34 @@ end $$;
 create policy "Ver sesiones propias o admin" on public.work_sessions
   for select to authenticated using (user_id = auth.uid() or public.is_active_admin());
 
-revoke all on function public.registrar_entrada(text) from public;
-revoke all on function public.registrar_salida() from public;
-revoke all on function public.mi_sesion_hoy() from public;
-revoke all on function public.admin_corregir_sesion(uuid, timestamptz, timestamptz, text) from public;
-revoke all on function public.asistencia_rango(date, date, int) from public;
-revoke all on function public.cerrar_sesiones_olvidadas() from public;
-revoke all on function public.revisar_asistencia() from public;
-revoke all on function public.resumen_asistencia_diario() from public;
+-- En Supabase, las funciones nuevas reciben EXECUTE directo para anon y authenticated
+-- (default privileges), así que "revoke ... from public" no basta: se revoca también a esos roles.
+-- Funciones internas (solo triggers, otras funciones security definer y pg_cron): nadie desde la API.
+revoke all on function public.work_day_schedule(uuid, date) from public, anon, authenticated;
+revoke all on function public.work_session_minutes(uuid, timestamptz, timestamptz) from public, anon, authenticated;
+revoke all on function public.record_user_activity(text) from public, anon, authenticated;
+revoke all on function public.trg_activity_task_update() from anon;
+revoke all on function public.trg_activity_generic() from anon;
+revoke all on function public.asistencia_rango_interno(date, int) from public, anon, authenticated;
+revoke all on function public.cerrar_sesiones_olvidadas() from public, anon, authenticated;
+revoke all on function public.revisar_asistencia() from public, anon, authenticated;
+revoke all on function public.resumen_asistencia_diario() from public, anon, authenticated;
+-- Funciones que usa la app: solo usuarios con sesión iniciada (nunca anon).
+revoke all on function public.registrar_entrada(text) from public, anon;
+revoke all on function public.registrar_salida() from public, anon;
+revoke all on function public.mi_sesion_hoy() from public, anon;
+revoke all on function public.admin_corregir_sesion(uuid, timestamptz, timestamptz, text) from public, anon;
+revoke all on function public.asistencia_rango(date, date, int) from public, anon;
 grant execute on function public.registrar_entrada(text) to authenticated;
 grant execute on function public.registrar_salida() to authenticated;
 grant execute on function public.mi_sesion_hoy() to authenticated;
 grant execute on function public.admin_corregir_sesion(uuid, timestamptz, timestamptz, text) to authenticated;
 grant execute on function public.asistencia_rango(date, date, int) to authenticated;
+-- Tablas nuevas: sin escritura desde la API (RLS ya lo bloquea; esto es una segunda capa).
+revoke insert, update, delete, truncate on public.user_daily_activity from anon, authenticated;
+revoke insert, update, delete, truncate on public.attendance_alerts from anon, authenticated;
+revoke insert, update, delete, truncate on public.work_session_corrections from anon, authenticated;
+revoke all on public.user_daily_activity, public.attendance_alerts, public.work_session_corrections from anon;
 
 -- 13. Jobs (pg_cron trabaja en UTC; CDMX = UTC-6).
 select cron.unschedule(jobid) from cron.job where jobname in

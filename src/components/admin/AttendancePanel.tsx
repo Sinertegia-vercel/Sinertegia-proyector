@@ -95,13 +95,18 @@ export default function AttendancePanel({ teamMembers }: Props) {
     setLoading(false)
   }, [from, to])
 
+  // La primera carga se difiere un tick para no llamar setState de forma síncrona dentro del efecto.
   useEffect(() => {
-    fetchToday()
+    const first = setTimeout(fetchToday, 0)
     const id = setInterval(fetchToday, 60000)
-    return () => clearInterval(id)
+    return () => { clearTimeout(first); clearInterval(id) }
   }, [fetchToday])
 
-  useEffect(() => { if (tab === 'rango') fetchRange() }, [tab, fetchRange])
+  useEffect(() => {
+    if (tab !== 'rango') return
+    const t = setTimeout(fetchRange, 0)
+    return () => clearTimeout(t)
+  }, [tab, fetchRange])
 
   const summary = useMemo(() => {
     const counts: Record<string, number> = { a_tiempo: 0, retardo: 0, sin_registro: 0, pendiente: 0, descanso: 0 }
