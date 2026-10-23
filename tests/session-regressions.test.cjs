@@ -412,6 +412,7 @@ function loadModule(file) {
   const exported = {}
   vm.runInNewContext(code, { exports: exported, require(id) {
     if (id.endsWith('/types')) return {}
+    if (id.endsWith('/projectTemplates')) return loadModule('src/data/projectTemplates.ts')
     return {}
   } })
   return exported
@@ -569,4 +570,210 @@ test('Admin can mark "client did not show up" on the recording session task and 
   assert.match(roadmap, /isClientAttributableDelay/)
   assert.match(projectDetail, /isClientAttributableDelay/)
   assert.match(dashboard, /clientDelayTasks/)
+})
+
+// ─────────────────────────────────────────────────────────────────────────
+// FASE 2: hoja de ruta del cliente y vista de admin de clientes
+// ─────────────────────────────────────────────────────────────────────────
+
+const roadmapPhases = loadModule('src/lib/roadmapPhases.ts')
+const templatesForPhases = loadModule('src/data/projectTemplates.ts')
+
+function taskSetForPhases(templateId, modalidad) {
+  const tpl = templatesForPhases.PROJECT_TEMPLATES.find(t => t.id === templateId)
+  const resolved = templatesForPhases.resolveTemplateTasks(tpl, [], false)
+  return [...resolved, ...templatesForPhases.tasksForModalidad(modalidad)]
+}
+
+test('inferPhase assigns a non-null phase to every VSL (64) and Webinar (70) task', () => {
+  for (const [templateId, modalidad, expectedTotal] of [
+    ['vsl', 'oficina', 64], ['vsl', 'remota', 64], ['webinar', 'oficina', 70], ['webinar', 'remota', 70],
+  ]) {
+    const full = taskSetForPhases(templateId, modalidad)
+    assert.equal(full.length, expectedTotal)
+    for (const task of full) {
+      const phase = templatesForPhases.inferPhase(task.title, task.department)
+      assert.ok(phase, `${templateId}/${modalidad}: "${task.title}" got no phase`)
+      assert.ok(templatesForPhases.PHASES.includes(phase), `${templateId}/${modalidad}: "${task.title}" got invalid phase "${phase}"`)
+    }
+  }
+})
+
+test('Phase progress counts only approved tasks as done; pendiente_revision does not count', () => {
+  const tasks = [
+    { title: 'a', department: 'copy', phase: 'estrategia', status: 'completada', review_status: 'aprobada' },
+    { title: 'b', department: 'copy', phase: 'estrategia', status: 'completada', review_status: 'pendiente_revision' },
+    { title: 'c', department: 'copy', phase: 'estrategia', status: 'pendiente', review_status: null },
+  ]
+  const stats = roadmapPhases.phaseStats(tasks, 'estrategia')
+  assert.equal(stats.total, 3)
+  assert.equal(stats.done, 1)
+  assert.equal(stats.pct, 33)
+})
+
+test('Current phase is the first incomplete one, and "produccion" combines both lanes', () => {
+  const done = (phase, title) => ({ title, department: 'lider', phase, status: 'completada', review_status: null })
+  const pending = (phase, title) => ({ title, department: 'lider', phase, status: 'pendiente', review_status: null })
+  const tasks = [
+    done('entrada', 'e1'), done('estrategia', 's1'), done('guiones', 'g1'),
+    done('produccion_video', 'v1'), pending('produccion_paginas', 'p1'),
+  ]
+  assert.equal(roadmapPhases.currentDisplayPhase(tasks), 'produccion')
+  const stats = roadmapPhases.displayPhaseStats(tasks, 'produccion')
+  assert.equal(stats.total, 2)
+  assert.equal(stats.done, 1)
+  assert.equal(stats.lanes.produccion_video.done, 1)
+  assert.equal(stats.lanes.produccion_paginas.done, 0)
+})
+
+test('Current phase falls through to optimizacion once every other phase is complete', () => {
+  const done = phase => ({ title: `t-${phase}`, department: 'lider', phase, status: 'completada', review_status: null })
+  const tasks = templatesForPhases.PHASES.filter(p => p !== 'optimizacion').map(done)
+  assert.equal(roadmapPhases.currentDisplayPhase(tasks), 'optimizacion')
+})
+
+test('Launch delay breakdown: client days + agency days always equals the date difference', () => {
+  const project = { launch_date: '2026-11-10', launch_date_original: '2026-11-01' }
+  for (const events of [
+    [{ responsible: 'cliente', days: 3 }],
+    [{ responsible: 'cliente', days: 3 }, { responsible: 'agencia', days: 2 }],
+    [{ responsible: 'cliente', days: 50 }], // más que la diferencia total: se limita
+    [],
+  ]) {
+    const breakdown = roadmapPhases.launchDelayBreakdown(project, events)
+    assert.equal(breakdown.totalDays, 9)
+    assert.equal(breakdown.clientDays + breakdown.agencyDays, breakdown.totalDays)
+  }
+})
+
+test('Launch delay breakdown is zero without both launch dates', () => {
+  const breakdown = roadmapPhases.launchDelayBreakdown({ launch_date: null, launch_date_original: null }, [])
+  assert.equal(breakdown.totalDays, 0)
+  assert.equal(breakdown.clientDays, 0)
+  assert.equal(breakdown.agencyDays, 0)
+})
+
+test('Both recording modalities show the correct responsible for the "grabación" milestone', () => {
+  const tasks = [{ title: 'Agendar sesión de grabación', department: 'lider', phase: 'entrada', status: 'pendiente', review_status: null }]
+  const oficina = roadmapPhases.buildMilestones({ recording_mode: 'oficina', launch_date: null }, tasks)
+  const remota = roadmapPhases.buildMilestones({ recording_mode: 'remota', launch_date: null }, tasks)
+  assert.match(oficina.find(m => m.key === 'grabacion').detail, /Grabación/)
+  assert.match(remota.find(m => m.key === 'grabacion').detail, /Cliente/)
+})
+
+const today2026 = new Date('2026-10-22T12:00:00Z')
+
+test('Project health: atrasado when launch moved or a task is more than 3 days overdue', () => {
+  const movedLaunch = { launch_date: '2026-11-05', launch_date_original: '2026-11-01' }
+  assert.equal(roadmapPhases.projectHealth([], movedLaunch, [], today2026).status, 'atrasado')
+  const overdueTask = [{ title: 't', department: 'copy', phase: 'estrategia', status: 'pendiente', review_status: null, commitment_date: '2026-10-15' }]
+  assert.equal(roadmapPhases.projectHealth(overdueTask, {}, [], today2026).status, 'atrasado')
+})
+
+test('Project health: en riesgo for a task overdue 1-3 days, or due within 2 days and not started', () => {
+  const overdue2days = [{ title: 't', department: 'copy', phase: 'estrategia', status: 'pendiente', review_status: null, commitment_date: '2026-10-20' }]
+  assert.equal(roadmapPhases.projectHealth(overdue2days, {}, [], today2026).status, 'en_riesgo')
+  const dueSoonNotStarted = [{ title: 't', department: 'copy', phase: 'estrategia', status: 'pendiente', review_status: null, commitment_date: '2026-10-23' }]
+  assert.equal(roadmapPhases.projectHealth(dueSoonNotStarted, {}, [], today2026).status, 'en_riesgo')
+})
+
+test('Project health: en tiempo otherwise', () => {
+  const healthy = [{ title: 't', department: 'copy', phase: 'estrategia', status: 'completada', review_status: 'aprobada', commitment_date: '2026-10-15' }]
+  assert.equal(roadmapPhases.projectHealth(healthy, {}, [], today2026).status, 'en_tiempo')
+  assert.equal(roadmapPhases.projectHealth([], {}, [], today2026).status, 'en_tiempo')
+})
+
+test('Projects are ordered by risk: atrasado before en riesgo before en tiempo, then by more delay days', () => {
+  const items = [
+    { status: 'en_tiempo', totalDays: 0 },
+    { status: 'atrasado', totalDays: 2 },
+    { status: 'en_riesgo', totalDays: 1 },
+    { status: 'atrasado', totalDays: 10 },
+  ]
+  const sorted = [...items].sort(roadmapPhases.compareByRisk)
+  assert.deepEqual(sorted.map(item => `${item.status}:${item.totalDays}`), ['atrasado:10', 'atrasado:2', 'en_riesgo:1', 'en_tiempo:0'])
+})
+
+test('inferTemplateLabel recognizes Webinar-only titles and falls back to VSL/Personalizado', () => {
+  assert.equal(roadmapPhases.inferTemplateLabel([{ title: 'Crear Presentación' }]), 'Webinar')
+  assert.equal(roadmapPhases.inferTemplateLabel([{ title: 'Montar funnel completo en GHL' }]), 'VSL')
+  assert.equal(roadmapPhases.inferTemplateLabel([]), 'Personalizado')
+})
+
+// ── Vista del cliente: sin nombres internos, solo su proyecto ──
+
+test('ClientRoadmapView never reads or renders team member names', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'src/components/roadmap/ClientRoadmapView.tsx'), 'utf8')
+  assert.doesNotMatch(source, /assignee/)
+  assert.doesNotMatch(source, /full_name/)
+  assert.match(source, /mode === 'interno'/)
+})
+
+test('ClientPortal scopes "Mi hoja de ruta" to the selected project only', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'src/components/client/ClientPortal.tsx'), 'utf8')
+  assert.match(source, /mihojaderuta/)
+  assert.match(source, /mode="cliente"/)
+  assert.match(source, /tasks=\{projectTasks\}/)
+})
+
+// ── Vista interna y pestaña del proyecto ──
+
+test('ProjectDetail exposes a "Hoja de ruta del cliente" tab reusing ClientRoadmapView in internal mode', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'src/components/admin/ProjectDetail.tsx'), 'utf8')
+  assert.match(source, /Hoja de ruta del cliente/)
+  assert.match(source, /mode="interno"/)
+})
+
+test('Clientes view can open the roadmap for a specific client card', () => {
+  const card = fs.readFileSync(path.join(__dirname, '..', 'src/components/admin/ClientAssignmentManager.tsx'), 'utf8')
+  const dashboard = fs.readFileSync(path.join(__dirname, '..', 'src/components/admin/AdminDashboard.tsx'), 'utf8')
+  assert.match(card, /onOpenRoadmap/)
+  assert.match(dashboard, /setRoadmapClientId\(clientId\)/)
+})
+
+// ── Menú y permisos de administración ──
+
+test('"client_roadmaps" is a first-class admin section controlled by role_permissions/user_permissions', () => {
+  const dashboard = fs.readFileSync(path.join(__dirname, '..', 'src/components/admin/AdminDashboard.tsx'), 'utf8')
+  const permissions = fs.readFileSync(path.join(__dirname, '..', 'src/components/admin/RolePermissionsManager.tsx'), 'utf8')
+  assert.match(dashboard, /id: 'client_roadmaps', label: 'Hoja de ruta de clientes'/)
+  assert.match(permissions, /\['client_roadmaps', 'Hoja de ruta de clientes'/)
+})
+
+test('Team "client_roadmaps" section is off by default unless explicitly allowed', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'src/components/team/TeamDashboard.tsx'), 'utf8')
+  assert.match(source, /resolved\.get\('client_roadmaps'\) !== true\) hidden\.add\('client_roadmaps'\)/)
+  const permissions = fs.readFileSync(path.join(__dirname, '..', 'src/components/admin/RolePermissionsManager.tsx'), 'utf8')
+  assert.match(permissions, /Ver el resumen de sus clientes asignados/)
+})
+
+test('ClientRoadmapsManager restricts the team to their own assigned clients or tasks, mirroring ClientChatsHub', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'src/components/admin/ClientRoadmapsManager.tsx'), 'utf8')
+  assert.match(source, /from\('client_team_members'\)\.select\('client_id'\)\.eq\('user_id', user\.id\)/)
+  assert.match(source, /from\('tasks'\)\.select\('project_id'\)\.eq\('assigned_to', user\.id\)/)
+  assert.match(source, /restricted/)
+})
+
+// ── Selector de cliente/proyecto con memoria en localStorage ──
+
+test('ClientRoadmapsManager remembers the last client/project per user with the agreed localStorage key', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'src/components/admin/ClientRoadmapsManager.tsx'), 'utf8')
+  assert.match(source, /`client-roadmap-last-\$\{userId\}`/)
+  assert.match(source, /localStorage\.setItem\(storageKey\(user\.id\)/)
+  assert.match(source, /localStorage\.getItem\(storageKey\(user\.id\)\)/)
+})
+
+test('Selecting a client picks its first project and switching projects keeps the same client scoped', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'src/components/admin/ClientRoadmapsManager.tsx'), 'utf8')
+  assert.match(source, /function selectClient\(clientId: string\)/)
+  assert.match(source, /const clientProjects = projects\.filter\(project => project\.client_id === clientId\)/)
+  assert.match(source, /function selectProject\(project: Project\)/)
+})
+
+test('Admin summary cards show template, modalidad, phase, launch delta, semáforo, client pendings and responsible', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'src/components/admin/ClientRoadmapsManager.tsx'), 'utf8')
+  assert.match(source, /inferTemplateLabel/)
+  assert.match(source, /recording_mode === 'remota' \? 'Remota' : 'Oficina'/)
+  assert.match(source, /DISPLAY_PHASE_LABELS\[card\.phase\]/)
+  assert.match(source, /card\.lider/)
 })

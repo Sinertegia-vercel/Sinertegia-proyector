@@ -147,6 +147,7 @@ export interface Task {
   client_approval?: 'aprobada' | 'cambios_solicitados'
   change_count?: number
   depends_on_task_id?: string
+  phase?: string | null
   delay_responsible?: 'cliente' | 'agencia'
   delay_days?: number
   delay_reason?: string

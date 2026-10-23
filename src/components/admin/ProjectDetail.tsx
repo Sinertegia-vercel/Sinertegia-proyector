@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, Plus, ChevronDown, Pencil, Check, X, MoreVertical, Trash2 } from 'lucide-react'
+import { ArrowLeft, Plus, ChevronDown, Pencil, Check, X, MoreVertical, Trash2, Map as MapIcon, ListChecks } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import type { Task, Project, User } from '../../types'
 import PriorityBadge from '../shared/PriorityBadge'
@@ -8,6 +8,7 @@ import ProgressBar from '../shared/ProgressBar'
 import TaskDetailModal from '../team/TaskDetailModal'
 import CreateTaskModal from './CreateTaskModal'
 import { isClientAttributableDelay } from '../../lib/taskDelays'
+import ClientRoadmapView, { type DelayEventLike } from '../roadmap/ClientRoadmapView'
 
 interface Props {
   project: Project
@@ -55,8 +56,26 @@ export default function ProjectDetail({ project, tasks, teamMembers, projects, o
   const [deleting, setDeleting] = useState(false)
   const [actionError, setActionError] = useState('')
   const [savingStatus, setSavingStatus] = useState(false)
+  const [tab, setTab] = useState<'tareas' | 'hoja_ruta'>('tareas')
+  const [delayEvents, setDelayEvents] = useState<DelayEventLike[]>([])
   const actionsRef = useRef<HTMLDivElement>(null)
   const busyRef = useRef(false)
+
+  useEffect(() => {
+    supabase.from('project_delay_events').select('id, task_id, responsible, days, reason, created_at')
+      .eq('project_id', project.id).order('created_at', { ascending: false })
+      .then(({ data }) => setDelayEvents((data as DelayEventLike[]) || []))
+  }, [project.id])
+
+  useEffect(() => {
+    function handleOpenTask(event: Event) {
+      const taskId = (event as CustomEvent).detail?.taskId
+      const found = tasks.find(task => task.id === taskId)
+      if (found) setSelectedTask(found)
+    }
+    window.addEventListener('open-task', handleOpenTask)
+    return () => window.removeEventListener('open-task', handleOpenTask)
+  }, [tasks])
 
   useEffect(() => {
     function dismiss(event: PointerEvent) {
@@ -299,6 +318,22 @@ export default function ProjectDetail({ project, tasks, teamMembers, projects, o
         </div>
       </div>
 
+      {/* Pestañas: tareas / hoja de ruta del cliente */}
+      <div className="mb-4 inline-flex rounded-xl border border-gray-200 bg-white p-1 shadow-sm">
+        <button type="button" onClick={() => setTab('tareas')} className={`flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-sm font-semibold transition ${tab === 'tareas' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}>
+          <ListChecks size={14} /> Tareas
+        </button>
+        <button type="button" onClick={() => setTab('hoja_ruta')} className={`flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-sm font-semibold transition ${tab === 'hoja_ruta' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}>
+          <MapIcon size={14} /> Hoja de ruta del cliente
+        </button>
+      </div>
+
+      {tab === 'hoja_ruta' && (
+        <ClientRoadmapView project={project} tasks={tasks} delayEvents={delayEvents} mode="interno" />
+      )}
+
+      {tab === 'tareas' && (
+      <>
       {/* Filtros + botón nueva tarea */}
       <div className="flex flex-wrap gap-2 mb-4 items-center justify-between">
         <div className="flex flex-wrap gap-2">
@@ -400,6 +435,8 @@ export default function ProjectDetail({ project, tasks, teamMembers, projects, o
           </table>
         </div>
       </div>
+      </>
+      )}
 
       {selectedTask && (
         <TaskDetailModal task={selectedTask} onClose={() => setSelectedTask(null)} onUpdate={onUpdate} />

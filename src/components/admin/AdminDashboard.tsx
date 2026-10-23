@@ -28,6 +28,7 @@ import {
   Workflow,
   ListChecks,
   History,
+  Route,
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import type { Task, Project, User, Client } from '../../types'
@@ -52,6 +53,7 @@ import ClientDeliverables from './ClientDeliverables'
 import RolePermissionsManager from './RolePermissionsManager'
 import LicenseManager from './LicenseManager'
 import FunnelTemplatesManager from './FunnelTemplatesManager'
+import ClientRoadmapsManager from './ClientRoadmapsManager'
 import { usePresence } from '../../hooks/usePresence'
 import { useAuth } from '../../contexts/AuthContext'
 import TaskDetailModal from '../team/TaskDetailModal'
@@ -67,6 +69,7 @@ type View =
   | 'performance'
   | 'mytasks'
   | 'roadmap'
+  | 'client_roadmaps'
   | 'requests'
   | 'chat_team'
   | 'chat_clients'
@@ -95,6 +98,7 @@ const ADMIN_NAV_ITEMS = [
   { id: 'performance', label: 'Rendimiento', icon: TrendingUp },
   { id: 'mytasks', label: 'Mis tareas', icon: ClipboardList },
   { id: 'roadmap', label: 'Hoja de Ruta', icon: Map },
+  { id: 'client_roadmaps', label: 'Hoja de ruta de clientes', icon: Route },
   { id: 'clientes', label: 'Clientes', icon: UserCheck },
   { id: 'requests', label: 'Solicitudes', icon: Inbox },
   { id: 'chat_team', label: 'Chat Equipo', icon: MessageSquare },
@@ -147,6 +151,7 @@ export default function AdminDashboard() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [createProjectReturnView, setCreateProjectReturnView] = useState<View>('overview')
   const [adminPermissions, setAdminPermissions] = useState<Record<string, boolean>>({})
+  const [roadmapClientId, setRoadmapClientId] = useState<string | null>(null)
 
   useEffect(() => {
     fetchAll()
@@ -335,7 +340,7 @@ export default function AdminDashboard() {
       label: 'Operación',
       ids: ['overview', 'team', 'team_tasks', 'calendar', 'performance'],
     },
-    { label: 'Trabajo', ids: ['mytasks', 'roadmap', 'requests'] },
+    { label: 'Trabajo', ids: ['mytasks', 'roadmap', 'client_roadmaps', 'requests'] },
     {
       label: 'Comunicación',
       ids: ['chat_team', 'chat_clients', 'entregables'],
@@ -697,6 +702,9 @@ export default function AdminDashboard() {
             {/* Vista hoja de ruta */}
             {view === 'roadmap' && <RoadmapView tasks={tasks} title="Todas las tareas del equipo" reportProjects={projects} onGenerateReport={setReportProject} />}
 
+            {/* Vista hoja de ruta de clientes */}
+            {view === 'client_roadmaps' && <ClientRoadmapsManager initialClientId={roadmapClientId} />}
+
             {/* Vista solicitudes de clientes */}
             {view === 'requests' && <TaskRequestsPanel />}
 
@@ -709,7 +717,7 @@ export default function AdminDashboard() {
             {view === 'entregables' && <ClientDeliverables />}
 
             {/* Vista: Asignación de clientes */}
-            {view === 'clientes' && <ClientAssignmentManager clients={clients} teamMembers={teamMembers} onCreateProject={() => { setCreateProjectReturnView('clientes'); setView('create_project') }} onOpenFunnels={() => setView('funnels')} />}
+            {view === 'clientes' && <ClientAssignmentManager clients={clients} teamMembers={teamMembers} onCreateProject={() => { setCreateProjectReturnView('clientes'); setView('create_project') }} onOpenFunnels={() => setView('funnels')} onOpenRoadmap={clientId => { setRoadmapClientId(clientId); setView('client_roadmaps') }} />}
 
             {view === 'funnels' && <FunnelTemplatesManager />}
 

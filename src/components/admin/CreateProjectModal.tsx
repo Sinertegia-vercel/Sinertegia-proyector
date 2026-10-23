@@ -3,7 +3,7 @@ import { X, Plus, ChevronLeft, CheckSquare, Square, GripVertical, MoreVertical, 
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import type { Client, Department, Priority, User } from '../../types'
-import { PROJECT_TEMPLATES, GROUP_LABELS, GROUP_COLORS, TEMPLATE_GROUP_ORDER, DEPT_LABELS, resolveTemplateTasks, tasksForModalidad, type Modalidad } from '../../data/projectTemplates'
+import { PROJECT_TEMPLATES, GROUP_LABELS, GROUP_COLORS, TEMPLATE_GROUP_ORDER, DEPT_LABELS, resolveTemplateTasks, tasksForModalidad, inferPhase, type Modalidad, type Phase } from '../../data/projectTemplates'
 import CreateFunnelTemplateModal from './CreateFunnelTemplateModal'
 
 interface CustomTemplate { id: string; name: string; icon: string; description: string | null; taskCount: number }
@@ -24,6 +24,7 @@ interface CombinedTask {
   isCustom: boolean
   group?: string
   note?: string
+  phase?: Phase
 }
 
 export default function CreateProjectModal({ clients, teamMembers, onClose, onCreated }: Props) {
@@ -297,12 +298,14 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
 
   function addTaskToGroup(groupKey: string) {
     if (!newTaskTitle.trim()) return
+    const department = groupToDepartment(groupKey)
     const newTask: CombinedTask = {
       title: newTaskTitle.trim(),
-      department: groupToDepartment(groupKey),
+      department,
       priority: 'media',
       isCustom: true,
       group: groupKey,
+      phase: inferPhase(newTaskTitle.trim(), department as any),
     }
     const newIdx = combinedTasks.length
     setCombinedTasks(prev => [...prev, newTask])
@@ -406,6 +409,7 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
           priority: t.priority,
           status: 'pendiente',
           created_by: user!.id,
+          phase: t.phase || inferPhase(t.title, t.department as any),
           _note: t.note || null, // no es columna real, se usa abajo para crear el comentario
         }
       })
@@ -417,6 +421,7 @@ export default function CreateProjectModal({ clients, teamMembers, onClose, onCr
         priority: task.priority,
         status: task.status,
         created_by: task.created_by,
+        phase: task.phase,
       }))
       const { data: insertedTasks } = await supabase.from('tasks').insert(taskRows).select('id')
 

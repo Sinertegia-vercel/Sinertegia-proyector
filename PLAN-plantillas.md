@@ -132,3 +132,55 @@ plantillas → asignación al cliente → modalidad → portal → retrasos → 
 1. Revisar y correr `sql/2026-10-22_reasignar_tareas_cliente.sql` (primero el SELECT de solo lectura, luego el UPDATE si se ve bien, luego el SELECT de clientes sin cuenta para invitarlos).
 2. Recién después, correr `sql/2026-10-22_modalidad_y_retrasos_cliente.sql` (incluye el trigger que depende de que el paso 1 ya haya limpiado los datos viejos).
 3. Publicar la rama.
+
+---
+
+# FASE 2 — Hoja de ruta del cliente
+
+Encima de la FASE 1, en la misma rama, commit aparte. Mismas restricciones duras (nada contra producción, sin `.env`, SQL nuevo sin ejecutar, sin push).
+
+## Plan con conteos
+
+- **Fases** (`src/data/projectTemplates.ts`): `PHASES` = `entrada, estrategia, guiones, produccion_video, produccion_paginas, revision, lanzamiento, optimizacion`. Cada `TemplateTask` (base, `soloWebinarTasks`, `modalidadTasks`) recibió su `phase` explícita. Verifiqué con conteos manuales que cuadran con los totales de la FASE 1:
+  - `entrada` 9, `estrategia` 6, `guiones` 6, `revision` 5, `lanzamiento` 2, `optimizacion` 0 (iguales en las 4 combinaciones).
+  - `produccion_video`: VSL 9 (1 líder + 1 Encarpetar + 4 edición + 3 de modalidad), Webinar 13 (+4 extras: 2 cliente, 1 diseño, 1 edición).
+  - `produccion_paginas`: VSL 27 (6 copy + 10 diseño + 11 webmaster), Webinar 29 (+2 webmaster de Pág. Ingreso/Addevent).
+  - Totales: VSL 9+6+6+9+27+5+2 = **64** ✓, Webinar 9+6+6+13+29+5+2 = **70** ✓ (coincide con la tabla de aceptación de la FASE 1 en ambas modalidades, porque el tamaño de `produccion_video` no cambia entre oficina/remota, solo se redistribuye entre cliente y Grabación).
+  - `resolveTemplateTasks` asigna `phase` a las filas de `template_tasks` (sin fase guardada) con el mismo criterio: primero por título exacto de la base, si no por `inferPhase(title, department)`.
+- **inferPhase(title, department)** (en `projectTemplates.ts`, re-exportado por `src/lib/roadmapPhases.ts`): mapa de título→fase construido desde las propias plantillas (cubre el 100% de VSL/Webinar) + respaldo por departamento para tareas personalizadas o de embudos "otro". Probado: ninguna de las 64/70 tareas queda sin fase.
+- **SQL nuevo (NO ejecutado)**: `sql/2026-10-22_hoja_ruta_cliente.sql` agrega `tasks.phase text` + check + índice `(project_id, phase)`, y deja comentada (NO aplicada) una política RLS más estricta para `projects`, por si las políticas actuales permiten que el equipo lea proyectos ajenos — no la activé porque varias pantallas existentes (TeamDashboard, CreateTaskModal, TeamCalendar) dependen hoy de que el equipo pueda leer todos los proyectos/tareas activos para asignar trabajo, y restringirla sin medir el impacto rompería esas pantallas. `sql/2026-10-22_backfill_fase_tareas.sql` (NO ejecutado) hace el backfill real con un `CASE` que es un espejo exacto de `inferPhase`.
+- **Cálculos puros** (`src/lib/roadmapPhases.ts`): `isTaskDone`, `phaseStats`/`displayPhaseStats` (Producción combina video+páginas), `currentDisplayPhase`, `overallProgress`, `launchDelayBreakdown` (N+M siempre = diferencia de fechas), `projectHealth` (semáforo) + `compareByRisk`, `buildMilestones`, `inferTemplateLabel`, `dueLabel`.
+- **Componente nuevo** `src/components/roadmap/ClientRoadmapView.tsx` (`mode: 'interno' | 'cliente'`): fases en línea horizontal con avance y fase actual resaltada, hitos, tarjeta de lanzamiento (transparencia total cliente/agencia en ambos modos, por la decisión de Tony), pendientes del cliente con "Vence en/Vencida hace", historial de retrasos, y "Ver tareas en el tiempo" que abre el `RoadmapView` existente sin tocarlo. Nunca lee ni muestra `assignee`/nombres del equipo (probado por texto fuente).
+- **Vista interna**: pestaña "Hoja de ruta del cliente" en `ProjectDetail.tsx` (con sus propios `project_delay_events`) y botón "Ver hoja de ruta" en cada tarjeta de `ClientAssignmentManager.tsx` → `Clientes`, que abre la vista de admin con ese cliente preseleccionado.
+- **Vista del cliente**: pestaña nueva "Mi hoja de ruta" (`mihojaderuta`) en `ClientPortal.tsx`, registrada en `CLIENT_NAV_ITEMS` y en `SECTIONS.client` de `RolePermissionsManager`.
+- **Vista de admin "Hoja de ruta de clientes"** (`src/components/admin/ClientRoadmapsManager.tsx`):
+  - Menú: `client_roadmaps` en `ADMIN_NAV_ITEMS` (mismo patrón de permisos que las demás secciones admin; superadmin siempre la ve) y, opcional y **apagada por defecto**, en `TEAM_NAV_ITEMS` — a diferencia de las demás secciones del equipo (que son visibles salvo que se desactiven explícitamente), esta necesita un `allowed: true` explícito en `role_permissions`/`user_permissions` para aparecer.
+  - Datos: para el equipo, la consulta replica el patrón de `ClientChatsHub` (clientes de `client_team_members` + proyectos con tareas asignadas) en vez de depender solo del menú — así alguien sin el permiso tampoco obtiene datos de otros clientes aunque el componente se montara.
+  - Buscador de cliente, selector de proyecto cuando hay varios (el primero de la lista queda activo), recuerda la última selección en `localStorage` con la llave `client-roadmap-last-{user.id}`.
+  - Cuadrícula de tarjetas de todos los proyectos activos con cliente/proyecto/plantilla (heurística `inferTemplateLabel` porque `projects` no guarda qué plantilla se usó), modalidad, fase actual, lanzamiento original vs actual con el desglose cliente/agencia, semáforo, pendientes del cliente y líder.
+  - Filtros (fase, semáforo, responsable, retraso de cliente/agencia) y orden por riesgo (`compareByRisk`).
+
+## Decisiones tomadas sin Tony (conservadoras)
+
+1. **RLS de `projects`/`tasks` para el equipo**: no se endurece automáticamente (ver arriba) — se deja como propuesta comentada en el SQL para que Tony decida si vale la pena el riesgo de romper otras pantallas que hoy asumen lectura amplia. La validación de datos de la FASE 2 se hace en la consulta del componente, igual que `ClientChatsHub`.
+2. **Plantilla mostrada en las tarjetas de admin**: como `projects` no tiene columna de plantilla, se infiere con `inferTemplateLabel` (si alguna tarea tiene un título exclusivo de Webinar → "Webinar", si no y tiene tareas → "VSL", si no tiene tareas → "Personalizado"). Es una heurística de solo lectura para mostrar, no afecta ninguna lógica de negocio.
+3. **"Responsable o líder" de la tarjeta**: se muestra el nombre de quien tiene asignada alguna tarea de departamento `lider` en ese proyecto (no existe un campo explícito "líder del proyecto").
+4. **Filtro "responsable" para el equipo**: no se cargan todos los `teamMembers` en el modo restringido (evita exponer nombres de personas fuera de los clientes asignados); el filtro de responsable solo aparece para admin/superadmin.
+
+## Pruebas y resultados
+
+- Pruebas nuevas en `tests/session-regressions.test.cjs`: fases puras (`phaseStats`, `displayPhaseStats`/Producción combinada, `currentDisplayPhase` incluido el caso que cae en `optimizacion`), `launchDelayBreakdown` (N+M = diferencia siempre, incluso si el evento excede la diferencia), `inferPhase` sobre las 64/70 tareas completas, hito de grabación con el responsable correcto en ambas modalidades, semáforo en sus 3 estados + orden por riesgo, `inferTemplateLabel`, y verificaciones por texto fuente de: que la vista del cliente nunca lee nombres del equipo, el alcance del proyecto en el portal, la pestaña en `ProjectDetail`, el acceso desde `Clientes`, el menú/permisos de admin y equipo (incluida la regla de "apagada por defecto"), el filtrado restringido del equipo estilo `ClientChatsHub`, y la memoria en `localStorage`.
+- `npm test`: **74/74 pruebas pasan** (22 nuevas de esta fase).
+- `npm run build`: compila sin errores (`tsc -b` + `vite build`).
+
+## Qué faltó / queda para después
+
+- No se verificó manualmente en navegador (sin Supabase local disponible); solo pruebas automatizadas y build, igual que la FASE 1.
+- El filtro "responsable" de la vista de admin no está disponible para el equipo en modo restringido (solo ven sus propios clientes, así que es de menor impacto).
+- La política RLS más estricta queda solo propuesta y comentada — Tony debe decidir si la aplica y medir el impacto en las pantallas que hoy leen todos los proyectos.
+- El backfill real de `phase` en la base (`sql/2026-10-22_backfill_fase_tareas.sql`) no se corrió — la vista funciona hoy solo con `inferPhase` en el cliente; correr el backfill es una mejora de rendimiento/consistencia, no un bloqueante.
+
+### Orden para correr el SQL de la FASE 2 (Tony, manualmente)
+
+1. `sql/2026-10-22_hoja_ruta_cliente.sql` (agrega la columna `phase` + índice; la política RLS comentada al final es opcional y requiere su propia revisión).
+2. Opcional: `sql/2026-10-22_backfill_fase_tareas.sql` para guardar la fase de los proyectos viejos (no es necesario para que la vista funcione).
