@@ -497,6 +497,7 @@ function loadModule(file) {
     if (id.endsWith('/types')) return {}
     if (id.endsWith('/projectTemplates')) return loadModule('src/data/projectTemplates.ts')
     if (id.endsWith('/roadmapPhases')) return loadModule('src/lib/roadmapPhases.ts')
+    if (id.endsWith('/dates')) return loadModule('src/lib/dates.ts')
     return {}
   } })
   return exported

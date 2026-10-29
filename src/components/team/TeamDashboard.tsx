@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { MessageSquare, CheckCircle, Clock, ClipboardList, MessageCircle, Map as MapIcon, Plus, CalendarDays, Link2, Loader2, XCircle, FileText, ChevronDown, Home, AlertTriangle, ArrowRight, PlayCircle, Eye, UserRound, PanelLeftClose, PanelLeftOpen, LogOut, Route } from 'lucide-react'
 import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { supabase } from '../../lib/supabase'
+import { formatDateOnly, isDateKeyOverdue } from '../../lib/dates'
 import { useAuth } from '../../contexts/AuthContext'
 import type { Task, Project, User, Priority } from '../../types'
 import PriorityBadge from '../shared/PriorityBadge'
@@ -254,7 +255,7 @@ export default function TeamDashboard({ embedded = false }: Props) {
 
   const byStatus = filter === 'todas' ? tasks.filter(t => t.status !== 'completada') : tasks.filter(t => t.status === filter)
   const byClient = clientFilter === 'todos' ? byStatus : byStatus.filter(t => t.project?.client?.name === clientFilter)
-  const isOverdue = (t: Task) => t.commitment_date && t.status !== 'completada' && new Date(t.commitment_date) < new Date()
+  const isOverdue = (t: Task) => !!t.commitment_date && t.status !== 'completada' && isDateKeyOverdue(t.commitment_date)
   const filtered = (priorityFilter === 'todos' ? byClient : byClient.filter(t => t.priority === priorityFilter)).slice().sort((a, b) => {
     const overdueDiff = Number(isOverdue(b)) - Number(isOverdue(a))
     if (overdueDiff) return overdueDiff
@@ -562,7 +563,7 @@ export default function TeamDashboard({ embedded = false }: Props) {
                 <td className="px-4 py-3 whitespace-nowrap">
                   <span className={`flex items-center gap-1 text-xs ${isOverdue(task) ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
                     <CalendarDays size={12} className="shrink-0" />
-                    {task.commitment_date ? new Date(task.commitment_date).toLocaleDateString('es-MX') : '—'}
+                    {formatDateOnly(task.commitment_date)}
                     {isOverdue(task) && ' ⚠️'}
                   </span>
                 </td>
