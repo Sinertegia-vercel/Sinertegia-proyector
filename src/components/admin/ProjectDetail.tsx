@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowLeft, Archive, Plus, ChevronDown, Pencil, Check, X, MoreVertical, Trash2, Map as MapIcon, ListChecks } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { isDateKeyOverdue } from '../../lib/dates'
 import { useAuth } from '../../contexts/AuthContext'
 import type { Task, Project, User } from '../../types'
 import PriorityBadge from '../shared/PriorityBadge'
@@ -119,7 +120,7 @@ export default function ProjectDetail({ project, tasks, teamMembers, projects, o
 
   const completed = tasks.filter(t => t.status === 'completada').length
   const pct = tasks.length ? (completed / tasks.length) * 100 : 0
-  const overdue = tasks.filter(t => t.commitment_date && t.status !== 'completada' && new Date(t.commitment_date) < new Date() && !isClientAttributableDelay(t))
+  const overdue = tasks.filter(t => t.commitment_date && t.status !== 'completada' && isDateKeyOverdue(t.commitment_date) && !isClientAttributableDelay(t))
   const clientDelays = tasks.filter(t => isClientAttributableDelay(t) && t.status !== 'completada')
   const launchDelta = project.launch_date && project.launch_date_original
     ? Math.round((new Date(project.launch_date).getTime() - new Date(project.launch_date_original).getTime()) / 86400000)
@@ -401,7 +402,7 @@ export default function ProjectDetail({ project, tasks, teamMembers, projects, o
                 <tr><td colSpan={isAdmin ? 10 : 9} className="text-center py-8 text-gray-400">No hay tareas con estos filtros</td></tr>
               )}
               {filteredTasks.map(task => {
-                const isLate = task.commitment_date && task.status !== 'completada' && new Date(task.commitment_date) < new Date()
+                const isLate = task.status !== 'completada' && isDateKeyOverdue(task.commitment_date)
                 const noCommitment = !task.commitment_date && task.status !== 'completada'
                 const reviewBadge = task.review_status ? REVIEW_BADGES[task.review_status] : null
                 return (

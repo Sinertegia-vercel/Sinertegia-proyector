@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { CalendarPlus, ChevronDown, FileDown, Map, Maximize2, Minimize2, MoveHorizontal } from 'lucide-react'
 import type { Project, Task } from '../../types'
 import { isClientAttributableDelay } from '../../lib/taskDelays'
+import { todayIndexFrom } from '../../lib/dates'
 
 interface Props {
   tasks: Task[]
@@ -38,7 +39,8 @@ export default function RoadmapView({ tasks, title, onSelectTask, reportProjects
   const daysCount = detailed ? (view === 'semana' ? 14 : 42) : (view === 'semana' ? 35 : 84)
   const timelineStart = new Date(anchor.getTime() - 7 * DAY)
   const days = Array.from({ length: daysCount }, (_, index) => new Date(timelineStart.getTime() + index * DAY))
-  const todayIndex = Math.round((monday(new Date()).getTime() + (new Date().getDay() || 7) * DAY - timelineStart.getTime()) / DAY)
+  // Antes sumaba getDay() (o 7 en domingo) al lunes: siempre marcaba "Hoy" un día después.
+  const todayIndex = todayIndexFrom(timelineStart)
   const colorFor = (client: string) => COLORS[Math.max(0, clients.indexOf(client)) % COLORS.length]
 
   function span(task: Task) {

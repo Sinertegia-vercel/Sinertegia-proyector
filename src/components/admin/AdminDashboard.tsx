@@ -32,6 +32,7 @@ import {
   UserCheck2,
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { isDateKeyOverdue } from '../../lib/dates'
 import type { Task, Project, User, Client } from '../../types'
 import Logo from '../shared/Logo'
 import TopBarActions from '../shared/TopBarActions'
@@ -141,6 +142,7 @@ export default function AdminDashboard() {
   const [projects, setProjects] = useState<Project[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
   const [teamMembers, setTeamMembers] = useState<User[]>([])
+  const [adminMembers, setAdminMembers] = useState<User[]>([])
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<View>('overview')
@@ -273,16 +275,19 @@ export default function AdminDashboard() {
   }, [user])
 
   async function fetchAll() {
-    const [{ data: proj }, { data: tsk }, { data: team }, { data: cls }] = await Promise.all([
+    const [{ data: proj }, { data: tsk }, { data: team }, { data: cls }, { data: admins }] = await Promise.all([
       supabase.from('projects').select('*, client:clients(*)').order('created_at', { ascending: false }),
       supabase.from('tasks').select('*, project:projects(*, client:clients(*)), assignee:users!assigned_to(*), links:task_links(*)').is('archived_at', null),
       supabase.from('users').select('*').eq('role', 'team').eq('active', true),
       supabase.from('clients').select('*').order('name'),
+      // Administradores activos (active nulo cuenta como activo) para el calendario del equipo.
+      supabase.from('users').select('*').eq('role', 'admin').or('active.is.null,active.eq.true'),
     ])
     setProjects(proj || [])
     setTasks(tsk || [])
     setTeamMembers(team || [])
     setClients(cls || [])
+    setAdminMembers(admins || [])
     setLoading(false)
   }
 
@@ -294,7 +299,7 @@ export default function AdminDashboard() {
 
   // "Fuera de fecha" y la salud operativa solo cuentan retrasos de la agencia —
   // los del cliente se muestran aparte y no penalizan al equipo.
-  const overdueTasks = tasks.filter((t) => t.commitment_date && t.status !== 'completada' && new Date(t.commitment_date) < new Date() && !isClientAttributableDelay(t))
+  const overdueTasks = tasks.filter((t) => t.commitment_date && t.status !== 'completada' && isDateKeyOverdue(t.commitment_date) && !isClientAttributableDelay(t))
   const clientDelayTasks = tasks.filter((t) => t.status !== 'completada' && isClientAttributableDelay(t))
 
   // Tareas que el equipo mandó a revisión y esperan autorización del trafficker
@@ -319,7 +324,7 @@ export default function AdminDashboard() {
   const filteredProjects = (statusFilter === 'todos' ? projects : projects.filter((p) => p.status === statusFilter)).sort((a, b) => {
     const urgency = (projectId: string) => {
       const projectTasks = tasks.filter((task) => task.project_id === projectId && task.status !== 'completada')
-      const overdue = projectTasks.filter((task) => task.commitment_date && new Date(task.commitment_date) < new Date()).length
+      const overdue = projectTasks.filter((task) => isDateKeyOverdue(task.commitment_date)).length
       const review = projectTasks.filter((task) => task.review_status === 'pendiente_revision').length
       const changes = projectTasks.filter((task) => task.client_approval === 'cambios_solicitados').length
       return overdue * 100 + review * 80 + changes * 70 + projectTasks.length
@@ -695,7 +700,7 @@ export default function AdminDashboard() {
             {view === 'team_tasks' && <TeamTasksManager teamMembers={teamMembers} tasks={tasks} onTasksChange={fetchAll} />}
 
             {/* Vista calendario */}
-            {view === 'calendar' && <TeamCalendar teamMembers={teamMembers} tasks={tasks} onlineIds={onlineIds} onTasksChange={fetchAll} />}
+            {view === 'calendar' && <TeamCalendar teamMembers={teamMembers} adminMembers={adminMembers} tasks={tasks} onlineIds={onlineIds} onTasksChange={fetchAll} />}
 
             {/* Vista rendimiento */}
             {view === 'performance' && <TeamPerformance teamMembers={teamMembers} tasks={tasks} />}

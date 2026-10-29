@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { ExternalLink, Send, Camera, Loader2, PlusCircle, CheckCircle, X, ChevronDown, CheckCheck, ClipboardList, LayoutGrid, CalendarDays, Map as MapIcon, Route, MessageCircle, Link2, Clock3, Eye, Sparkles, UserRound, LogOut, Upload, FileUp, History } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { cdmxTodayKey, isDateKeyOverdue } from '../../lib/dates'
 import { useAuth } from '../../contexts/AuthContext'
 import type { Task, Project, Client } from '../../types'
 import StatusBadge from '../shared/StatusBadge'
@@ -356,7 +357,7 @@ export default function ClientPortal() {
   const completed = projectTasks.filter(t => t.status === 'completada').length
   const pct = projectTasks.length ? (completed / projectTasks.length) * 100 : 0
   const activeTasks = projectTasks.filter(t => t.status !== 'completada')
-  const today = new Date().toISOString().slice(0, 10)
+  const today = cdmxTodayKey()
   const datedActiveTasks = activeTasks
     .filter(t => t.commitment_date && t.commitment_date >= today)
     .sort((a, b) => String(a.commitment_date).localeCompare(String(b.commitment_date)))
@@ -985,7 +986,7 @@ export default function ClientPortal() {
                 {/* Tasks */}
                 <div className="divide-y divide-gray-50">
                   {deptTasks.map(task => {
-                    const isLate = task.commitment_date && task.status !== 'completada' && new Date(task.commitment_date) < new Date()
+                    const isLate = task.status !== 'completada' && isDateKeyOverdue(task.commitment_date)
                     return (
                       <div key={task.id} className={`flex items-center gap-3 px-5 py-3 ${isLate ? 'bg-red-50' : ''}`}>
                         <div className="shrink-0">
